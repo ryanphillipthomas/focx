@@ -1,0 +1,22 @@
+{
+  "runId": "run-20260831-043221-manual",
+  "screens": [
+    {
+      "storyId": "S1",
+      "name": "Marketing root <head> metadata — no new visual surface",
+      "figma": {
+        "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
+        "nodeId": "9:7"
+      },
+      "components": [
+        "none — this story adds an HTML <head> meta tag, not a UI component; no design-focx/design-connect component is added, removed, or modified"
+      ],
+      "tokens": [
+        "focx.style.ui-subheading"
+      ],
+      "notes": "This story has zero visual footprint: it duplicates already-published copy into a non-rendering <meta name=\"description\"> tag. The Figma reference cited is the same Cover frame (9:7) the existing hero already maps to (per figma.manifest.json's sync log) — there is no separate Figma node for document metadata, and none is invented. The token cited, focx.style.ui-subheading, is the typography style that already governs the visible subheading text being duplicated verbatim into the meta tag; it establishes that the copy is the exact published string, not new or paraphrased marketing copy. No component is consumed because no UI is built. designSystemGaps is empty: the design system fully supports this change by requiring nothing new from it."
+    }
+  ],
+  "tokensSynced": false,
+  "designSystemGaps": []
+}
