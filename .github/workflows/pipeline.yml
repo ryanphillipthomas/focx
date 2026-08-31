@@ -28,6 +28,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write   # claude-code-action's OIDC token exchange
 
 concurrency:
   group: pipeline-${{ github.event.issue.number || github.run_id }}
