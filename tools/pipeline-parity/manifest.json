@@ -48,7 +48,8 @@
     "docs/roles/chief.md",
     "docs/roles/product.md",
     "docs/roles/qa.md",
-    "docs/roles/deploy.md"
+    "docs/roles/deploy.md",
+    "tools/deploy-verify/index.mjs"
   ],
   "branded": [
     ".github/workflows/pipeline.yml",
