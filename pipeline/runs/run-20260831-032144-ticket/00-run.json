@@ -1,0 +1,13 @@
+{
+  "runId": "run-20260831-032144-ticket",
+  "trigger": {
+    "source": "ticket",
+    "issueNumber": 12,
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33353598659"
+  },
+  "prompt": "Build the focx.ai marketing root page in apps/site/, replacing the current placeholder redirect (index.html).\n\nWhat it is: the umbrella landing page for Focx — the first thing visitors see at focx.ai.\n\nContent and design:\n- Hero with the Focx brand treatment from the DS-001 cover: eyebrow line (Brand/Eyebrow style), the 'Focx' wordmark treatment (Brand/Hero, The Fox Tail display face), and a short positioning line in UI/Subheading — mirror the cover frame 9:7 as the design reference.\n- A clear link/button into /skills/connect (use the Button/Primary component pattern, Medium/Pill).\n- Dark treatment is welcome (surface-inverse background with text-inverse) since the cover reads that way — Design role decides from the Figma source.\n\nConstraints:\n- Published tokens and existing component patterns only — no raw values, no new visual inventions. The drift gate applies.\n- The Fox Tail is not hosted anywhere yet: use the token's font-family with a sensible fallback stack (do not embed or fetch font files from anywhere except the Google Fonts Geist link already in use).\n- Keep it a single static page: apps/site/index.html + apps/site/styles.css. The site-compose copy step serves apps/site at the root — do not touch tools/, render.yaml, or the compose map.\n- Page must remain fully served at '/' AND keep /skills/connect reachable (relative link, not hardcoded domain).",
+  "mode": "build",
+  "createdAt": "2026-08-31T03:21:45.183Z",
+  "branch": "run/run-20260831-032144-ticket"
+}
