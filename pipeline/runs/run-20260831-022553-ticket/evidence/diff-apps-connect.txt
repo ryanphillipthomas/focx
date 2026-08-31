@@ -1,0 +1,28 @@
+$ git diff main -- apps/connect/
+diff --git a/apps/connect/index.html b/apps/connect/index.html
+index 2d72b9b..f360956 100644
+--- a/apps/connect/index.html
++++ b/apps/connect/index.html
+@@ -69,5 +69,12 @@
+       <button class="btn btn--destructive btn--lg btn--control" disabled title="Large / Control / Disabled">Button</button>
+     </div>
+   </section>
++  <section class="sheet" data-figma-primary-node="28:117" data-figma-destructive-node="31:117">
++    <h2>Confirmation actions — Medium / Pill</h2>
++    <div class="grid">
++      <button class="btn btn--primary btn--md btn--pill" title="Medium / Pill / Confirm">Confirm</button>
++      <button class="btn btn--destructive btn--md btn--pill" title="Medium / Pill / Delete">Delete</button>
++    </div>
++  </section>
+ </body>
+ </html>
+
+Confirms: apps/connect/styles.css is untouched (no diff produced for it — no new CSS
+classes, tokens, or raw values introduced). The existing Button/Primary (28:117) and
+Button/Destructive (31:117) sheets are unmodified above the diff hunk (unified diff shows
+zero changes to any line preceding the new section). The new section reuses only
+pre-existing classes: btn, btn--primary, btn--destructive, btn--md, btn--pill.
+
+$ git log --oneline main..HEAD
+08d4ea6 pipeline: run-20260831-022553-ticket build
+675cac5 pipeline: open run-20260831-022553-ticket (trigger: ticket)

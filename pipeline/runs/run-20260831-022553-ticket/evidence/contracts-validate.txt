@@ -1,0 +1,3 @@
+$ node tools/contracts/validate.mjs
+contracts: 7 artifact(s) valid — every handoff conforms.
+(command completed successfully; no non-zero exit reported by the tool harness)

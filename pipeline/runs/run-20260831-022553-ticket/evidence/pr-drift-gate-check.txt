@@ -1,0 +1,26 @@
+Attempted to independently verify the drift-gate check on PR #10 (DRIFT_CHECK_URL:
+https://github.com/ryanphillipthomas/focx/pull/10/checks) as required by the QA charter
+("Gate first ... DRIFT_CHECK_STATE must be a pass and you must independently re-run
+node tools/drift-check/index.mjs yourself. Record both.").
+
+DRIFT_CHECK_STATE handed to this run was: UNKNOWN (not a confirmed pass).
+
+Tool access to independently confirm the PR's actual check-run state was denied in this
+QA session:
+  $ gh pr checks 10          -> "This command requires approval"
+  $ gh pr view 10 --json ...  -> "This command requires approval"
+  $ gh auth status            -> "This command requires approval"
+  WebFetch(https://github.com/ryanphillipthomas/focx/pull/10/checks) -> "Claude requested
+    permissions to use WebFetch, but you haven't granted it yet."
+
+No approval prompt was resolvable in this non-interactive QA run, so the PR-level
+drift-gate check state could NOT be independently confirmed as green.
+
+Per the charter, an unverifiable criterion/gate is recorded as a failure with the reason
+as evidence, not assumed to pass. The local re-run of tools/drift-check/index.mjs (see
+drift-check.txt in this directory) passed clean, but that only covers the working tree
+at HEAD — it is not a substitute for confirming the PR's actual CI check run, which could
+differ (different commit SHA, environment, or a check that hasn't completed).
+
+Conclusion: driftGate.passed = false (unverified), which per qa-verdict.schema.json's
+conditional forces verdict = fail.

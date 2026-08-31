@@ -1,0 +1,53 @@
+{
+  "runId": "run-20260831-022553-ticket",
+  "driftGate": {
+    "passed": false,
+    "checkRunUrl": "https://github.com/ryanphillipthomas/focx/pull/10/checks"
+  },
+  "criteria": [
+    {
+      "storyId": "S1",
+      "criterion": "Gate first: DRIFT_CHECK_STATE must be a confirmed pass and independently re-verified.",
+      "result": "fail",
+      "evidence": "DRIFT_CHECK_STATE handed to this run was UNKNOWN, not a confirmed pass. Independently re-running `node tools/drift-check/index.mjs` at HEAD produced a clean result (pipeline/runs/run-20260831-022553-ticket/evidence/drift-check.txt), but attempts to independently confirm the actual PR #10 drift-gate check run (per DRIFT_CHECK_URL) were blocked: `gh pr checks 10`, `gh pr view 10 --json ...`, and `gh auth status` all returned 'This command requires approval', and WebFetch on the checks URL returned 'Claude requested permissions to use WebFetch, but you haven't granted it yet.' No approval was resolvable in this session. See pipeline/runs/run-20260831-022553-ticket/evidence/pr-drift-gate-check.txt for the full transcript. An unverifiable gate is recorded as fail, not assumed pass."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "node tools/contracts/validate.mjs exits clean for every artifact in this run.",
+      "result": "pass",
+      "evidence": "Ran `node tools/contracts/validate.mjs` from repo root; output: 'contracts: 7 artifact(s) valid — every handoff conforms.' See pipeline/runs/run-20260831-022553-ticket/evidence/contracts-validate.txt."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The Connect POC page (apps/connect/index.html) shows a new 'Confirmation actions' section after the existing Button/Primary and Button/Destructive sheets.",
+      "result": "pass",
+      "evidence": "apps/connect/index.html:72-78 — a third <section class=\"sheet\" data-figma-primary-node=\"28:117\" data-figma-destructive-node=\"31:117\"> with <h2>Confirmation actions — Medium / Pill</h2> appears immediately after the Button/Primary sheet (lines 14-42) and Button/Destructive sheet (lines 43-71). Confirmed via `git diff main -- apps/connect/` (evidence/diff-apps-connect.txt), which shows the only change is this appended section."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The section contains exactly one Medium/Pill Primary button (28:117) labeled 'Confirm' and one Medium/Pill Destructive button (31:117) labeled 'Delete', laid out side by side.",
+      "result": "pass",
+      "evidence": "apps/connect/index.html:75-76: `<button class=\"btn btn--primary btn--md btn--pill\" title=\"Medium / Pill / Confirm\">Confirm</button>` and `<button class=\"btn btn--destructive btn--md btn--pill\" title=\"Medium / Pill / Delete\">Delete</button>` — exactly two buttons, correct variant classes, correct labels. Both sit inside the shared `.grid` container (apps/connect/styles.css:76-81, `display:grid; grid-template-columns: repeat(4, max-content); align-items:center;`), which places them side by side in one row. No other buttons exist in this section."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The new section uses only existing btn/btn--primary/btn--destructive/btn--md/btn--pill classes already generated from design/tokens/ in apps/connect/styles.css — no new CSS classes or raw values.",
+      "result": "pass",
+      "evidence": "`git diff main -- apps/connect/` (evidence/diff-apps-connect.txt) shows apps/connect/styles.css has zero diff — no new classes, custom properties, or raw values were added anywhere. Read of apps/connect/styles.css confirms btn, btn--primary, btn--destructive, btn--md, btn--pill were all pre-existing and every declaration in them resolves to a var(--...) custom property (styles.css:83-110), which in turn are generated from design/tokens/focx/tokens.json per the file's own header comment (styles.css:1-3). The new section's data-figma-primary-node/data-figma-destructive-node are plain data attributes, matching the existing data-figma-node pattern on the other two sheets, not new CSS."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The existing Button/Primary (28:117) and Button/Destructive (31:117) full sheets are present with unchanged markup.",
+      "result": "pass",
+      "evidence": "`git diff main -- apps/connect/` (evidence/diff-apps-connect.txt) shows a unified diff whose only hunk is an addition after the closing </section> of the Destructive sheet; zero lines of the Primary sheet (index.html:14-42) or Destructive sheet (index.html:43-71) were touched, added, or removed."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "Design fidelity: the new section's components/tokens match 40-design-spec.json (focx/Button/Primary 28:117 and focx/Button/Destructive 31:117, Medium/Pill/Default) and design/figma.manifest.json, with nothing visual introduced outside the cited spec.",
+      "result": "pass",
+      "evidence": "design/figma.manifest.json:11-12 lists componentSets Button/Primary nodeId 28:117 and Button/Destructive nodeId 31:117 with Size/Shape/State variants matching what's cited in 40-design-spec.json and 50-build-report.json. The built markup uses exactly the Medium/Pill/Default variant classes (btn--md, btn--pill, no is-hover/is-focused/disabled modifiers) for both, matching the design spec's scope ('Medium/Pill/Default' only, full matrix left in existing sheets). No additional visual elements, colors, or components beyond the two buttons and their container/heading (which reuse the pre-existing .sheet/.grid/h2 pattern) were introduced. No lookalike or divergent drift found."
+    }
+  ],
+  "additionalDriftFound": [],
+  "verdict": "fail"
+}
