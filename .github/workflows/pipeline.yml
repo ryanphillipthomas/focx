@@ -239,19 +239,29 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # The URL is Render's service-preview naming convention
-      # (<service>-pr-<number>.onrender.com), verified live on PR #14. Service
-      # previews are a dashboard toggle, not a render.yaml field — see that
-      # file's header. Polling keeps QA from reading a preview mid-build; an
-      # unreachable preview is recorded rather than fatal, because the QA
-      # charter already treats a missing preview as a documented limitation.
+      # (<service>-pr-<number>.onrender.com), verified live on PR #14 — and the
+      # service is whichever one watches the PR's BASE branch: focx watches
+      # main, focx-staging watches staging (both toggles set to Automatic
+      # 2026-08-31). The base is asked of GitHub rather than assumed, so the
+      # URL stays right wherever the PR targets. Service previews are a
+      # dashboard toggle, not a render.yaml field — see that file's header.
+      # Polling keeps QA from reading a preview mid-build; an unreachable
+      # preview is recorded rather than fatal, because the QA charter already
+      # treats a missing preview as a documented limitation.
       - name: Await Render preview
         id: preview
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
-          URL="https://focx-pr-${PR_NUMBER}.onrender.com"
+          BASE=$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)
+          case "$BASE" in
+            staging) SERVICE=focx-staging ;;
+            *)       SERVICE=focx ;;
+          esac
+          URL="https://${SERVICE}-pr-${PR_NUMBER}.onrender.com"
           STATE=unreachable
           for i in $(seq 1 20); do
             CODE=$(curl -s -o /dev/null -w '%{http_code}' -L "$URL" || true)
