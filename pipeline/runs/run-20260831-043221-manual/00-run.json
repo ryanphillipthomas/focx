@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260831-043221-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33357431300"
+  },
+  "prompt": "Add a meta description tag to the focx.ai marketing root page (apps/site/index.html) so link unfurls and search snippets describe the product. Use the existing subheading copy: Ticket in, reviewed pull request out — every stage built by bots, merged only by a human. No visual changes, no new components.",
+  "mode": "build",
+  "createdAt": "2026-08-31T04:32:21.736Z",
+  "branch": "run/run-20260831-043221-manual"
+}
