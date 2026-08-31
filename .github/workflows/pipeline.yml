@@ -33,7 +33,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # PIPELINE_TOKEN (a fine-grained PAT) instead of the default token:
+      # events created with GITHUB_TOKEN don't trigger other workflows, so the
+      # drift gate would never fire on pipeline-created PRs. Falls back to the
+      # default token so intake still works (gate-less) if the secret is absent.
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PIPELINE_TOKEN || github.token }}
 
       - name: Resolve trigger
         id: trigger
@@ -109,7 +115,7 @@ jobs:
       - name: Open draft PR (audit surface)
         id: pr
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || github.token }}
           RUN_ID: ${{ steps.trigger.outputs.run_id }}
           SOURCE: ${{ steps.trigger.outputs.source }}
           BRANCH: ${{ steps.manifest.outputs.branch }}
