@@ -4,6 +4,8 @@ The boundary between merged and live. Render performs deploys; this role proves 
 
 Deploy is not a stage inside a run. It is a second loop, triggered by deploy events rather than by intake, because deployment happens after the human review a run deliberately ends at.
 
+It runs as code, not as an agent: `tools/deploy-verify/index.mjs` is the deterministic gate on every deploy, because everything below is a field compare, a poll, or a probe. The charter (`pipeline/prompts/deploy-agent.md`) remains the role's rulebook and governs any agent summoned for the judgment work code can't do — prose-vs-reality audits, failure triage — which is occasional, never per-deploy, and never holds the Render API key as a standing grant.
+
 ## Inputs
 - The deploy event: environment, expected commit SHA, Render service id, public URL.
 - The Render API (`api.render.com/v1`): deploy status, custom domains, service configuration.

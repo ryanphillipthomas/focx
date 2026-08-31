@@ -38,10 +38,12 @@ Every stage commits its artifact to `pipeline/runs/<run-id>/` **before** handing
 ## After the run — deploy
 
 A run ends at a draft PR on purpose, so deployment happens *after* the human
-review the run stops at. The **Deploy** role ([`roles/deploy.md`](roles/deploy.md),
-charter [`pipeline/prompts/deploy-agent.md`](../pipeline/prompts/deploy-agent.md))
-is therefore not a stage in the chain above — it is a second loop, triggered by
-deploy events rather than by intake.
+review the run stops at. The **Deploy** role ([`roles/deploy.md`](roles/deploy.md)) is therefore not a
+stage in the chain above — it is a second loop, triggered by deploy events
+rather than by intake, and it runs as deterministic code
+([`tools/deploy-verify/`](../tools/deploy-verify/index.mjs)); its charter
+([`pipeline/prompts/deploy-agent.md`](../pipeline/prompts/deploy-agent.md))
+governs any agent summoned for audits or failure triage.
 
 ```
 human merges ──▶ Render deploys ──▶ Deploy ──▶ release record
