@@ -1,0 +1,22 @@
+{
+  "runId": "run-20260831-023654-ticket",
+  "stories": [
+    {
+      "id": "S1",
+      "story": "As a design-system consumer reviewing the Connect POC, I want to see Primary and Destructive buttons paired in a realistic confirmation-actions demo so that I can evaluate how the two component sets read together, Medium/Pill, without hunting through the full variant sheets.",
+      "acceptanceCriteria": [
+        "The Connect POC page (apps/connect/index.html) shows a new 'Confirmation actions' section positioned after the existing Button/Primary (28:117) and Button/Destructive (31:117) sheets.",
+        "The section renders exactly two buttons: a Primary button labeled 'Confirm' and a Destructive button labeled 'Delete', each Medium size, Pill shape, Default state.",
+        "The existing Button/Primary and Button/Destructive variant sheets remain present and unchanged in content and structure.",
+        "Every color, dimension, radius, and type value used by the new section resolves to a token already published in design/tokens/focx/tokens.json — verifiable by running node tools/drift-check/index.mjs and getting a clean result."
+      ]
+    }
+  ],
+  "outOfScope": [
+    "A full Size x Shape x State matrix for the confirmation pairing — only Medium/Pill/Default is demoed.",
+    "Wiring the Confirm/Delete buttons to real confirmation logic, navigation, or a modal/dialog pattern.",
+    "New button variants, sizes, shapes, or states beyond what Button/Primary (28:117) and Button/Destructive (31:117) already publish.",
+    "Any change to design/tokens/ or the Figma manifest — this run consumes the existing sync as-is."
+  ],
+  "designSystemNeeds": []
+}

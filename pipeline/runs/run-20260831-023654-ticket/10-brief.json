@@ -1,0 +1,27 @@
+{
+  "runId": "run-20260831-023654-ticket",
+  "objective": "Add a 'Confirmation actions' demo section to the Connect POC page pairing a Medium/Pill Primary (Confirm) button with a Medium/Pill Destructive (Delete) button, without disturbing the existing Button/Primary and Button/Destructive variant sheets.",
+  "successCriteria": [
+    "The Connect POC page renders a new 'Confirmation actions' section below the existing two variant sheets.",
+    "The new section contains exactly two buttons: a Primary button labeled 'Confirm' and a Destructive button labeled 'Delete', both Medium size and Pill shape, Default state.",
+    "The existing Button/Primary (28:117) and Button/Destructive (31:117) full variant sheets are unchanged.",
+    "Every value the new section introduces (color, spacing, radius, type) resolves to an existing published token in design/tokens/focx/tokens.json — no raw hex/px values.",
+    "node tools/drift-check/index.mjs exits clean after the change."
+  ],
+  "constraints": [
+    "Only Medium/Pill, Default state is in scope for the new pairing — not a full state matrix.",
+    "Must reuse the DS-001 component sets already in the manifest: Button/Primary (28:117) and Button/Destructive (31:117); no new components or tokens.",
+    "Do not modify design/tokens/, pipeline/contracts/, docs/, tools/, or .github/.",
+    "Do not remove or restructure the existing Button/Primary / Button/Destructive sheets already on the page."
+  ],
+  "targetApp": "connect",
+  "route": {
+    "skipResearch": true,
+    "skipReason": "The needed components (Button/Primary, Button/Destructive) and every token the pairing requires are already published and synced from a prior run; there is no open question of feasibility or prior art to investigate."
+  },
+  "assumptions": [
+    "The prompt does not specify button copy — 'Confirm' and 'Delete' are used as the labels since the prompt names the actions as 'confirm' and 'delete'.",
+    "'A small demo pairing' is interpreted as the Default state only, not a full Size x Shape x State matrix like the existing sheets — the prompt explicitly says 'Medium/Pill' (singular), not a matrix.",
+    "The new section is appended after the two existing sheets on the same Connect POC page (apps/connect/index.html), not a new route/page."
+  ]
+}

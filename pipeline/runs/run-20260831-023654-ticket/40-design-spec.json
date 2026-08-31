@@ -1,0 +1,59 @@
+{
+  "runId": "run-20260831-023654-ticket",
+  "screens": [
+    {
+      "storyId": "S1",
+      "name": "Confirmation actions — Confirm (Button/Primary, Medium/Pill/Default)",
+      "figma": {
+        "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
+        "nodeId": "28:117"
+      },
+      "components": [
+        "focx/Button/Primary/Size=Medium, Shape=Pill, State=Default"
+      ],
+      "tokens": [
+        "focx.font.sans",
+        "focx.weight.medium",
+        "focx.color.action-fill",
+        "focx.color.action-fill-hover",
+        "focx.color.action-fill-text",
+        "focx.color.border-focus",
+        "focx.border.focus-ring",
+        "focx.control.h-md",
+        "focx.control.px-md",
+        "focx.text.label",
+        "focx.radius.pill",
+        "focx.space.3"
+      ],
+      "notes": "Reuses the existing .btn / .btn--primary / .btn--md / .btn--pill classes already established for the Button/Primary sheet on this page — same component, same tokens, labeled 'Confirm' instead of the sheet's generic 'Button'. Hover/focus tokens are listed because the shared classes carry those states even though only Default is demoed visually."
+    },
+    {
+      "storyId": "S1",
+      "name": "Confirmation actions — Delete (Button/Destructive, Medium/Pill/Default)",
+      "figma": {
+        "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
+        "nodeId": "31:117"
+      },
+      "components": [
+        "focx/Button/Destructive/Size=Medium, Shape=Pill, State=Default"
+      ],
+      "tokens": [
+        "focx.font.sans",
+        "focx.weight.medium",
+        "focx.color.status-danger",
+        "focx.color.status-danger-fill",
+        "focx.color.action-fill-text",
+        "focx.color.border-focus",
+        "focx.border.focus-ring",
+        "focx.control.h-md",
+        "focx.control.px-md",
+        "focx.text.label",
+        "focx.radius.pill",
+        "focx.space.3"
+      ],
+      "notes": "Reuses the existing .btn / .btn--destructive / .btn--md / .btn--pill classes already established for the Button/Destructive sheet, labeled 'Delete'. The two buttons sit in a new flex layout (.confirm-actions) whose only new declaration is gap, sourced from the already-published focx.space.3 token — no new tokens or components are introduced."
+    }
+  ],
+  "tokensSynced": false,
+  "designSystemGaps": []
+}

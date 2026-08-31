@@ -1,0 +1,34 @@
+diff --git a/apps/connect/index.html b/apps/connect/index.html
+index 2d72b9b..aeb7be6 100644
+--- a/apps/connect/index.html
++++ b/apps/connect/index.html
+@@ -69,5 +69,12 @@
+       <button class="btn btn--destructive btn--lg btn--control" disabled title="Large / Control / Disabled">Button</button>
+     </div>
+   </section>
++  <section class="sheet" data-figma-node="28:117, 31:117">
++    <h2>Confirmation actions — Figma 28:117, 31:117</h2>
++    <div class="confirm-actions">
++      <button class="btn btn--primary btn--md btn--pill" data-figma-node="28:117" title="Medium / Pill / Default">Confirm</button>
++      <button class="btn btn--destructive btn--md btn--pill" data-figma-node="31:117" title="Medium / Pill / Default">Delete</button>
++    </div>
++  </section>
+ </body>
+ </html>
+diff --git a/apps/connect/styles.css b/apps/connect/styles.css
+index 08dc589..5d6af9d 100644
+--- a/apps/connect/styles.css
++++ b/apps/connect/styles.css
+@@ -80,6 +80,12 @@ h1 {
+   align-items: center;
+ }
+ 
++.confirm-actions {
++  display: flex;
++  align-items: center;
++  gap: var(--space-3);
++}
++
+ .btn {
+   display: inline-flex;
+   align-items: center;
