@@ -4,7 +4,16 @@
 # (focx.ai/skills/connect), so tools/site-compose copies the committed app
 # directories into dist/ per its site-map.json. COPY-ONLY — nothing is
 # generated or rewritten at deploy time: what was reviewed is what deploys.
-# PR previews generate automatically and show the full umbrella at real paths.
+#
+# PR previews come from Render's *service previews*, enabled in the dashboard
+# (Service -> Previews -> Automatic). There is no render.yaml field for them:
+# this file cannot turn them on, and for the first thirteen PRs it did not —
+# the line that used to sit here claimed otherwise and was wrong.
+#
+# The `previews` block below is a different feature: preview *environments*,
+# which clone every service in the blueprint. Harmless while this blueprint
+# holds one static site; adding a paid service would make each PR provision a
+# billed copy of it.
 previews:
   generation: automatic
 
