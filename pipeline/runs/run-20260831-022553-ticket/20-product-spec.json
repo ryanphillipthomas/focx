@@ -1,0 +1,25 @@
+{
+  "runId": "run-20260831-022553-ticket",
+  "stories": [
+    {
+      "id": "S1",
+      "story": "As a Connect design-system reviewer, I want a 'Confirmation actions' demo pairing a Primary button with a Destructive button, so that I can evaluate the confirm/delete pairing pattern using real DS-001 components before it's used in an actual confirmation flow.",
+      "acceptanceCriteria": [
+        "The Connect POC page (apps/connect/index.html) shows a new 'Confirmation actions' section after the existing Button/Primary and Button/Destructive sheets.",
+        "The section contains exactly one Medium/Pill Primary button (per Button/Primary 28:117) labeled 'Confirm' and one Medium/Pill Destructive button (per Button/Destructive 31:117) labeled 'Delete', laid out side by side.",
+        "The new section uses only the existing btn / btn--primary / btn--destructive / btn--md / btn--pill classes already generated from design/tokens/ in apps/connect/styles.css — no new CSS classes or raw values.",
+        "The existing Button/Primary (28:117) and Button/Destructive (31:117) full sheets are present with unchanged markup."
+      ]
+    }
+  ],
+  "outOfScope": [
+    "Wiring the buttons to real confirm/delete application logic or a modal/dialog.",
+    "Other sizes (Small/Large) or shapes (Control) in the new section — Medium/Pill only, per the ticket.",
+    "Hover/Focused/Disabled state permutations in the new section (the existing sheets already demonstrate the full state matrix).",
+    "Any change to design/tokens/, design/figma.manifest.json, or packages/design-focx / design-connect."
+  ],
+  "designSystemNeeds": [
+    "Button/Primary (28:117), Medium/Pill variant — already published and already used in the existing sheet.",
+    "Button/Destructive (31:117), Medium/Pill variant — already published and already used in the existing sheet."
+  ]
+}

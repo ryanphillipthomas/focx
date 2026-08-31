@@ -1,0 +1,37 @@
+{
+  "runId": "run-20260831-022553-ticket",
+  "screens": [
+    {
+      "storyId": "S1",
+      "name": "Connect POC — Confirmation actions section",
+      "figma": {
+        "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
+        "nodeId": "28:117",
+        "url": "https://www.figma.com/file/GOlqIWU8MUzYZDQA39g6tv?node-id=28-117"
+      },
+      "components": [
+        "focx/Button/Primary (28:117) — Size=Medium, Shape=Pill, State=Default",
+        "focx/Button/Destructive (31:117) — Size=Medium, Shape=Pill, State=Default"
+      ],
+      "tokens": [
+        "focx.color.action-fill",
+        "focx.color.action-fill-hover",
+        "focx.color.action-fill-text",
+        "focx.color.status-danger",
+        "focx.color.status-danger-fill",
+        "focx.control.h-md",
+        "focx.control.px-md",
+        "focx.radius.pill",
+        "focx.text.label",
+        "focx.weight.medium",
+        "focx.font.sans",
+        "focx.space.3",
+        "focx.border.focus-ring",
+        "focx.color.border-focus"
+      ],
+      "notes": "Reuses the Button/Primary and Button/Destructive component sets already synced from DS-001 (see design/figma.manifest.json componentSets). Only the Medium/Pill/Default variant is needed for this pairing; the full variant matrix stays in the existing sheets. No new tokens or components are required — the existing .btn / .btn--primary / .btn--destructive / .btn--md / .btn--pill classes in apps/connect/styles.css already implement this exact variant, generated from the token paths listed above."
+    }
+  ],
+  "tokensSynced": false,
+  "designSystemGaps": []
+}

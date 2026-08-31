@@ -1,0 +1,30 @@
+{
+  "runId": "run-20260831-022553-ticket",
+  "storiesImplemented": ["S1"],
+  "filesChanged": ["apps/connect/index.html"],
+  "componentsUsed": [
+    "focx/Button/Primary (28:117) — Medium/Pill",
+    "focx/Button/Destructive (31:117) — Medium/Pill"
+  ],
+  "tokensUsed": [
+    "focx.color.action-fill",
+    "focx.color.action-fill-hover",
+    "focx.color.action-fill-text",
+    "focx.color.status-danger",
+    "focx.color.status-danger-fill",
+    "focx.control.h-md",
+    "focx.control.px-md",
+    "focx.radius.pill",
+    "focx.text.label",
+    "focx.weight.medium",
+    "focx.font.sans",
+    "focx.space.3",
+    "focx.border.focus-ring",
+    "focx.color.border-focus"
+  ],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean — no design drift detected."
+  }
+}

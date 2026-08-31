@@ -1,0 +1,27 @@
+{
+  "runId": "run-20260831-022553-ticket",
+  "objective": "Add a 'Confirmation actions' demo section to the Connect POC page pairing a Medium/Pill Primary (confirm) button with a Medium/Pill Destructive (delete) button, built entirely from published DS-001 tokens and components, without altering the existing button sheets.",
+  "successCriteria": [
+    "apps/connect/index.html renders a new 'Confirmation actions' section containing exactly one Primary button and one Destructive button, both Medium size / Pill shape, per DS-001 Button/Primary (28:117) and Button/Destructive (31:117).",
+    "The existing Button/Primary (28:117) and Button/Destructive (31:117) sheets are present and unchanged in structure and content.",
+    "Every color, dimension, radius, and type value the new section uses resolves to a token in design/tokens/ via existing CSS custom properties — no raw hex or pixel values are introduced.",
+    "node tools/drift-check/index.mjs exits 0 after the change.",
+    "node tools/contracts/validate.mjs exits 0 for every artifact in this run."
+  ],
+  "constraints": [
+    "Must use Button/Primary (28:117) and Button/Destructive (31:117) component sets per DS-001, Medium/Pill variant only.",
+    "Must not modify the existing button sheets already in apps/connect/index.html.",
+    "No new design tokens and no raw values — reuse the existing focx tokens already backing .btn--primary, .btn--destructive, .btn--md, and .btn--pill in apps/connect/styles.css.",
+    "No dependency installs or network calls beyond the Google Fonts link already present."
+  ],
+  "targetApp": "connect",
+  "route": {
+    "skipResearch": true,
+    "skipReason": "Purely additive UI composition using already-published components/tokens and the CSS pattern already established in apps/connect/styles.css; there are no unknowns to investigate."
+  },
+  "assumptions": [
+    "The prompt does not specify button labels; using 'Confirm' and 'Delete' as representative confirm/delete demo copy.",
+    "'Small demo pairing' is interpreted as a single row with one Primary + one Destructive button side by side, not a full size/shape/state matrix like the existing sheets.",
+    "The section reuses the existing .sheet/.grid/.btn* CSS classes already generated from tokens in styles.css, since Medium/Pill/Primary/Destructive styling already exists there — no new CSS is required."
+  ]
+}
