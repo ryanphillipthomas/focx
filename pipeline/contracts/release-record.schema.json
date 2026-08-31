@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focx.ai/contracts/release-record.schema.json",
+  "title": "Release record (pipeline/releases/<deploy-id>.json)",
+  "description": "Deploy → human. Evidence that a specific commit reached a specific public URL. The schema makes a live outcome impossible while infrastructure drift is recorded or the serving commit differs from the expected one.",
+  "type": "object",
+  "required": ["deployId", "environment", "service", "expectedSha", "deploy", "health", "outcome"],
+  "additionalProperties": false,
+  "properties": {
+    "deployId": { "type": "string", "description": "Render deploy id — the identity of this record" },
+    "runId": { "type": "string", "description": "Pipeline run this deploy traces to, when there is one" },
+    "environment": { "enum": ["staging", "production"] },
+    "service": {
+      "type": "object",
+      "required": ["id", "name", "publicUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "Render service id (srv-...)" },
+        "name": { "type": "string" },
+        "publicUrl": { "type": "string", "format": "uri", "description": "The custom domain a visitor types, not the onrender.com hostname" }
+      }
+    },
+    "expectedSha": { "type": "string", "minLength": 7 },
+    "deploy": {
+      "type": "object",
+      "required": ["status", "servingSha", "finishedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["live", "build_failed", "update_failed", "canceled", "timed_out"] },
+        "servingSha": { "type": "string", "description": "The commit actually live — a green deploy of the wrong commit is a failure" },
+        "finishedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["httpStatus", "tlsValid", "checkedUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "httpStatus": { "type": "integer" },
+        "tlsValid": { "type": "boolean" },
+        "certificateSubject": { "type": "string" },
+        "checkedUrl": { "type": "string", "format": "uri" },
+        "contentMarker": { "type": "string", "description": "String matched in the response body proving the right site answered" }
+      }
+    },
+    "customDomains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "verified", "certificateIssued"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "verified": { "type": "boolean" },
+          "certificateIssued": { "type": "boolean" }
+        }
+      }
+    },
+    "infraDrift": {
+      "type": "array",
+      "description": "Live Render configuration that disagrees with render.yaml or docs/sources-of-truth.md. Dashboard-only settings revert silently and no gate watches them. Any entry forbids outcome=live.",
+      "items": {
+        "type": "object",
+        "required": ["setting", "declared", "actual"],
+        "additionalProperties": false,
+        "properties": {
+          "setting": { "type": "string", "description": "e.g. prPreviewsEnabled, branch, buildCommand, publishPath" },
+          "declared": { "type": "string" },
+          "actual": { "type": "string" },
+          "authority": { "enum": ["repo", "dashboard"], "description": "Which side is the source of truth for this setting — i.e. which one is wrong" }
+        }
+      }
+    },
+    "unverified": {
+      "type": "array",
+      "description": "Checks that could not be completed, with the reason. Never silently omitted, never counted as a pass.",
+      "items": { "type": "string" }
+    },
+    "promotion": {
+      "type": "object",
+      "description": "Staging only. The promotion case handed to a human. Bots never merge.",
+      "required": ["prUrl", "commitRange", "merged"],
+      "additionalProperties": false,
+      "properties": {
+        "prUrl": { "type": "string", "format": "uri" },
+        "commitRange": { "type": "string", "description": "e.g. 854a84d..fbea1fb" },
+        "qaVerdictPath": { "type": "string" },
+        "merged": { "const": false, "description": "Structurally false. This role has no merge authority." }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "description": "Production only, and only from outcome=failed. Backward to a human-approved state is the one write this role owns.",
+      "required": ["rolledBackTo", "issueUrl", "healthyAfter"],
+      "additionalProperties": false,
+      "properties": {
+        "rolledBackTo": { "type": "string", "description": "Deploy id restored" },
+        "issueUrl": { "type": "string", "format": "uri" },
+        "healthyAfter": { "type": "boolean" }
+      }
+    },
+    "outcome": { "enum": ["live", "degraded", "failed", "blocked"] }
+  },
+  "allOf": [
+    {
+      "comment": "Infrastructure drift forbids a clean outcome.",
+      "if": { "properties": { "infraDrift": { "minItems": 1 } }, "required": ["infraDrift"] },
+      "then": { "properties": { "outcome": { "not": { "const": "live" } } } }
+    },
+    {
+      "comment": "A green deploy of the wrong commit is not live.",
+      "if": { "properties": { "outcome": { "const": "live" } } },
+      "then": {
+        "properties": {
+          "deploy": { "properties": { "status": { "const": "live" } } },
+          "health": { "properties": { "httpStatus": { "const": 200 }, "tlsValid": { "const": true } } }
+        }
+      }
+    },
+    {
+      "comment": "Rollback is only ever a response to failure.",
+      "if": { "required": ["rollback"] },
+      "then": { "properties": { "outcome": { "const": "failed" }, "environment": { "const": "production" } } }
+    }
+  ]
+}

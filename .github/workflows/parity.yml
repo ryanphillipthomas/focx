@@ -1,0 +1,52 @@
+# The pipeline machinery is duplicated across focx and studio-810 by hand.
+# Twice a fix landed in one repo and not the other — descriptive PR titles, then
+# the base-branch-aware preview URL — and nothing noticed, because nothing
+# recorded which files were supposed to match. This makes that a failing check.
+#
+# tools/pipeline-parity/manifest.json is the record of the shared surface and
+# how strictly each file is held: identical, branded, structure, or local.
+# Scheduled as well as per-PR, because the drift usually arrives via the *other*
+# repo, where this workflow does not run.
+#
+# The runner's Node is sufficient — no setup-node, no install, minimal billed
+# time, same as the drift gate.
+name: parity
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'pipeline/**'
+      - 'tools/**'
+      - 'docs/roles/**'
+  push:
+    branches: [main, staging]
+    paths:
+      - '.github/workflows/**'
+      - 'pipeline/**'
+      - 'tools/**'
+      - 'docs/roles/**'
+  schedule:
+    - cron: '17 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # The sibling's default branch is the comparison point: main is what each
+      # repo actually ships from, so parity is judged against shipped machinery
+      # rather than whatever is in flight on a branch.
+      - uses: actions/checkout@v4
+        with:
+          repository: ryanphillipthomas/studio-810
+          path: .sibling
+          ref: main
+
+      - run: node tools/pipeline-parity/index.mjs .sibling

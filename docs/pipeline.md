@@ -35,6 +35,34 @@ Every stage commits its artifact to `pipeline/runs/<run-id>/` **before** handing
 - **No stage skipping.** Only Research may be skipped, and only when the Chief's brief says so with a reason.
 - **Determinism of record.** Anything a role decided must be recoverable from its artifact alone. If it isn't in the artifact, it didn't happen.
 
+## After the run — deploy
+
+A run ends at a draft PR on purpose, so deployment happens *after* the human
+review the run stops at. The **Deploy** role ([`roles/deploy.md`](roles/deploy.md),
+charter [`pipeline/prompts/deploy-agent.md`](../pipeline/prompts/deploy-agent.md))
+is therefore not a stage in the chain above — it is a second loop, triggered by
+deploy events rather than by intake.
+
+```
+human merges ──▶ Render deploys ──▶ Deploy ──▶ release record
+   (staging)                           │       └─▶ staging→main PR, for a human
+                                       │
+   (main) ─────────────────────────────┴─▶ verified live, or rolled back
+```
+
+It proves what actually reached the internet — that the expected commit is the
+one serving, that the public URL answers over a valid certificate, and that live
+Render configuration still matches `render.yaml`. Its record is
+`pipeline/releases/<deploy-id>.json`
+([`release-record.schema.json`](../pipeline/contracts/release-record.schema.json)),
+keyed by deploy rather than by run because a human's direct merge is a release
+too.
+
+The **bots never merge** rule holds here without exception. Deploy assembles the
+promotion case and a human merges it. Its one write authority is *backward*: it
+may roll production back to a deploy a human already approved, never forward
+into one they have not.
+
 ## Phase 3 status — how runs execute today
 
 When the `ANTHROPIC_API_KEY` secret is configured, each run executes as **two

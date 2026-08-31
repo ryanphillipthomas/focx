@@ -1,0 +1,79 @@
+{
+  "comment": "The pipeline machinery is duplicated across ryanphillipthomas/focx and ryanphillipthomas/studio-810 by hand. This manifest is the record of which files are supposed to stay in lockstep, so that divergence is a failing check instead of a discovery months later. Identical copies of this file must exist in both repos.",
+  "repos": [
+    "focx",
+    "studio-810"
+  ],
+  "brandTokens": [
+    [
+      "focx-pipeline",
+      "studio-810-pipeline"
+    ],
+    [
+      "focx-staging",
+      "wearestudio810-staging"
+    ],
+    [
+      "focx.ai",
+      "wearestudio810.com"
+    ],
+    [
+      "design-focx",
+      "design-studio810"
+    ],
+    [
+      "Focx",
+      "Studio 810"
+    ],
+    [
+      "focx",
+      "wearestudio810"
+    ]
+  ],
+  "identical": [
+    ".github/workflows/drift-gate.yml",
+    "tools/contracts/validate.mjs",
+    "tools/pipeline-parity/index.mjs",
+    "tools/pipeline-parity/manifest.json",
+    "docs/pipeline.md",
+    "docs/roles/chief.md",
+    "docs/roles/product.md",
+    "docs/roles/qa.md",
+    "docs/roles/deploy.md"
+  ],
+  "branded": [
+    ".github/workflows/pipeline.yml",
+    "pipeline/prompts/qa-agent.md",
+    "pipeline/prompts/deploy-agent.md"
+  ],
+  "structure": [
+    "pipeline/contracts/run.schema.json",
+    "pipeline/contracts/brief.schema.json",
+    "pipeline/contracts/product-spec.schema.json",
+    "pipeline/contracts/research-report.schema.json",
+    "pipeline/contracts/design-spec.schema.json",
+    "pipeline/contracts/build-report.schema.json",
+    "pipeline/contracts/qa-verdict.schema.json",
+    "pipeline/contracts/release-record.schema.json"
+  ],
+  "local": {
+    "comment": "Deliberately repo-specific — each repo describes its own apps, packages, and design-system layering. Listed so the manifest is a complete account of the shared surface rather than a partial one. Not checked. tools/drift-check is here because the two implementations genuinely diverged: studio-810 generalized the parent/child token model that focx still hardcodes as focx/connect. That is a real difference worth reconciling one day, not a copy that slipped.",
+    "paths": [
+      ".github/workflows/parity.yml",
+      "AGENTS.md",
+      "README.md",
+      "render.yaml",
+      "pipeline/prompts/build-agent.md",
+      "docs/roles/design.md",
+      "docs/roles/engineer.md",
+      "docs/roles/research.md",
+      "docs/sources-of-truth.md",
+      "tools/drift-check/",
+      "tools/poc-builder/",
+      "tools/site-compose/",
+      "design/",
+      "apps/",
+      "packages/"
+    ]
+  }
+}
