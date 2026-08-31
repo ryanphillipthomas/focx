@@ -1,0 +1,44 @@
+{
+  "runId": "run-20260831-032144-ticket",
+  "storiesImplemented": ["S1"],
+  "filesChanged": [
+    "apps/site/index.html",
+    "apps/site/styles.css"
+  ],
+  "componentsUsed": [
+    "focx/Button/Primary/Size=Medium, Shape=Pill, State=Default",
+    "focx/Button/Primary/Size=Medium, Shape=Pill, State=Focused",
+    "focx/Button/Primary/Size=Medium, Shape=Pill, State=Hover"
+  ],
+  "tokensUsed": [
+    "focx.border.focus-ring",
+    "focx.color.action-fill",
+    "focx.color.action-fill-hover",
+    "focx.color.action-fill-text",
+    "focx.color.border-focus",
+    "focx.color.surface-1",
+    "focx.color.surface-inverse",
+    "focx.control.h-lg",
+    "focx.control.h-md",
+    "focx.control.px-lg",
+    "focx.control.px-md",
+    "focx.font.display",
+    "focx.font.sans",
+    "focx.radius.pill",
+    "focx.space.3",
+    "focx.style.brand-eyebrow",
+    "focx.style.brand-hero-desktop",
+    "focx.style.ui-subheading",
+    "focx.text.brand-eyebrow",
+    "focx.text.brand-hero",
+    "focx.text.label",
+    "focx.text.subheading",
+    "focx.weight.medium",
+    "focx.weight.regular"
+  ],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean — no design drift detected."
+  }
+}
