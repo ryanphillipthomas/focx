@@ -80,6 +80,12 @@ h1 {
   align-items: center;
 }
 
+.confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
