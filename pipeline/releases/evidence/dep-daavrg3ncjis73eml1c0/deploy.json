@@ -1,0 +1,14 @@
+{
+  "id": "dep-daavrg3ncjis73eml1c0",
+  "commit": {
+    "id": "c7c1789cac2e80b42fae10f50e2f0be8c7cc9383",
+    "message": "deploy: the per-deploy gate is code now\n\nOne day of agent-run verification made the case plainly: every check on the\nhappy path was mechanical — poll to terminal, compare the serving commit,\nprobe the URL and match the marker, read verificationStatus, diff live config\nagainst what the repo declares — and every failure the agent hit was sandbox\nfriction, not a deploy problem. In this system gates are deterministic and\nagents do judgment work; deploy verification is a gate, and now it runs as\none: tools/deploy-verify/index.mjs, dependency-free, seconds per deploy, and\nRENDER_API_KEY never enters an LLM environment at all.\n\nThe role survives intact — same release records, same contract, same draft\npromotion PR on healthy staging deploys, same backward-only rollback on\nfailed production ones, opened issues included. The charter stays as the\nrulebook and now says so in a banner: an agent reading it is being summoned\nfor an audit or a triage, never a routine deploy.\n\nThe tool carries a fixtures mode (DEPLOY_VERIFY_FIXTURES) that replaces API\nreads with files and disables every side effect, so the full decision path —\nlive, failed-with-rollback, degraded-with-drift — is tested offline against\nthe API shapes the agent runs left behind in pipeline/releases/evidence.\ndeploy.config.json gains serviceName so the rename class of drift the agent\ncaught tonight stays caught. The workflow drops the Claude CLI install, needs\nonly RENDER_API_KEY, finishes in seconds, and goes red on a failed outcome\nafter committing the record.\n\nCo-Authored-By: claude-flow <ruv@ruv.net>",
+    "createdAt": "2026-08-31T22:18:38Z"
+  },
+  "status": "live",
+  "trigger": "new_commit",
+  "createdAt": "2026-08-31T22:18:40.875817Z",
+  "updatedAt": "2026-08-31T22:18:47.927218Z",
+  "startedAt": "2026-08-31T22:18:40.873732Z",
+  "finishedAt": "2026-08-31T22:18:47.926866Z"
+}

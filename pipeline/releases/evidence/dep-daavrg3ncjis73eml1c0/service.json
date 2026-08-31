@@ -1,0 +1,34 @@
+{
+  "autoDeploy": "yes",
+  "autoDeployTrigger": "commit",
+  "branch": "main",
+  "createdAt": "2026-08-31T03:11:47.641555Z",
+  "dashboardUrl": "https://dashboard.render.com/static/srv-daaf1stg1s2s73d08edg",
+  "id": "srv-daaf1stg1s2s73d08edg",
+  "name": "focx",
+  "notifyOnFail": "default",
+  "ownerId": "tea-d8dd21h9rddc739r69n0",
+  "repo": "https://github.com/ryanphillipthomas/focx",
+  "rootDir": "",
+  "serviceDetails": {
+    "buildCommand": "node tools/site-compose/index.mjs",
+    "buildPlan": "starter",
+    "ipAllowList": [
+      {
+        "cidrBlock": "0.0.0.0/0",
+        "description": "everywhere"
+      }
+    ],
+    "previews": {
+      "generation": "automatic"
+    },
+    "publishPath": "dist",
+    "pullRequestPreviewsEnabled": "yes",
+    "url": "https://focx-w0na.onrender.com"
+  },
+  "slug": "focx-w0na",
+  "suspended": "not_suspended",
+  "suspenders": [],
+  "type": "static_site",
+  "updatedAt": "2026-08-31T22:18:47.930063Z"
+}
