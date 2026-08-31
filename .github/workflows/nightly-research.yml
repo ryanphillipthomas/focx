@@ -4,9 +4,12 @@
 name: nightly-research
 
 on:
-  schedule:
-    - cron: "0 8 * * *"   # nightly, 08:00 UTC
-  workflow_dispatch: {}    # allow manual test-fires of the scheduled path
+  # Cron parked until Phase 2 attaches the Research agent — until then a
+  # nightly fire would open an empty stub PR and burn a billed minute every
+  # day for nothing. Re-enable by uncommenting when Phase 2 lands.
+  # schedule:
+  #   - cron: "0 8 * * *"   # nightly, 08:00 UTC
+  workflow_dispatch: {}    # manual test-fires of the scheduled path still work
 
 permissions:
   contents: write
@@ -15,6 +18,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

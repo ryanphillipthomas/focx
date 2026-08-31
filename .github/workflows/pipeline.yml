@@ -31,6 +31,7 @@ jobs:
   intake:
     if: github.event_name != 'issues' || github.event.label.name == 'pipeline:build'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

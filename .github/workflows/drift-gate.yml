@@ -9,13 +9,19 @@ on:
 permissions:
   contents: read
 
+# Rapid pushes to the same PR cancel the superseded gate run instead of
+# stacking billed minutes.
+concurrency:
+  group: drift-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   drift:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      # drift-check is dependency-free vanilla Node; the runner's preinstalled
+      # Node is sufficient — no setup-node, no install, minimal billed time.
       - name: drift-check
         run: node tools/drift-check/index.mjs
