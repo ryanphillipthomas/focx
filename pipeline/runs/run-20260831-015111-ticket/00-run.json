@@ -1,0 +1,13 @@
+{
+  "runId": "run-20260831-015111-ticket",
+  "trigger": {
+    "source": "ticket",
+    "issueNumber": 3,
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33348830234"
+  },
+  "prompt": "Build the Connect Button POC page from the DS-001 Figma foundation (Button/Primary 28:117, Button/Destructive 31:117). This issue is trigger source 1 of 3 in the Phase 2 E2E proof.",
+  "mode": "build",
+  "createdAt": "2026-08-31T01:51:12.032Z",
+  "branch": "run/run-20260831-015111-ticket"
+}
