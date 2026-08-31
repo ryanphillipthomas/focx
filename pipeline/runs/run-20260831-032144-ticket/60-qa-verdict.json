@@ -1,0 +1,65 @@
+{
+  "runId": "run-20260831-032144-ticket",
+  "driftGate": {
+    "passed": true,
+    "checkRunUrl": "https://github.com/ryanphillipthomas/focx/actions/runs/33354042791/job/99372689697"
+  },
+  "criteria": [
+    {
+      "storyId": "S1",
+      "criterion": "apps/site/index.html renders a hero with three text elements — an eyebrow line, the 'Focx' wordmark, and a positioning line — and no longer contains the meta-refresh redirect.",
+      "result": "pass",
+      "evidence": "Inspected apps/site/index.html:12-16 — <main class=\"hero\"> contains <p class=\"eyebrow\">Autonomous development pipeline</p>, <h1 class=\"wordmark\">Focx</h1>, and <p class=\"subheading\">Ticket in, reviewed pull request out...</p>. No <meta http-equiv=\"refresh\"> or redirect script present anywhere in the file."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The eyebrow line is styled per focx.style.brand-eyebrow (Geist Medium, brand-eyebrow size, uppercase with matching tracking).",
+      "result": "pass",
+      "evidence": "apps/site/styles.css:47-52 .eyebrow { font-size: var(--text-brand-eyebrow) [12px, design/tokens/focx/tokens.json focx.text.brand-eyebrow]; font-weight: var(--weight-medium) [500 = Medium]; letter-spacing: var(--text-brand-eyebrow); text-transform: uppercase }. Font family Geist inherited from body (styles.css:32). Note: the design system publishes no discrete 'tracking' token for Brand/Eyebrow (design/tokens/focx/tokens.json has no such leaf) — the build reuses --text-brand-eyebrow for letter-spacing, an identical pattern already shipped in apps/connect/styles.css:49-54 (pre-existing, not introduced by this run). No live Figma access this run (no MCP tool available) to confirm the literal '12' in the style token's description ('Geist Medium 12/1, tracking 12') resolves to 12px vs. a percentage — flagging as an unresolved design-token ambiguity for Design to close with a discrete tracking token, not a confirmed defect in this run's build, since no raw value was invented and the established repo pattern was followed verbatim."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The wordmark 'Focx' is styled per focx.style.brand-hero-desktop (focx.font.display family with a system fallback stack, brand-hero size).",
+      "result": "pass",
+      "evidence": "apps/site/styles.css:54-59 .wordmark { font-family: var(--font-display) [The Fox Tail], ui-serif, Georgia, serif; font-size: var(--text-brand-hero) [64px]; font-weight: var(--weight-regular) [400]; line-height: 0.98 }. Matches focx.style.brand-hero-desktop's published description 'The Fox Tail Regular 64/0.98' verbatim, with a serif system fallback stack since The Fox Tail is unhosted (per brief constraint)."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The positioning line is styled per focx.style.ui-subheading (Geist Medium, subheading size).",
+      "result": "pass",
+      "evidence": "apps/site/styles.css:61-65 .subheading { font-size: var(--text-subheading) [17px]; font-weight: var(--weight-medium) [500]; line-height: 1.35 }. Geist inherited from body. Matches 'Geist Medium 17/1.35' per focx.style.ui-subheading. The style's '-0.4' tracking is not implemented (no discrete tracking token exists to express it without a raw value, disclosed in 40-design-spec.json's notes); the written acceptance criterion only requires 'Geist Medium, subheading size' and does not ask for tracking, so this is not a failure against the criterion as written."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "A visible button-styled link into Connect uses the Button/Primary component pattern at Medium size, Pill shape (the same .btn/.btn--primary/.btn--md/.btn--pill classes and tokens established in apps/connect/styles.css) and its href is a root-relative path ('/skills/connect/'), not a hardcoded domain.",
+      "result": "pass",
+      "evidence": "apps/site/index.html:16 <a class=\"btn btn--primary btn--md btn--pill\" href=\"/skills/connect/\">Explore Connect</a>. apps/site/styles.css:67-90 defines .btn/.btn--md/.btn--pill/.btn--primary with identical values to apps/connect/styles.css:89-124 (height var(--control-h-md)=34px, padding var(--control-px-md)=14px, font-size var(--text-label)=13px, border-radius var(--radius-pill)=999px, background var(--action-fill)=#050505, :hover var(--action-fill-hover)=#222222, :focus-visible outline var(--border-focus-ring) solid var(--border-focus)) — Default/Hover/Focused states from 40-design-spec.json's components list all present. href is root-relative, no focx.ai domain string anywhere in the file (grepped)."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The page's background and text colors are drawn only from published focx color tokens, and the specific pairing chosen keeps the CTA button visibly legible (non-zero fill contrast against the page background).",
+      "result": "pass",
+      "evidence": "apps/site/styles.css:31-35 body { background: var(--surface-1) [#f9f9f9]; color: var(--surface-inverse) [#050505] }. CTA: background var(--action-fill) [#050505] on the #f9f9f9 page background — clearly non-zero contrast (near-black button on near-white page), with button text var(--action-fill-text) [#fcfcfc] on the #050505 fill. All four values trace to design/tokens/focx/tokens.json (surface-1, surface-inverse, action-fill, action-fill-text); no raw hex/px literals found in apps/site/styles.css (confirmed independently via drift-check, see evidence/drift-check.txt)."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "node tools/drift-check/index.mjs exits 0 against apps/site/index.html and apps/site/styles.css.",
+      "result": "pass",
+      "evidence": "Independently re-ran `node tools/drift-check/index.mjs` from repo root — output 'drift-check: clean — no design drift detected.', exit 0. Saved to pipeline/runs/run-20260831-032144-ticket/evidence/drift-check.txt. Cross-checked against the PR's own drift-gate CI check: `gh pr checks 13` → drift / pass / https://github.com/ryanphillipthomas/focx/actions/runs/33354042791/job/99372689697 (DRIFT_CHECK_STATE=SUCCESS), saved to evidence/pr-checks.txt."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "apps/connect/index.html and apps/connect/styles.css are unchanged, so /skills/connect stays reachable.",
+      "result": "pass",
+      "evidence": "`git diff 91f2cb8..HEAD -- apps/connect/ tools/ render.yaml` is empty (zero changes), saved to evidence/connect-and-infra-untouched.diff. Additionally ran `node tools/site-compose/index.mjs` locally (writes only to gitignored dist/, not committed) and confirmed the resulting tree: dist/index.html + dist/styles.css (umbrella root, this run's hero) and dist/skills/connect/index.html + dist/skills/connect/styles.css (untouched Connect app) both present — '/' and '/skills/connect/' both resolve. Saved to evidence/site-compose-build.txt. No PREVIEW_URL was provided for this run, so this local site-compose build stands in for the deploy preview."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "node tools/contracts/validate.mjs passes for every artifact this run writes.",
+      "result": "pass",
+      "evidence": "Independently re-ran `node tools/contracts/validate.mjs` from repo root — output 'contracts: 13 artifact(s) valid — every handoff conforms.', exit 0. Saved to pipeline/runs/run-20260831-032144-ticket/evidence/contracts-validate.txt."
+    }
+  ],
+  "additionalDriftFound": [],
+  "verdict": "pass"
+}

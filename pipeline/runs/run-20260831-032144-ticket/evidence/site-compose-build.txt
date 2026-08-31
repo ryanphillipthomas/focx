@@ -1,0 +1,14 @@
+$ node tools/site-compose/index.mjs
+site-compose: apps/site → dist/
+site-compose: apps/connect → dist/skills/connect/
+site-compose: done
+
+$ find dist -maxdepth 3 -type f
+dist/index.html
+dist/styles.css
+dist/skills/connect/index.html
+dist/skills/connect/styles.css
+
+Confirms: '/' serves apps/site's hero (dist/index.html), and '/skills/connect/' (the CTA's href)
+resolves to apps/connect's untouched app (dist/skills/connect/index.html) per site-map.json's
+mount "skills/connect": "apps/connect".
