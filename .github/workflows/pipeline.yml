@@ -28,7 +28,6 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  id-token: write   # claude-code-action's OIDC token exchange
 
 concurrency:
   group: pipeline-${{ github.event.issue.number || github.run_id }}
@@ -125,31 +124,25 @@ jobs:
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------- build (agent)
+      # The Claude Code CLI runs directly in this workspace — the wrapper
+      # action runs Claude in its own managed checkout, which discards the
+      # agent's work before our commit step can stage it.
+      - name: Install Claude Code CLI
+        if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
+        run: npm install -g @anthropic-ai/claude-code
+
       - name: Build agent — role chain (Chief → Engineer)
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
-        uses: anthropics/claude-code-action@v1
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RUN_ID: ${{ steps.trigger.outputs.run_id }}
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            RUN_ID is ${{ steps.trigger.outputs.run_id }}. Read pipeline/prompts/build-agent.md and execute that charter for this run, start to finish.
-          claude_args: >-
-            --model claude-sonnet-5
-            --max-turns 60
-            --permission-mode acceptEdits
-            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
-
-      - name: Agent transcript (debug)
-        if: always() && env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
         run: |
-          FILE=/home/runner/work/_temp/claude-execution-output.json
-          if [ -f "$FILE" ]; then
-            echo "=== agent final messages ==="
-            jq -r '.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' "$FILE" | tail -80 || true
-            echo "=== permission denials ==="
-            jq -r '.[] | select(.type=="result") | .permission_denials[]? | "\(.tool_name): \(.tool_input | tostring | .[0:160])"' "$FILE" || true
-          fi
+          set -euo pipefail
+          claude -p "RUN_ID is $RUN_ID. Read pipeline/prompts/build-agent.md and execute that charter for this run, start to finish." \
+            --model claude-sonnet-5 \
+            --max-turns 60 \
+            --permission-mode acceptEdits \
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
 
       # ---------------------------------------------- build (deterministic)
       - name: Fallback build (deterministic POC builder)
@@ -230,19 +223,17 @@ jobs:
 
       - name: QA agent — independent verification
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
-        uses: anthropics/claude-code-action@v1
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RUN_ID: ${{ steps.trigger.outputs.run_id }}
           DRIFT_CHECK_STATE: ${{ steps.gate.outputs.state }}
           DRIFT_CHECK_URL: ${{ steps.gate.outputs.url }}
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            RUN_ID is ${{ steps.trigger.outputs.run_id }}. DRIFT_CHECK_STATE is ${{ steps.gate.outputs.state }} and DRIFT_CHECK_URL is ${{ steps.gate.outputs.url }}. Read pipeline/prompts/qa-agent.md and execute that charter for this run.
-          claude_args: >-
-            --model claude-sonnet-5
-            --max-turns 40
-            --permission-mode acceptEdits
+        run: |
+          set -euo pipefail
+          claude -p "RUN_ID is $RUN_ID. DRIFT_CHECK_STATE is $DRIFT_CHECK_STATE and DRIFT_CHECK_URL is $DRIFT_CHECK_URL. Read pipeline/prompts/qa-agent.md and execute that charter for this run." \
+            --model claude-sonnet-5 \
+            --max-turns 40 \
+            --permission-mode acceptEdits \
             --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
 
       - name: Commit QA verdict
