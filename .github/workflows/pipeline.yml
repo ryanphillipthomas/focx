@@ -225,6 +225,32 @@ jobs:
             echo "url=${LINK:-https://github.com/${{ github.repository }}/pull/$PR_NUMBER/checks}"
           } >> "$GITHUB_OUTPUT"
 
+      # The URL is Render's service-preview naming convention
+      # (<service>-pr-<number>.onrender.com), verified live on PR #14. Service
+      # previews are a dashboard toggle, not a render.yaml field — see that
+      # file's header. Polling keeps QA from reading a preview mid-build; an
+      # unreachable preview is recorded rather than fatal, because the QA
+      # charter already treats a missing preview as a documented limitation.
+      - name: Await Render preview
+        id: preview
+        if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          URL="https://focx-pr-${PR_NUMBER}.onrender.com"
+          STATE=unreachable
+          for i in $(seq 1 20); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -L "$URL" || true)
+            if [ "$CODE" = "200" ]; then STATE=ready; break; fi
+            sleep 15
+          done
+          echo "preview: $STATE $URL"
+          {
+            echo "url=$URL"
+            echo "state=$STATE"
+          } >> "$GITHUB_OUTPUT"
+
       - name: QA agent — independent verification
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
         env:
@@ -234,13 +260,15 @@ jobs:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           DRIFT_CHECK_STATE: ${{ steps.gate.outputs.state }}
           DRIFT_CHECK_URL: ${{ steps.gate.outputs.url }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+          PREVIEW_STATE: ${{ steps.preview.outputs.state }}
         run: |
           set -euo pipefail
-          claude -p "RUN_ID is $RUN_ID. The run's PR is #$PR_NUMBER. DRIFT_CHECK_STATE is $DRIFT_CHECK_STATE and DRIFT_CHECK_URL is $DRIFT_CHECK_URL — you may confirm it yourself with 'gh pr checks $PR_NUMBER'. Read pipeline/prompts/qa-agent.md and execute that charter for this run." \
+          claude -p "RUN_ID is $RUN_ID. The run's PR is #$PR_NUMBER. DRIFT_CHECK_STATE is $DRIFT_CHECK_STATE and DRIFT_CHECK_URL is $DRIFT_CHECK_URL — you may confirm it yourself with 'gh pr checks $PR_NUMBER'. PREVIEW_URL is $PREVIEW_URL (state: $PREVIEW_STATE — ready means it answered HTTP 200; unreachable means record the limitation as before). Read pipeline/prompts/qa-agent.md and execute that charter for this run." \
             --model claude-sonnet-5 \
             --max-turns 40 \
             --permission-mode acceptEdits \
-            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr checks:*),Bash(gh pr view:*)"
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr checks:*),Bash(gh pr view:*),Bash(curl:*)"
 
       - name: Commit QA verdict
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
