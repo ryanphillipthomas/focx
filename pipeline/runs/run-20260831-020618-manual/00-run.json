@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260831-020618-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33349603765"
+  },
+  "prompt": "Smoke test: Phase 3 workflow rewrite, fallback path (no agent key).",
+  "mode": "build",
+  "createdAt": "2026-08-31T02:06:20.921Z",
+  "branch": "run/run-20260831-020618-manual"
+}
