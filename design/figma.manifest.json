@@ -2,24 +2,24 @@
   "description": "Registry of the Figma sources of design truth. The Design role syncs published variables/components from these into design/tokens/ via the Figma MCP. Entries may share a fileKey: the parent/child split is logical (pages/sections + token namespaces), not necessarily separate files.",
   "files": {
     "focx-foundation": {
-      "name": "TODO — exact Figma file name",
-      "fileKey": "TODO — from the Figma URL: figma.com/design/<fileKey>/...",
+      "name": "Focx — DS-001 Shell - Today",
+      "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
       "role": "parent",
-      "scopeHint": "TODO — page/section within the file holding the focx foundation (variables, components)",
+      "scopeHint": "Single page 'Cover' (0:1) today; roadmap per the cover: foundations → components → patterns → responsive screens. All content is focx.* scope until Connect pages exist.",
       "contains": "focx design system foundation: variables (color, type, spacing, radius) and components"
     },
     "connect": {
-      "name": "TODO — same file as focx-foundation for now",
-      "fileKey": "TODO — same fileKey as focx-foundation until Connect gets its own file",
+      "name": "Focx — DS-001 Shell - Today",
+      "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
       "role": "child",
       "extends": "focx-foundation",
-      "scopeHint": "TODO — page/section within the file holding Connect's extension layer",
+      "scopeHint": "No Connect-specific pages yet — connect.* deltas begin when Connect surfaces are added to this file (or a dedicated file, at which point only this fileKey changes).",
       "contains": "Connect's extension layer: connect-specific variables and components"
     }
   },
   "sync": {
     "tool": "figma-mcp",
-    "lastSync": null,
-    "syncedBy": null
+    "lastSync": "2026-08-31T01:14:48Z",
+    "syncedBy": "claude-code (bootstrap partial sync — variables consumed by Cover frame 9:7; full extraction when foundation frames land)"
   }
 }
