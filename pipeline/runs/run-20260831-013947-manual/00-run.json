@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260831-013947-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33348253677"
+  },
+  "prompt": "Smoke test 3: verify the drift gate fires on a pipeline-created PR.",
+  "mode": "build",
+  "createdAt": "2026-08-31T01:39:47.669Z",
+  "branch": "run/run-20260831-013947-manual"
+}
