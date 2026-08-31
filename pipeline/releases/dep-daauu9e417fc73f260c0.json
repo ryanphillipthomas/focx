@@ -1,0 +1,29 @@
+{
+  "deployId": "dep-daauu9e417fc73f260c0",
+  "environment": "production",
+  "service": {
+    "id": "srv-daaf1stg1s2s73d08edg",
+    "name": "focx",
+    "publicUrl": "https://focx.ai"
+  },
+  "expectedSha": "c15d0ddb591672d308b02d585819a9295a62ecf4",
+  "deploy": {
+    "status": "live",
+    "servingSha": "c15d0ddb591672d308b02d585819a9295a62ecf4",
+    "finishedAt": "2026-08-31T21:16:31.355299Z"
+  },
+  "health": {
+    "httpStatus": 200,
+    "tlsValid": true,
+    "certificateSubject": "CN=focx.ai",
+    "checkedUrl": "https://focx.ai/",
+    "contentMarker": "<title>Focx</title>"
+  },
+  "customDomains": [
+    { "name": "www.focx.ai", "verified": true, "certificateIssued": true },
+    { "name": "focx.ai", "verified": true, "certificateIssued": true }
+  ],
+  "infraDrift": [],
+  "unverified": [],
+  "outcome": "live"
+}

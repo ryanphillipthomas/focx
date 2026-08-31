@@ -1,0 +1,8 @@
+{
+  "subject": { "CN": "focx.ai" },
+  "issuer": { "C": "US", "O": "Google Trust Services", "CN": "WE1" },
+  "valid_from": "Aug 31 02:54:23 2026 GMT",
+  "valid_to": "Nov 29 03:54:13 2026 GMT",
+  "subjectaltname": "DNS:focx.ai",
+  "authorized": true
+}

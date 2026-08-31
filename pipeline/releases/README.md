@@ -20,3 +20,10 @@ Deploy is not a stage inside a run. Runs deliberately end at a draft PR awaiting
 human review; deployment happens after that review, so this is a second loop
 triggered by deploy events. The role has no merge authority: it assembles the
 promotion case and a human merges it.
+
+Records are committed to the branch whose deploy they verify, so staging and
+main each accumulate their own environment's records and the branches diverge
+by design between promotions. The promotion merge reconciles them — record
+filenames are unique per deploy id, so these merges never conflict. Do not
+"fix" the divergence by force-syncing one branch over the other; that erases
+the other environment's release history.

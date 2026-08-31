@@ -96,7 +96,7 @@ jobs:
           set -euo pipefail
           claude -p "EVENT is $EVENT. EXPECTED_SHA is $EXPECTED_SHA. SERVICE_ID is $SERVICE_ID. PUBLIC_URL is $PUBLIC_URL. The content marker for this environment is: $CONTENT_MARKER — the served page must contain it. RENDER_API_KEY is in your environment for api.render.com (send it as 'Authorization: Bearer \$RENDER_API_KEY'). Read pipeline/prompts/deploy-agent.md and execute that charter for this deploy." \
             --model claude-sonnet-5 \
-            --max-turns 40 \
+            --max-turns 60 \
             --permission-mode acceptEdits \
             --allowedTools "Read,Glob,Grep,Write,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(curl:*),Bash(dig:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr create:*),Bash(gh pr edit:*),Bash(gh pr checks:*),Bash(gh issue create:*),Bash(gh issue comment:*)"
 
