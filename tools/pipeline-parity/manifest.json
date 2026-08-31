@@ -28,10 +28,19 @@
     [
       "focx",
       "wearestudio810"
+    ],
+    [
+      "'focx'",
+      "'studio810'"
+    ],
+    [
+      "@focx/",
+      "@studio810/"
     ]
   ],
   "identical": [
     ".github/workflows/drift-gate.yml",
+    ".github/workflows/deploy.yml",
     "tools/contracts/validate.mjs",
     "tools/pipeline-parity/index.mjs",
     "tools/pipeline-parity/manifest.json",
@@ -44,7 +53,9 @@
   "branded": [
     ".github/workflows/pipeline.yml",
     "pipeline/prompts/qa-agent.md",
-    "pipeline/prompts/deploy-agent.md"
+    "pipeline/prompts/deploy-agent.md",
+    "tools/drift-check/index.mjs",
+    "tools/drift-check/package.json"
   ],
   "structure": [
     "pipeline/contracts/run.schema.json",
@@ -57,9 +68,10 @@
     "pipeline/contracts/release-record.schema.json"
   ],
   "local": {
-    "comment": "Deliberately repo-specific — each repo describes its own apps, packages, and design-system layering. Listed so the manifest is a complete account of the shared surface rather than a partial one. Not checked. tools/drift-check is here because the two implementations genuinely diverged: studio-810 generalized the parent/child token model that focx still hardcodes as focx/connect. That is a real difference worth reconciling one day, not a copy that slipped.",
+    "comment": "Deliberately repo-specific — each repo describes its own apps, packages, and design-system layering. Listed so the manifest is a complete account of the shared surface rather than a partial one. Not checked. tools/drift-check graduated out of this tier on 2026-08-31 when focx adopted studio-810's generalized parent/child layer model; only the PARENT constant and npm scope differ now, both covered by brand tokens.",
     "paths": [
       ".github/workflows/parity.yml",
+      "pipeline/deploy.config.json",
       "AGENTS.md",
       "README.md",
       "render.yaml",
@@ -68,7 +80,6 @@
       "docs/roles/engineer.md",
       "docs/roles/research.md",
       "docs/sources-of-truth.md",
-      "tools/drift-check/",
       "tools/poc-builder/",
       "tools/site-compose/",
       "design/",
