@@ -1,0 +1,14 @@
+{
+  "runId": "run-20260831-043221-manual",
+  "storiesImplemented": ["S1"],
+  "filesChanged": [
+    "apps/site/index.html"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean — no design drift detected."
+  }
+}

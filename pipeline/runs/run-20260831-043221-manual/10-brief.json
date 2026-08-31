@@ -1,0 +1,26 @@
+{
+  "runId": "run-20260831-043221-manual",
+  "objective": "Add a <meta name=\"description\"> tag to apps/site/index.html, using the existing subheading copy verbatim, so link unfurls and search snippets describe the product.",
+  "successCriteria": [
+    "apps/site/index.html's <head> contains a <meta name=\"description\"> tag whose content is exactly the existing subheading text: 'Ticket in, reviewed pull request out — every stage built by bots, merged only by a human.'",
+    "No other visible/visual change to apps/site/index.html or apps/site/styles.css — the rendered page is byte-identical in appearance.",
+    "No new components, tokens, or raw design values are introduced; node tools/drift-check/index.mjs exits clean.",
+    "node tools/contracts/validate.mjs passes for every artifact this run writes."
+  ],
+  "constraints": [
+    "Touch only apps/site/index.html — no CSS changes, no other files.",
+    "Reuse the exact subheading copy already in the page; do not paraphrase or invent new marketing copy.",
+    "No new design-system components or tokens; this is a non-visual, metadata-only change.",
+    "Do not touch .github/, tools/, docs/, design/tokens/, pipeline/contracts/, or CODEOWNERS.",
+    "No git commit/push and no dependency installs — the workflow commits after this run exits."
+  ],
+  "targetApp": "focx-site",
+  "route": {
+    "skipResearch": true,
+    "skipReason": "The prompt is fully self-contained: exact target file, exact copy to reuse, and an explicit 'no visual changes, no new components' scope boundary. There is no feasibility question, prior-art comparison, or technical unknown to investigate."
+  },
+  "assumptions": [
+    "'Add a meta description tag' is interpreted literally as a single <meta name=\"description\"> element — not an Open Graph (og:description) or Twitter Card tag. The prompt names one specific tag and pairs it with 'no visual changes, no new components,' so adding a broader social-meta suite is treated as out of scope, not a free extension.",
+    "The em dash in the reused copy is written with the &mdash; entity in the meta content attribute, matching the encoding style already used for the same string in the visible subheading."
+  ]
+}

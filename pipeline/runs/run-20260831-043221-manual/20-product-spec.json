@@ -1,0 +1,24 @@
+{
+  "runId": "run-20260831-043221-manual",
+  "stories": [
+    {
+      "id": "S1",
+      "story": "As a person sharing or searching for a focx.ai link, I want the marketing root page to declare a meta description, so that link unfurls and search-engine snippets describe the product instead of showing nothing or falling back to arbitrary page text.",
+      "acceptanceCriteria": [
+        "apps/site/index.html's <head> contains exactly one <meta name=\"description\" content=\"...\"> tag.",
+        "The tag's content attribute is exactly the existing subheading copy: 'Ticket in, reviewed pull request out — every stage built by bots, merged only by a human.'",
+        "The visible rendered page (hero, eyebrow, wordmark, subheading, CTA button) is unchanged — no new or modified visual elements.",
+        "apps/site/styles.css is untouched.",
+        "node tools/drift-check/index.mjs exits 0.",
+        "node tools/contracts/validate.mjs passes for every artifact this run writes."
+      ]
+    }
+  ],
+  "outOfScope": [
+    "Open Graph tags (og:title, og:description, og:image) or Twitter Card meta tags.",
+    "Any change to the visible hero copy, layout, styling, or CTA.",
+    "Meta description tags on any page other than apps/site/index.html.",
+    "New design-system components or tokens of any kind."
+  ],
+  "designSystemNeeds": []
+}
