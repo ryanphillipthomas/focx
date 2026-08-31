@@ -134,7 +134,10 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             RUN_ID is ${{ steps.trigger.outputs.run_id }}. Read pipeline/prompts/build-agent.md and execute that charter for this run, start to finish.
-          claude_args: "--model claude-sonnet-5 --max-turns 60"
+          claude_args: >-
+            --model claude-sonnet-5
+            --max-turns 60
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*)"
 
       # ---------------------------------------------- build (deterministic)
       - name: Fallback build (deterministic POC builder)
@@ -224,7 +227,10 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             RUN_ID is ${{ steps.trigger.outputs.run_id }}. DRIFT_CHECK_STATE is ${{ steps.gate.outputs.state }} and DRIFT_CHECK_URL is ${{ steps.gate.outputs.url }}. Read pipeline/prompts/qa-agent.md and execute that charter for this run.
-          claude_args: "--model claude-sonnet-5 --max-turns 40"
+          claude_args: >-
+            --model claude-sonnet-5
+            --max-turns 40
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*)"
 
       - name: Commit QA verdict
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
