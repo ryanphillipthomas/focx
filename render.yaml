@@ -2,8 +2,9 @@
 # Preview generation is automatic: every PR gets its own deploy preview, which
 # is how "bots build, never merge" stays reviewable.
 #
-# NOTE: dormant until Phase 2 gives apps/connect a build. Connect this repo in
-# the Render dashboard once the first pipeline run scaffolds the app.
+# Connect this repo in the Render dashboard to activate PR previews.
+# The POC page is generated deterministically from the design tokens at deploy
+# time — the same builder the pipeline runs, so preview and PR always agree.
 previews:
   generation: automatic
 
@@ -11,6 +12,6 @@ services:
   - type: web
     name: connect
     runtime: static
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @focx/connect build
-    staticPublishPath: apps/connect/dist
+    buildCommand: node tools/poc-builder/index.mjs
+    staticPublishPath: apps/connect
     autoDeployTrigger: commit

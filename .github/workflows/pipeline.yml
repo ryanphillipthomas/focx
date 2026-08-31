@@ -64,9 +64,13 @@ jobs:
             exit 1
           fi
           RUN_ID="run-$(date -u +%Y%m%d-%H%M%S)-$SOURCE"
+          # "[drift-test]" in the prompt runs the Phase 2 negative test: the
+          # builder injects one raw value so the PR gate can prove it blocks.
+          DRIFT=0; case "$PROMPT" in *"[drift-test]"*) DRIFT=1 ;; esac
           {
             echo "source=$SOURCE"
             echo "run_id=$RUN_ID"
+            echo "drift=$DRIFT"
             echo "prompt<<PROMPT_EOF"
             echo "$PROMPT"
             echo "PROMPT_EOF"
@@ -111,6 +115,26 @@ jobs:
           git commit -m "pipeline: open $RUN_ID (trigger: $SOURCE)"
           git push origin "$BRANCH"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      # Phase 2: the deterministic builder stands in for the Chief→QA role
+      # chain — same tokens in, byte-identical output out, whatever the
+      # trigger. The generated app lives only on run branches so the PR diff
+      # IS the build. Role agents replace this step in Phase 3.
+      - name: Build (deterministic POC builder)
+        env:
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          DRIFT_INJECT: ${{ steps.trigger.outputs.drift }}
+        run: |
+          set -euo pipefail
+          node tools/poc-builder/index.mjs
+          if node tools/drift-check/index.mjs; then
+            echo "local drift-check: clean"
+          else
+            echo "::warning::local drift-check failed — the PR drift gate will block this run (expected for [drift-test])"
+          fi
+          git add apps pipeline
+          git commit -m "pipeline: $RUN_ID build (deterministic POC builder)"
+          git push origin "run/$RUN_ID"
 
       - name: Open draft PR (audit surface)
         id: pr

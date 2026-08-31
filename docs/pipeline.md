@@ -35,6 +35,16 @@ Every stage commits its artifact to `pipeline/runs/<run-id>/` **before** handing
 - **No stage skipping.** Only Research may be skipped, and only when the Chief's brief says so with a reason.
 - **Determinism of record.** Anything a role decided must be recoverable from its artifact alone. If it isn't in the artifact, it didn't happen.
 
+## Phase 2 status
+
+The role chain's Engineer seat is currently held by a **deterministic builder**
+([`tools/poc-builder/`](../tools/poc-builder/)): it generates the Connect POC
+page purely from `design/tokens/` and the registered Figma component sets, and
+writes a schema-valid `50-build-report.json`. Same Figma in → byte-identical
+output out, for every trigger source — which is exactly what Phase 2 must
+prove. AI role agents take over this seat in Phase 3; the artifacts, contracts,
+and gates do not change when they do.
+
 ## Run identity
 
 - Run ID format: `run-<UTC yyyymmdd-HHMMSS>-<trigger>` (e.g., `run-20260830-142201-ticket`).

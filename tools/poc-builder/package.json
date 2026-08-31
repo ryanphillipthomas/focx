@@ -1,0 +1,10 @@
+{
+  "name": "@focx/poc-builder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Phase 2 deterministic builder: generates the Connect POC page from the synced design tokens. Replaced by the Engineer agent in Phase 3.",
+  "bin": {
+    "poc-builder": "./index.mjs"
+  }
+}
