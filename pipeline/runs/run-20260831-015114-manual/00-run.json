@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260831-015114-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33348831328"
+  },
+  "prompt": "Build the Connect Button POC page from the DS-001 Figma foundation. Trigger source 2 of 3 (manual) in the Phase 2 E2E proof.",
+  "mode": "build",
+  "createdAt": "2026-08-31T01:51:15.904Z",
+  "branch": "run/run-20260831-015114-manual"
+}
