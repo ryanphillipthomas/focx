@@ -1,0 +1,14 @@
+{
+  "id": "dep-dab04ke8bjmc73fv2b0g",
+  "commit": {
+    "id": "f23cc795f2aa4f528b42e7827a523e1c411b02fb",
+    "message": "Promote staging to production (#17)\n\nPromote staging to production",
+    "createdAt": "2026-08-31T22:38:07Z"
+  },
+  "status": "live",
+  "trigger": "new_commit",
+  "createdAt": "2026-08-31T22:38:09.094978Z",
+  "updatedAt": "2026-08-31T22:38:16.132185Z",
+  "startedAt": "2026-08-31T22:38:09.093208Z",
+  "finishedAt": "2026-08-31T22:38:16.131912Z"
+}
