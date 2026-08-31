@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260831-012408-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33347458530"
+  },
+  "prompt": "Smoke test: verify intake opens a run branch, manifest, and draft PR.",
+  "mode": "build",
+  "createdAt": "2026-08-31T01:24:08.198Z",
+  "branch": "run/run-20260831-012408-manual"
+}
