@@ -183,10 +183,23 @@ jobs:
           BRANCH: ${{ steps.manifest.outputs.branch }}
         run: |
           set -euo pipefail
+          # The Chief's brief opens with a one-sentence objective — what this run
+          # exists to produce. That is a far better PR title than the run ID, which
+          # says only which run this was. The run ID stays in the body, so nothing
+          # is lost for auditing. Falls back to the old format on the
+          # deterministic-builder path, which writes no brief.
+          TITLE="pipeline: $RUN_ID"
+          BRIEF="pipeline/runs/$RUN_ID/10-brief.json"
+          if [ -f "$BRIEF" ]; then
+            OBJ=$(jq -r '.objective // empty' "$BRIEF" 2>/dev/null || true)
+            if [ -n "$OBJ" ]; then
+              TITLE=$(printf '%s' "$OBJ" | tr '\n' ' ' | cut -c1-120)
+            fi
+          fi
           PR_URL=$(gh pr create \
             --draft \
             --head "$BRANCH" \
-            --title "pipeline: $RUN_ID" \
+            --title "$TITLE" \
             --body "Autonomous run **$RUN_ID** (trigger: \`$SOURCE\`).
 
           Artifacts: \`pipeline/runs/$RUN_ID/\` — see [docs/pipeline.md](https://github.com/${{ github.repository }}/blob/main/docs/pipeline.md).
