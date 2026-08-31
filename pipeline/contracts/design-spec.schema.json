@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focx.ai/contracts/design-spec.schema.json",
+  "title": "Design spec (40-design-spec.json)",
+  "description": "Design → Engineer. The complete visual contract: every screen resolves to Figma nodes, system components, and token paths. Nothing visual exists outside this document.",
+  "type": "object",
+  "required": ["runId", "screens", "designSystemGaps"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": { "type": "string" },
+    "screens": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["storyId", "name", "figma", "components", "tokens"],
+        "additionalProperties": false,
+        "properties": {
+          "storyId": { "type": "string", "description": "The product-spec story this screen implements" },
+          "name": { "type": "string" },
+          "figma": {
+            "type": "object",
+            "required": ["fileKey", "nodeId"],
+            "additionalProperties": false,
+            "properties": {
+              "fileKey": { "type": "string" },
+              "nodeId": { "type": "string" },
+              "url": { "type": "string", "format": "uri" }
+            },
+            "description": "The exact Figma source QA compares the build against"
+          },
+          "components": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" },
+            "description": "Component names from design-focx / design-connect, e.g. 'connect/Button/primary'"
+          },
+          "tokens": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" },
+            "description": "Token paths from design/tokens/, e.g. 'focx.color.surface.primary'"
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "tokensSynced": {
+      "type": "boolean",
+      "description": "True when this run updated design/tokens/ from Figma (manifest lastSync must match)"
+    },
+    "designSystemGaps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Needs Figma does not yet publish. Non-empty gaps that block a story mean escalation, not improvisation. Empty array = no gaps."
+    }
+  }
+}

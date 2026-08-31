@@ -1,0 +1,29 @@
+name: Build request
+description: A ticket the autonomous pipeline can pick up. The pipeline:build label fires the run.
+title: "[build] "
+labels: ["pipeline:build"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should be built
+      description: Plain language. The Chief derives the run brief from this — the clearer the ask, the fewer recorded assumptions.
+      placeholder: Build me…
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target
+      options:
+        - connect
+        - focx-site
+        - shared / design system
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints (optional)
+      description: Out-of-scope items, deadlines, must-use components — anything beyond the standing guardrails.

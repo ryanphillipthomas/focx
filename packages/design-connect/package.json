@@ -1,0 +1,13 @@
+{
+  "name": "@focx/design-connect",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Connect's design system — extends @focx/design-focx (shared fundamentals, distinct identity). Adds and overrides; never copies.",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "dependencies": {
+    "@focx/design-focx": "workspace:*"
+  }
+}

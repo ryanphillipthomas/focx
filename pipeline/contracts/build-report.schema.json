@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focx.ai/contracts/build-report.schema.json",
+  "title": "Build report (50-build-report.json)",
+  "description": "Engineer → QA. What was built, from what, and where to see it running.",
+  "type": "object",
+  "required": ["runId", "storiesImplemented", "filesChanged", "componentsUsed", "tokensUsed", "deviations", "driftCheckLocal"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": { "type": "string" },
+    "storiesImplemented": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Story ids from the product spec; must cover every in-scope story"
+    },
+    "filesChanged": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "componentsUsed": { "type": "array", "items": { "type": "string" } },
+    "tokensUsed": { "type": "array", "items": { "type": "string" } },
+    "deviations": {
+      "type": "array",
+      "maxItems": 0,
+      "items": { "type": "string" },
+      "description": "Structurally required to be empty: a needed deviation is an escalation to the Chief, never a report line"
+    },
+    "driftCheckLocal": {
+      "type": "object",
+      "required": ["passed"],
+      "additionalProperties": false,
+      "properties": {
+        "passed": { "const": true, "description": "The Engineer runs pnpm drift-check before handoff; a failing local check blocks handoff" },
+        "output": { "type": "string" }
+      }
+    },
+    "previewUrl": { "type": "string", "format": "uri", "description": "Render PR preview once deployed" },
+    "prNumber": { "type": "integer" }
+  }
+}

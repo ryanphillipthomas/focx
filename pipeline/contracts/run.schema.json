@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focx.ai/contracts/run.schema.json",
+  "title": "Run manifest (00-run.json)",
+  "description": "Written by intake automation the moment a trigger fires. The root of the audit trail.",
+  "type": "object",
+  "required": ["runId", "trigger", "prompt", "createdAt", "branch"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": { "type": "string", "pattern": "^run-[0-9]{8}-[0-9]{6}-(ticket|manual|grok|grok-scheduled)$" },
+    "trigger": {
+      "type": "object",
+      "required": ["source"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "enum": ["ticket", "manual", "grok", "grok-scheduled"] },
+        "issueNumber": { "type": "integer", "description": "Present when source=ticket" },
+        "actor": { "type": "string", "description": "GitHub login or bot identity that fired the trigger" },
+        "requestedBy": { "type": "string", "description": "Human on whose behalf a bot acted, when known" },
+        "workflowRunId": { "type": "string", "description": "GitHub Actions run id, for log traceability" }
+      }
+    },
+    "prompt": { "type": "string", "minLength": 1, "description": "The raw request text as received, unedited" },
+    "mode": { "enum": ["build", "research"], "default": "build" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "branch": { "type": "string", "pattern": "^run/" }
+  }
+}

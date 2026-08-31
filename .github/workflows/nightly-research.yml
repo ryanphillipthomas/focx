@@ -1,0 +1,53 @@
+# Scheduled grok-bot research: survey → rank → brief the top 3 prototypes worth
+# building; each brief becomes its own build run. The Research role charter is
+# docs/roles/research.md. Intake mirrors pipeline.yml with mode=research.
+name: nightly-research
+
+on:
+  schedule:
+    - cron: "0 8 * * *"   # nightly, 08:00 UTC
+  workflow_dispatch: {}    # allow manual test-fires of the scheduled path
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open research run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          RUN_ID="run-$(date -u +%Y%m%d-%H%M%S)-grok-scheduled"
+          export RUN_ID
+          BRANCH="run/$RUN_ID"
+          git checkout -b "$BRANCH"
+          mkdir -p "pipeline/runs/$RUN_ID"
+          node -e '
+            const fs = require("fs");
+            const manifest = {
+              runId: process.env.RUN_ID,
+              trigger: { source: "grok-scheduled", actor: "nightly-research", workflowRunId: process.env.WORKFLOW_RUN_ID },
+              prompt: "Nightly research: survey, rank, and brief the top 3 prototypes that make the most sense to build (docs/roles/research.md).",
+              mode: "research",
+              createdAt: new Date().toISOString(),
+              branch: "run/" + process.env.RUN_ID,
+            };
+            fs.writeFileSync(`pipeline/runs/${process.env.RUN_ID}/00-run.json`, JSON.stringify(manifest, null, 2) + "\n");
+          '
+          git config user.name "focx-pipeline[bot]"
+          git config user.email "pipeline@focx.ai"
+          git add "pipeline/runs/$RUN_ID/00-run.json"
+          git commit -m "pipeline: open $RUN_ID (nightly research)"
+          git push origin "$BRANCH"
+          gh pr create \
+            --draft \
+            --head "$BRANCH" \
+            --title "pipeline: $RUN_ID (nightly research)" \
+            --body "Scheduled research run **$RUN_ID**. Research leads: top-3 prototype briefs land in \`pipeline/runs/$RUN_ID/30-research.json\`; each brief spawns its own build run. Phase 2 attaches the Research agent here."

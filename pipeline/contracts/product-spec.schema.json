@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focx.ai/contracts/product-spec.schema.json",
+  "title": "Product spec (20-product-spec.json)",
+  "description": "Product → Design (and Research). What exactly ships and how QA will know it is right.",
+  "type": "object",
+  "required": ["runId", "stories", "outOfScope"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": { "type": "string" },
+    "stories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "story", "acceptanceCriteria"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^S[0-9]+$" },
+          "story": { "type": "string", "description": "As a <who>, I <what>, so that <why>" },
+          "acceptanceCriteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" },
+            "description": "Checkable statements, verifiable against the deployed preview and/or Figma"
+          }
+        }
+      }
+    },
+    "outOfScope": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Mandatory and never empty — the Engineer builds nothing outside stories"
+    },
+    "designSystemNeeds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Anticipated components/tokens this spec depends on, so Design sees gaps early"
+    }
+  }
+}

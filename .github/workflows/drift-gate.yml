@@ -1,0 +1,21 @@
+# The design-drift fail-safe. Runs on every PR; intended to be a required
+# status check on main. The fix for a red gate is never to edit this file.
+# See docs/drift-gate.md.
+name: drift-gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: drift-check
+        run: node tools/drift-check/index.mjs

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focx.ai/contracts/qa-verdict.schema.json",
+  "title": "QA verdict (60-qa-verdict.json)",
+  "description": "QA → Chief. Evidence-backed verification against the deployed preview and the cited Figma nodes. The schema makes a pass verdict impossible while the drift gate is red.",
+  "type": "object",
+  "required": ["runId", "driftGate", "criteria", "verdict"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": { "type": "string" },
+    "driftGate": {
+      "type": "object",
+      "required": ["passed", "checkRunUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "passed": { "type": "boolean" },
+        "checkRunUrl": { "type": "string", "format": "uri", "description": "Link to the drift-gate check run on the PR — verified, not assumed" }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["storyId", "criterion", "result", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "storyId": { "type": "string" },
+          "criterion": { "type": "string" },
+          "result": { "enum": ["pass", "fail"] },
+          "evidence": { "type": "string", "minLength": 1, "description": "Screenshot path, check output, or preview URL + reproduction steps" }
+        }
+      }
+    },
+    "additionalDriftFound": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Drift the automated gate missed (lookalike components, visual divergence from the cited Figma nodes). Any entry forces verdict=fail."
+    },
+    "verdict": { "enum": ["pass", "fail"] }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "driftGate": { "properties": { "passed": { "const": false } } } }
+      },
+      "then": {
+        "properties": { "verdict": { "const": "fail" } }
+      }
+    }
+  ]
+}

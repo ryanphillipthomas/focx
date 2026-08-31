@@ -1,0 +1,10 @@
+{
+  "name": "@focx/design-focx",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Parent design system for the focx.ai umbrella. Components are added by pipeline runs (Phase 2+); tokens are canonical in design/tokens/focx/ and consumed from there.",
+  "exports": {
+    ".": "./src/index.js"
+  }
+}

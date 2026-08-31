@@ -1,0 +1,23 @@
+{
+  "description": "Registry of the Figma files that are the design source of truth. The Design role syncs published variables/components from these files into design/tokens/ via the Figma MCP.",
+  "files": {
+    "focx-foundation": {
+      "name": "TODO — exact Figma file name",
+      "fileKey": "TODO — paste the file key from the Figma URL (figma.com/design/<fileKey>/...)",
+      "role": "parent",
+      "contains": "focx design system foundation: variables (color, type, spacing, radius) and components"
+    },
+    "connect": {
+      "name": "TODO — exact Figma file name",
+      "fileKey": "TODO",
+      "role": "child",
+      "extends": "focx-foundation",
+      "contains": "Connect's extension layer: connect-specific variables and components"
+    }
+  },
+  "sync": {
+    "tool": "figma-mcp",
+    "lastSync": null,
+    "syncedBy": null
+  }
+}

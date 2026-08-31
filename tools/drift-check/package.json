@@ -1,0 +1,10 @@
+{
+  "name": "@focx/drift-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The design-drift gate CLI. Dependency-free. See docs/drift-gate.md.",
+  "bin": {
+    "drift-check": "./index.mjs"
+  }
+}

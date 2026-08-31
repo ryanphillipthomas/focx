@@ -1,0 +1,151 @@
+# The pipeline trigger surface. All three sources converge here:
+#   tickets  → issues labeled `pipeline:build`
+#   manual   → workflow_dispatch
+#   grok bot → repository_dispatch type `grok-build`
+# Intake is identical regardless of source: run ID, run branch, committed run
+# manifest, draft PR, acknowledgement. Role orchestration attaches in Phase 2 —
+# the audit surface it plugs into is fully live now. See docs/triggers.md.
+name: pipeline
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "What to build"
+        required: true
+        type: string
+  repository_dispatch:
+    types: [grok-build]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pipeline-${{ github.event.issue.number || github.run_id }}
+
+jobs:
+  intake:
+    if: github.event_name != 'issues' || github.event.label.name == 'pipeline:build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve trigger
+        id: trigger
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          MANUAL_PROMPT: ${{ inputs.prompt }}
+          GROK_PROMPT: ${{ github.event.client_payload.prompt }}
+          GROK_BOT: ${{ github.event.client_payload.bot }}
+          GROK_REQUESTED_BY: ${{ github.event.client_payload.requested_by }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            issues)              SOURCE=ticket; PROMPT="$ISSUE_BODY" ;;
+            workflow_dispatch)   SOURCE=manual; PROMPT="$MANUAL_PROMPT" ;;
+            repository_dispatch) SOURCE=grok;   PROMPT="$GROK_PROMPT" ;;
+          esac
+          if [ -z "${PROMPT// /}" ]; then
+            echo "::error::Empty prompt — refusing to open a run with nothing to do."
+            exit 1
+          fi
+          RUN_ID="run-$(date -u +%Y%m%d-%H%M%S)-$SOURCE"
+          {
+            echo "source=$SOURCE"
+            echo "run_id=$RUN_ID"
+            echo "prompt<<PROMPT_EOF"
+            echo "$PROMPT"
+            echo "PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create run branch and manifest
+        id: manifest
+        env:
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          SOURCE: ${{ steps.trigger.outputs.source }}
+          PROMPT: ${{ steps.trigger.outputs.prompt }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.actor }}
+          GROK_REQUESTED_BY: ${{ github.event.client_payload.requested_by }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          BRANCH="run/$RUN_ID"
+          git checkout -b "$BRANCH"
+          mkdir -p "pipeline/runs/$RUN_ID"
+          node -e '
+            const fs = require("fs");
+            const manifest = {
+              runId: process.env.RUN_ID,
+              trigger: {
+                source: process.env.SOURCE,
+                ...(process.env.ISSUE_NUMBER ? { issueNumber: Number(process.env.ISSUE_NUMBER) } : {}),
+                actor: process.env.ACTOR,
+                ...(process.env.GROK_REQUESTED_BY ? { requestedBy: process.env.GROK_REQUESTED_BY } : {}),
+                workflowRunId: process.env.WORKFLOW_RUN_ID,
+              },
+              prompt: process.env.PROMPT,
+              mode: "build",
+              createdAt: new Date().toISOString(),
+              branch: "run/" + process.env.RUN_ID,
+            };
+            fs.writeFileSync(`pipeline/runs/${process.env.RUN_ID}/00-run.json`, JSON.stringify(manifest, null, 2) + "\n");
+          '
+          git config user.name "focx-pipeline[bot]"
+          git config user.email "pipeline@focx.ai"
+          git add "pipeline/runs/$RUN_ID/00-run.json"
+          git commit -m "pipeline: open $RUN_ID (trigger: $SOURCE)"
+          git push origin "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Open draft PR (audit surface)
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          SOURCE: ${{ steps.trigger.outputs.source }}
+          BRANCH: ${{ steps.manifest.outputs.branch }}
+        run: |
+          set -euo pipefail
+          PR_URL=$(gh pr create \
+            --draft \
+            --head "$BRANCH" \
+            --title "pipeline: $RUN_ID" \
+            --body "Autonomous run **$RUN_ID** (trigger: \`$SOURCE\`).
+
+          Artifacts: \`pipeline/runs/$RUN_ID/\` — see [docs/pipeline.md](https://github.com/${{ github.repository }}/blob/main/docs/pipeline.md).
+
+          Bots build, never merge: this PR requires the drift gate and a human review.")
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Acknowledge on originating issue
+        if: steps.trigger.outputs.source == 'ticket'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --body "Pipeline run **$RUN_ID** opened for this ticket → $PR_URL"
+
+      - name: Run summary
+        env:
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          SOURCE: ${{ steps.trigger.outputs.source }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          {
+            echo "## Pipeline run opened"
+            echo "- **Run ID:** $RUN_ID"
+            echo "- **Trigger:** $SOURCE"
+            echo "- **PR:** $PR_URL"
+            echo ""
+            echo "Next: role orchestration (Chief → … → QA) attaches here in Phase 2."
+          } >> "$GITHUB_STEP_SUMMARY"

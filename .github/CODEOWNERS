@@ -1,0 +1,7 @@
+# Human review is the only path to merge — bots build, never merge.
+* @ryanphillipthomas
+
+# Changing the gate or the guardrails is doubly protected.
+/.github/ @ryanphillipthomas
+/tools/drift-check/ @ryanphillipthomas
+/docs/ @ryanphillipthomas
