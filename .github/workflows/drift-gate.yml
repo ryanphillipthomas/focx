@@ -25,3 +25,5 @@ jobs:
       # Node is sufficient — no setup-node, no install, minimal billed time.
       - name: drift-check
         run: node tools/drift-check/index.mjs
+      - name: contract validation
+        run: node tools/contracts/validate.mjs

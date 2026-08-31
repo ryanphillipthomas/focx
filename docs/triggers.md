@@ -64,4 +64,5 @@ Same Figma in, same pipeline, same gates out — the trigger source only changes
 |---|---|---|
 | `GROK_BOT_TOKEN` | grok bot (external) | Fine-grained PAT to POST `repository_dispatch` |
 | (default) `GITHUB_TOKEN` | workflows | Branch, commit, PR, and comment operations |
-| `PIPELINE_TOKEN` (Phase 2) | pipeline workflows | GitHub limitation: events created with the default `GITHUB_TOKEN` do **not** trigger other workflows, so the drift gate would not fire on pipeline-created PRs. Before Phase 2 validation, add a fine-grained PAT (contents + pull-requests: write) as `PIPELINE_TOKEN` and use it for `gh pr create` in `pipeline.yml` / `nightly-research.yml`. |
+| `PIPELINE_TOKEN` | pipeline workflows | GitHub limitation: events created with the default `GITHUB_TOKEN` do **not** trigger other workflows, so the drift gate would not fire on pipeline-created PRs. A fine-grained PAT (contents + pull-requests: write) used for checkout and `gh pr create`. |
+| `ANTHROPIC_API_KEY` | pipeline workflows | Powers the Phase 3 build and QA agents (Claude, per-run). When absent, runs fall back to the deterministic builder — the rails stay testable at zero agent cost. |

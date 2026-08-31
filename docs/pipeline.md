@@ -35,15 +35,31 @@ Every stage commits its artifact to `pipeline/runs/<run-id>/` **before** handing
 - **No stage skipping.** Only Research may be skipped, and only when the Chief's brief says so with a reason.
 - **Determinism of record.** Anything a role decided must be recoverable from its artifact alone. If it isn't in the artifact, it didn't happen.
 
-## Phase 2 status
+## Phase 3 status — how runs execute today
 
-The role chain's Engineer seat is currently held by a **deterministic builder**
-([`tools/poc-builder/`](../tools/poc-builder/)): it generates the Connect POC
-page purely from `design/tokens/` and the registered Figma component sets, and
-writes a schema-valid `50-build-report.json`. Same Figma in → byte-identical
-output out, for every trigger source — which is exactly what Phase 2 must
-prove. AI role agents take over this seat in Phase 3; the artifacts, contracts,
-and gates do not change when they do.
+When the `ANTHROPIC_API_KEY` secret is configured, each run executes as **two
+independent Claude agents** inside the pipeline workflow:
+
+1. **Build agent** ([`pipeline/prompts/build-agent.md`](../pipeline/prompts/build-agent.md))
+   executes the role chain Chief → Product → (Research) → Design → Engineer in
+   one invocation, writing each artifact and validating it against its contract
+   before moving on. Design works from the synced mirrors (`design/tokens/`,
+   `design/figma.manifest.json`) — CI has no live Figma access.
+2. **QA agent** ([`pipeline/prompts/qa-agent.md`](../pipeline/prompts/qa-agent.md))
+   runs with fresh context after the PR opens and the drift gate reports,
+   verifies every acceptance criterion with evidence, and writes the verdict.
+   Separate invocation on purpose: an agent grading its own homework isn't QA.
+
+The roles remain real as **contract stages** — every artifact is mechanically
+validated in CI (`tools/contracts/validate.mjs`, part of the gate check) — but
+Phase 3 deliberately uses one process for the build chain rather than six, for
+cost. The contracts make per-role isolation a drop-in change later.
+
+Without the key — and for `[drift-test]` negative tests — the Phase 2
+**deterministic builder** ([`tools/poc-builder/`](../tools/poc-builder/)) runs
+instead: same Figma in → byte-identical POC out, at zero agent cost. Fallback
+runs produce only `00-run.json` and `50-build-report.json`; the full artifact
+trail is an agent-path feature.
 
 ## Run identity
 
