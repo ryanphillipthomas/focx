@@ -1,0 +1,13 @@
+{
+  "runId": "run-20260831-023654-ticket",
+  "trigger": {
+    "source": "ticket",
+    "issueNumber": 9,
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33351222906"
+  },
+  "prompt": "Add a 'Confirmation actions' section to the Connect POC page: a small demo pairing a Primary button (confirm) with a Destructive button (delete), in Medium/Pill, per the DS-001 component sets (Button/Primary 28:117, Button/Destructive 31:117). Keep the existing button sheets intact. Everything must resolve to published tokens — no raw values.",
+  "mode": "build",
+  "createdAt": "2026-08-31T02:36:54.875Z",
+  "branch": "run/run-20260831-023654-ticket"
+}
