@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// contracts/validate — validates every run artifact in pipeline/runs/**
-// against its JSON Schema in pipeline/contracts/. Dependency-free subset
-// validator covering exactly what the contracts use: type, required,
-// properties, additionalProperties:false, enum, const, pattern, minLength,
-// minItems, maxItems, items, allOf + if/then.
+// contracts/validate — validates every run artifact in pipeline/runs/** and
+// every release record in pipeline/releases/*.json against its JSON Schema in
+// pipeline/contracts/. Dependency-free subset validator covering exactly what
+// the contracts use: type, required, properties, additionalProperties:false,
+// enum, const, pattern, minLength, minItems, maxItems, items, allOf + if/then.
+// Contracts must stay inside this subset — an unknown keyword is ignored, and
+// an ignored keyword is a rule that silently stopped existing.
 //
 // Exit 0 = every artifact valid. Exit 1 = violations, with a report.
 
@@ -13,6 +15,7 @@ import { join } from 'node:path';
 const ROOT = new URL('../..', import.meta.url).pathname;
 const CONTRACTS = join(ROOT, 'pipeline/contracts');
 const RUNS = join(ROOT, 'pipeline/runs');
+const RELEASES = join(ROOT, 'pipeline/releases');
 
 const SCHEMA_FOR = {
   '00-run.json': 'run.schema.json',
@@ -114,6 +117,27 @@ if (existsSync(RUNS)) {
       validated += 1;
       if (errors.length) failures.push({ rel, errors });
     }
+  }
+}
+
+// Release records are flat files keyed by deploy id, one schema for all of
+// them. evidence/ lives alongside and is not a contract artifact.
+if (existsSync(RELEASES)) {
+  for (const file of readdirSync(RELEASES)) {
+    if (!file.endsWith('.json')) continue;
+    const rel = `pipeline/releases/${file}`;
+    let schema, data;
+    try {
+      schema = JSON.parse(readFileSync(join(CONTRACTS, 'release-record.schema.json'), 'utf8'));
+      data = JSON.parse(readFileSync(join(RELEASES, file), 'utf8'));
+    } catch (err) {
+      failures.push({ rel, errors: [`unreadable: ${err.message}`] });
+      continue;
+    }
+    const errors = [];
+    check(schema, data, '$', errors);
+    validated += 1;
+    if (errors.length) failures.push({ rel, errors });
   }
 }
 

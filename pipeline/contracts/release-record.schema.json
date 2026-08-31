@@ -103,23 +103,20 @@
   },
   "allOf": [
     {
-      "comment": "Infrastructure drift forbids a clean outcome.",
-      "if": { "properties": { "infraDrift": { "minItems": 1 } }, "required": ["infraDrift"] },
-      "then": { "properties": { "outcome": { "not": { "const": "live" } } } }
-    },
-    {
-      "comment": "A green deploy of the wrong commit is not live.",
+      "comment": "A live outcome must be earned on every axis at once: deploy terminal and green, the site answering over valid TLS, and zero recorded infrastructure drift. Expressed as one forward implication (live => all of these) because the validator's subset has no `not` — the contrapositive (drift => not live) is the same rule.",
       "if": { "properties": { "outcome": { "const": "live" } } },
       "then": {
         "properties": {
           "deploy": { "properties": { "status": { "const": "live" } } },
-          "health": { "properties": { "httpStatus": { "const": 200 }, "tlsValid": { "const": true } } }
+          "health": { "properties": { "httpStatus": { "const": 200 }, "tlsValid": { "const": true } } },
+          "infraDrift": { "type": "array", "maxItems": 0 },
+          "unverified": { "type": "array", "maxItems": 0 }
         }
       }
     },
     {
-      "comment": "Rollback is only ever a response to failure.",
-      "if": { "required": ["rollback"] },
+      "comment": "Rollback is only ever a response to failure. The if carries properties as well as required because the validator's subset only evaluates required inside its object branch, and a bare required-only clause would apply the then unconditionally.",
+      "if": { "properties": { "rollback": { "type": "object" } }, "required": ["rollback"] },
       "then": { "properties": { "outcome": { "const": "failed" }, "environment": { "const": "production" } } }
     }
   ]

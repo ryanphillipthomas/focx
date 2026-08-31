@@ -1,0 +1,18 @@
+{
+  "comment": "Per-repo deploy targets, read by .github/workflows/deploy.yml. The workflow is parity-identical across repos; everything repo-specific lives here. contentMarker is a string the deploy agent must find in the served page — proof the right site answered, not just any 200.",
+  "bot": { "name": "focx-pipeline[bot]", "email": "pipeline@focx.ai" },
+  "environments": {
+    "staging": {
+      "branch": "staging",
+      "serviceId": "srv-daatu9fqj5pc73b9ap0g",
+      "publicUrl": "https://staging.focx.ai",
+      "contentMarker": "<title>Focx</title>"
+    },
+    "production": {
+      "branch": "main",
+      "serviceId": "srv-daaf1stg1s2s73d08edg",
+      "publicUrl": "https://focx.ai",
+      "contentMarker": "<title>Focx</title>"
+    }
+  }
+}

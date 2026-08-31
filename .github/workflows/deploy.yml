@@ -1,0 +1,118 @@
+# The second loop. Render deploys on every push to staging and main; this
+# workflow runs the Deploy role (pipeline/prompts/deploy-agent.md) after each
+# one to prove what actually reached the internet: the expected commit serving,
+# the public URL answering over a valid certificate, live Render configuration
+# matching render.yaml. On a healthy staging deploy the agent assembles the
+# staging->main promotion PR; on a failed production deploy it rolls back to
+# the last known-good deploy. It never merges anything — docs/pipeline.md.
+#
+# Per-repo values (service ids, public URLs, content markers, bot identity)
+# come from pipeline/deploy.config.json, so this file stays parity-identical
+# across focx and studio-810.
+#
+# paths-ignore prevents the loop this workflow would otherwise create: it
+# commits the release record back to the deployed branch, and that push must
+# not re-trigger verification of a content-identical rebuild.
+#
+# Secrets: RENDER_API_KEY + ANTHROPIC_API_KEY, or the run skips with a notice.
+# Render offers no read-only API keys — the key can suspend and delete
+# services, so the charter's hard limits and the tool allowlist below are the
+# fence, and the allowlist deliberately omits git push and gh pr merge.
+name: deploy
+
+on:
+  push:
+    branches: [staging, main]
+    paths-ignore:
+      - 'pipeline/releases/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+
+# Never cancel a verification mid-flight — it might be mid-rollback. Queue.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+  HAS_RENDER: ${{ secrets.RENDER_API_KEY != '' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # PIPELINE_TOKEN so the promotion PR the agent opens can trigger the
+      # drift gate — PRs created with the default token trigger nothing.
+      # Falls back to the default token; the PR still opens, gate-less.
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PIPELINE_TOKEN || github.token }}
+
+      - name: Keys present?
+        if: env.HAS_RENDER != 'true' || env.HAS_ANTHROPIC != 'true'
+        run: |
+          echo "::notice::deploy verification skipped — RENDER_API_KEY and ANTHROPIC_API_KEY must both be repo secrets. The deploy itself already happened on Render; it is merely unverified."
+
+      - name: Resolve deploy context
+        id: ctx
+        if: env.HAS_RENDER == 'true' && env.HAS_ANTHROPIC == 'true'
+        run: |
+          set -euo pipefail
+          BRANCH="$GITHUB_REF_NAME"
+          EVENT=$(jq -r --arg b "$BRANCH" '.environments | to_entries[] | select(.value.branch == $b) | .key' pipeline/deploy.config.json)
+          if [ -z "$EVENT" ]; then
+            echo "::error::no environment in pipeline/deploy.config.json maps to branch $BRANCH"
+            exit 1
+          fi
+          {
+            echo "event=$EVENT"
+            echo "service_id=$(jq -r --arg e "$EVENT" '.environments[$e].serviceId' pipeline/deploy.config.json)"
+            echo "public_url=$(jq -r --arg e "$EVENT" '.environments[$e].publicUrl' pipeline/deploy.config.json)"
+            echo "marker=$(jq -r --arg e "$EVENT" '.environments[$e].contentMarker' pipeline/deploy.config.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Claude Code CLI
+        if: steps.ctx.outputs.event != ''
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Deploy agent — verify the release
+        if: steps.ctx.outputs.event != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          GH_TOKEN: ${{ secrets.PIPELINE_TOKEN || github.token }}
+          EVENT: ${{ steps.ctx.outputs.event }}
+          EXPECTED_SHA: ${{ github.sha }}
+          SERVICE_ID: ${{ steps.ctx.outputs.service_id }}
+          PUBLIC_URL: ${{ steps.ctx.outputs.public_url }}
+          CONTENT_MARKER: ${{ steps.ctx.outputs.marker }}
+        run: |
+          set -euo pipefail
+          claude -p "EVENT is $EVENT. EXPECTED_SHA is $EXPECTED_SHA. SERVICE_ID is $SERVICE_ID. PUBLIC_URL is $PUBLIC_URL. The content marker for this environment is: $CONTENT_MARKER — the served page must contain it. RENDER_API_KEY is in your environment for api.render.com (send it as 'Authorization: Bearer \$RENDER_API_KEY'). Read pipeline/prompts/deploy-agent.md and execute that charter for this deploy." \
+            --model claude-sonnet-5 \
+            --max-turns 40 \
+            --permission-mode acceptEdits \
+            --allowedTools "Read,Glob,Grep,Write,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(curl:*),Bash(dig:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr create:*),Bash(gh pr edit:*),Bash(gh pr checks:*),Bash(gh issue create:*),Bash(gh issue comment:*)"
+
+      # The agent writes; the workflow commits — same division as the QA
+      # verdict. An empty diff means no record was produced, and an unrecorded
+      # deploy is a failure of the role even when the deploy itself was fine.
+      - name: Commit release record
+        if: steps.ctx.outputs.event != ''
+        run: |
+          set -euo pipefail
+          git add pipeline/releases
+          if git diff --cached --quiet; then
+            echo "::error::deploy agent produced no release record — the deploy is unrecorded."
+            exit 1
+          fi
+          git config user.name "$(jq -r '.bot.name' pipeline/deploy.config.json)"
+          git config user.email "$(jq -r '.bot.email' pipeline/deploy.config.json)"
+          git commit -m "release: record for ${GITHUB_SHA:0:7} (${{ steps.ctx.outputs.event }})"
+          git push origin "$GITHUB_REF_NAME"
