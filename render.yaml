@@ -1,18 +1,17 @@
-# Render Blueprint — deployment source of truth (docs/sources-of-truth.md).
-# Preview generation is automatic: every PR gets its own deploy preview, which
-# is how "bots build, never merge" stays reviewable.
+# Deployment source of truth (docs/sources-of-truth.md).
 #
-# Deployment source of truth (docs/sources-of-truth.md). PR previews generate
-# automatically. Publishes the committed apps/connect files verbatim — no build
-# step: rebuilding at deploy time would overwrite agent-authored changes with
-# regenerated Phase 2 builder output. What was reviewed is what deploys.
+# One static site serves the whole umbrella: focx.ai routes sub-apps by path
+# (focx.ai/skills/connect), so tools/site-compose copies the committed app
+# directories into dist/ per its site-map.json. COPY-ONLY — nothing is
+# generated or rewritten at deploy time: what was reviewed is what deploys.
+# PR previews generate automatically and show the full umbrella at real paths.
 previews:
   generation: automatic
 
 services:
   - type: web
-    name: connect
+    name: focx
     runtime: static
-    buildCommand: ""
-    staticPublishPath: apps/connect
+    buildCommand: node tools/site-compose/index.mjs
+    staticPublishPath: dist
     autoDeployTrigger: commit

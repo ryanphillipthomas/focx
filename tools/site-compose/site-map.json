@@ -1,0 +1,6 @@
+{
+  "description": "URL layout of focx.ai. Maps site paths to committed app directories. apps/site is always the root. Adding a sub-app = one entry here.",
+  "mounts": {
+    "skills/connect": "apps/connect"
+  }
+}
