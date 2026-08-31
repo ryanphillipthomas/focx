@@ -1,0 +1,4 @@
+*  subject: CN=staging.focx.ai
+*  expire date: Nov 29 20:15:44 2026 GMT
+*  issuer: C=US; O=Google Trust Services; CN=WE1
+*  SSL certificate verify ok.

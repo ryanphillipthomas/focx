@@ -1,0 +1,14 @@
+HTTP/2 200
+date: Mon, 31 Aug 2026 21:53:16 GMT
+content-type: text/html; charset=utf-8
+cache-control: public, max-age=0, s-maxage=300
+cf-cache-status: MISS
+last-modified: Mon, 31 Aug 2026 21:52:17 UTC
+rndr-id: 98b4e10a-a572-45d2
+server: cloudflare
+vary: Accept-Encoding
+vary: Accept-Encoding
+x-content-type-options: nosniff
+etag: W/"b70e32ca8ad744a5c23a3aeb37399f00"
+cf-ray: a33f445ba8baba09-SEA
+alt-svc: h3=":443"; ma=86400
