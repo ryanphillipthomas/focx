@@ -1,0 +1,13 @@
+{
+  "runId": "run-20260831-015121-grok",
+  "trigger": {
+    "source": "grok",
+    "actor": "ryanphillipthomas",
+    "requestedBy": "ryan",
+    "workflowRunId": "33348835280"
+  },
+  "prompt": "Build the Connect Button POC page from the DS-001 Figma foundation. Trigger source 3 of 3 (grok bot, simulated) in the Phase 2 E2E proof.",
+  "mode": "build",
+  "createdAt": "2026-08-31T01:51:23.726Z",
+  "branch": "run/run-20260831-015121-grok"
+}
