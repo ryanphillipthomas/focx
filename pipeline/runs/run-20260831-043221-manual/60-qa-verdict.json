@@ -1,0 +1,53 @@
+{
+  "runId": "run-20260831-043221-manual",
+  "driftGate": {
+    "passed": true,
+    "checkRunUrl": "https://github.com/ryanphillipthomas/focx/actions/runs/33357601362/job/99382618090"
+  },
+  "criteria": [
+    {
+      "storyId": "S1",
+      "criterion": "apps/site/index.html's <head> contains exactly one <meta name=\"description\" content=\"...\"> tag.",
+      "result": "pass",
+      "evidence": "grep -c 'name=\"description\"' apps/site/index.html => 1. Confirmed via Read of apps/site/index.html line 7: <meta name=\"description\" content=\"Ticket in, reviewed pull request out &mdash; every stage built by bots, merged only by a human.\"> placed inside <head>."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The tag's content attribute is exactly the existing subheading copy: 'Ticket in, reviewed pull request out — every stage built by bots, merged only by a human.'",
+      "result": "pass",
+      "evidence": "apps/site/index.html line 7 (meta) and line 16 (<p class=\"subheading\">) both render the identical string 'Ticket in, reviewed pull request out &mdash; every stage built by bots, merged only by a human.' using the same &mdash; entity encoding — byte-identical between the two occurrences."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The visible rendered page (hero, eyebrow, wordmark, subheading, CTA button) is unchanged — no new or modified visual elements.",
+      "result": "pass",
+      "evidence": "git diff main -- apps/site/index.html shows only one added line (the <meta name=\"description\"> tag); no changes inside <body>. Fetched deployed preview https://focx-pr-15.onrender.com/ (HTTP 200) and saved to pipeline/runs/run-20260831-043221-manual/evidence/preview-index.html — its <body> is byte-identical to the repo's apps/site/index.html (eyebrow, wordmark 'Focx', subheading, and 'Explore Connect' CTA button all unchanged)."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "apps/site/styles.css is untouched.",
+      "result": "pass",
+      "evidence": "md5sum of apps/site/styles.css at main and at HEAD both equal ad02a0e0cc1c2d4c7a8d14776f02e91b (identical). Also fetched deployed preview stylesheet https://focx-pr-15.onrender.com/styles.css, saved to pipeline/runs/run-20260831-043221-manual/evidence/preview-styles.css, md5sum ad02a0e0cc1c2d4c7a8d14776f02e91b — matches the repo file exactly."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "node tools/drift-check/index.mjs exits 0.",
+      "result": "pass",
+      "evidence": "Independently re-ran `node tools/drift-check/index.mjs` on the run branch; output: 'drift-check: clean — no design drift detected.' No error, command completed successfully. Also cross-checked against the PR's own drift-gate check: `gh pr checks 15` reports drift = pass, https://github.com/ryanphillipthomas/focx/actions/runs/33357601362/job/99382618090."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "node tools/contracts/validate.mjs passes for every artifact this run writes.",
+      "result": "pass",
+      "evidence": "Ran `node tools/contracts/validate.mjs` on the run branch; output: 'contracts: 19 artifact(s) valid — every handoff conforms.' Includes 00-run.json, 10-brief.json, 20-product-spec.json, 40-design-spec.json, 50-build-report.json for this run."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "Constraint: touch only apps/site/index.html — no CSS changes, no other files (excluding this run's own pipeline artifacts).",
+      "result": "pass",
+      "evidence": "git diff main --stat shows only apps/site/index.html plus this run's pipeline/runs/run-20260831-043221-manual/*.json artifacts changed. No changes under .github/, tools/, docs/, design/tokens/, or pipeline/contracts/."
+    }
+  ],
+  "additionalDriftFound": [],
+  "verdict": "pass"
+}
