@@ -2,9 +2,10 @@
 # Preview generation is automatic: every PR gets its own deploy preview, which
 # is how "bots build, never merge" stays reviewable.
 #
-# Connect this repo in the Render dashboard to activate PR previews.
-# The POC page is generated deterministically from the design tokens at deploy
-# time — the same builder the pipeline runs, so preview and PR always agree.
+# Deployment source of truth (docs/sources-of-truth.md). PR previews generate
+# automatically. Publishes the committed apps/connect files verbatim — no build
+# step: rebuilding at deploy time would overwrite agent-authored changes with
+# regenerated Phase 2 builder output. What was reviewed is what deploys.
 previews:
   generation: automatic
 
@@ -12,6 +13,6 @@ services:
   - type: web
     name: connect
     runtime: static
-    buildCommand: node tools/poc-builder/index.mjs
+    buildCommand: ""
     staticPublishPath: apps/connect
     autoDeployTrigger: commit
