@@ -1,17 +1,19 @@
 {
-  "description": "Registry of the Figma files that are the design source of truth. The Design role syncs published variables/components from these files into design/tokens/ via the Figma MCP.",
+  "description": "Registry of the Figma sources of design truth. The Design role syncs published variables/components from these into design/tokens/ via the Figma MCP. Entries may share a fileKey: the parent/child split is logical (pages/sections + token namespaces), not necessarily separate files.",
   "files": {
     "focx-foundation": {
       "name": "TODO — exact Figma file name",
-      "fileKey": "TODO — paste the file key from the Figma URL (figma.com/design/<fileKey>/...)",
+      "fileKey": "TODO — from the Figma URL: figma.com/design/<fileKey>/...",
       "role": "parent",
+      "scopeHint": "TODO — page/section within the file holding the focx foundation (variables, components)",
       "contains": "focx design system foundation: variables (color, type, spacing, radius) and components"
     },
     "connect": {
-      "name": "TODO — exact Figma file name",
-      "fileKey": "TODO",
+      "name": "TODO — same file as focx-foundation for now",
+      "fileKey": "TODO — same fileKey as focx-foundation until Connect gets its own file",
       "role": "child",
       "extends": "focx-foundation",
+      "scopeHint": "TODO — page/section within the file holding Connect's extension layer",
       "contains": "Connect's extension layer: connect-specific variables and components"
     }
   },
