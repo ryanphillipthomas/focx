@@ -1,0 +1,24 @@
+Command: node pipeline/runs/run-20260831-023654-ticket/evidence/inspect.mjs
+(inspects apps/connect/index.html on branch run/run-20260831-023654-ticket, HEAD bb66412)
+
+=== Confirmation actions section ===
+<section class="sheet" data-figma-node="28:117, 31:117">
+    <h2>Confirmation actions — Figma 28:117, 31:117</h2>
+    <div class="confirm-actions">
+      <button class="btn btn--primary btn--md btn--pill" data-figma-node="28:117" title="Medium / Pill / Default">Confirm</button>
+      <button class="btn btn--destructive btn--md btn--pill" data-figma-node="31:117" title="Medium / Pill / Default">Delete</button>
+    </div>
+  </section>
+
+button count in section: 2
+ - <button class="btn btn--primary btn--md btn--pill" data-figma-node="28:117" title="Medium / Pill / Default">Confirm</button>
+ - <button class="btn btn--destructive btn--md btn--pill" data-figma-node="31:117" title="Medium / Pill / Default">Delete</button>
+
+total .sheet sections on page: 3
+ - <section class="sheet" data-figma-node="28:117">
+ - <section class="sheet" data-figma-node="31:117">
+ - <section class="sheet" data-figma-node="28:117, 31:117">
+
+Interpretation:
+- New section is the 3rd .sheet, positioned after the Button/Primary (28:117) and Button/Destructive (31:117) sheets. Confirms AC1.
+- Exactly 2 buttons: btn--primary/btn--md/btn--pill labeled "Confirm", btn--destructive/btn--md/btn--pill labeled "Delete". No is-hover/is-focused/disabled modifiers present on either -> Default state only. Confirms AC2.

@@ -1,0 +1,53 @@
+{
+  "runId": "run-20260831-023654-ticket",
+  "driftGate": {
+    "passed": true,
+    "checkRunUrl": "https://github.com/ryanphillipthomas/focx/actions/runs/33351421026/job/99365428330"
+  },
+  "criteria": [
+    {
+      "storyId": "S1",
+      "criterion": "The Connect POC page (apps/connect/index.html) shows a new 'Confirmation actions' section positioned after the existing Button/Primary (28:117) and Button/Destructive (31:117) sheets.",
+      "result": "pass",
+      "evidence": "pipeline/runs/run-20260831-023654-ticket/evidence/confirm-section-inspection.txt — apps/connect/index.html contains exactly 3 <section class=\"sheet\"> elements in document order: data-figma-node=\"28:117\", then \"31:117\", then \"28:117, 31:117\" (the new Confirmation actions section, h2 text 'Confirmation actions — Figma 28:117, 31:117')."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The section renders exactly two buttons: a Primary button labeled 'Confirm' and a Destructive button labeled 'Delete', each Medium size, Pill shape, Default state.",
+      "result": "pass",
+      "evidence": "pipeline/runs/run-20260831-023654-ticket/evidence/confirm-section-inspection.txt — the new section's .confirm-actions div contains exactly 2 <button> elements: class=\"btn btn--primary btn--md btn--pill\" text 'Confirm', and class=\"btn btn--destructive btn--md btn--pill\" text 'Delete'. Neither carries is-hover, is-focused, or disabled — Default state only, matching the existing sheets' class vocabulary for Medium/Pill."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The existing Button/Primary and Button/Destructive variant sheets remain present and unchanged in content and structure.",
+      "result": "pass",
+      "evidence": "pipeline/runs/run-20260831-023654-ticket/evidence/build-diff.patch — `git diff bb66412~1 bb66412 -- apps/connect/index.html apps/connect/styles.css` shows the change is purely additive: a new <section> appended after the existing two sheets in index.html, and a new .confirm-actions rule appended in styles.css. Zero lines of the pre-existing Button/Primary (28:117) or Button/Destructive (31:117) markup/CSS were touched."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "Every color, dimension, radius, and type value used by the new section resolves to a token already published in design/tokens/focx/tokens.json — verifiable by running node tools/drift-check/index.mjs and getting a clean result.",
+      "result": "pass",
+      "evidence": "pipeline/runs/run-20260831-023654-ticket/evidence/drift-check-local.txt — independently re-ran `node tools/drift-check/index.mjs` on the checked-out run branch: 'drift-check: clean — no design drift detected.' (exit 0). Cross-checked manually: the only new CSS declaration is `.confirm-actions { display:flex; align-items:center; gap: var(--space-3); }` (build-diff.patch), and --space-3 is defined in styles.css as 6px, matching design/tokens/focx/tokens.json focx.space.3 (value 6px, figmaName --space-3). The two new buttons reuse the pre-existing .btn/.btn--primary/.btn--destructive/.btn--md/.btn--pill classes verbatim — no new declarations, no raw hex/px."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "Independent drift-gate re-run and PR check status (QA charter step 1).",
+      "result": "pass",
+      "evidence": "pipeline/runs/run-20260831-023654-ticket/evidence/pr-checks-11.txt — `gh pr checks 11` reports check 'drift' state SUCCESS at https://github.com/ryanphillipthomas/focx/actions/runs/33351421026/job/99365428330 (matches DRIFT_CHECK_STATE=SUCCESS / DRIFT_CHECK_URL supplied for this run). Independently re-ran the same check locally (see drift-check-local.txt) and it also passed."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "Contracts validation for all pipeline artifacts on this run.",
+      "result": "pass",
+      "evidence": "pipeline/runs/run-20260831-023654-ticket/evidence/contracts-validate.txt — `node tools/contracts/validate.mjs` reports 'contracts: 7 artifact(s) valid — every handoff conforms.'"
+    },
+    {
+      "storyId": "S1",
+      "criterion": "Design fidelity against the cited Figma nodes (28:117, 31:117) and no PR deploy preview to check.",
+      "result": "pass",
+      "evidence": "No Figma MCP tool and no PREVIEW_URL/Render deployment check are available in this QA environment — pipeline/runs/run-20260831-023654-ticket/evidence/pr-checks-11.txt shows the PR's only check is 'drift'; no deploy-preview check exists to inspect. Fidelity was therefore verified at the code level instead of by live pixel comparison: the new buttons apply the exact same .btn/.btn--primary/.btn--destructive/.btn--md/.btn--pill classes (build-diff.patch) already used by the Button/Primary (28:117) and Button/Destructive (31:117) sheets on the same page, which resolve to the same tokens (focx.color.action-fill, focx.color.status-danger, focx.control.h-md, focx.control.px-md, focx.radius.pill, focx.text.label, focx.weight.medium — design/tokens/focx/tokens.json). No new class, component, or override was introduced, so there is no rendering path independent of what those two sheets already exhibit. Recorded as a documented limitation rather than a shrug; if a Figma MCP or preview becomes available this criterion should be re-verified visually."
+    }
+  ],
+  "additionalDriftFound": [],
+  "verdict": "pass"
+}
