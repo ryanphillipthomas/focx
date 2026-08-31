@@ -1,0 +1,13 @@
+{
+  "statusCode": 200,
+  "authorized": true,
+  "authorizationError": null,
+  "certSubject": {
+    "CN": "staging.focx.ai"
+  },
+  "certValidFrom": "Aug 31 19:15:49 2026 GMT",
+  "certValidTo": "Nov 29 20:15:44 2026 GMT",
+  "certSubjectAltName": "DNS:staging.focx.ai",
+  "bodyIncludesMarker": true,
+  "bodySnippet": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Focx</title>\n<meta name=\"description\" content=\"Ticket in, reviewed pull request out &mdash; every stage built by bots, merged only by a human.\">\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link href=\"https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap\" rel=\"stylesheet\">\n<link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<b"
+}

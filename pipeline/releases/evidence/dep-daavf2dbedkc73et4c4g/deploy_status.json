@@ -1,0 +1,19 @@
+[
+  {
+    "deploy": {
+      "id": "dep-daavf2dbedkc73et4c4g",
+      "commit": {
+        "id": "06a2e5e88be6f0ccf53e97ec224f46eea05d3d16",
+        "message": "Merge branch 'main' into HEAD",
+        "createdAt": "2026-08-31T21:52:06Z"
+      },
+      "status": "live",
+      "trigger": "new_commit",
+      "createdAt": "2026-08-31T21:52:09.03136Z",
+      "updatedAt": "2026-08-31T21:52:17.65883Z",
+      "startedAt": "2026-08-31T21:52:09.029073Z",
+      "finishedAt": "2026-08-31T21:52:17.658557Z"
+    },
+    "cursor": "u5uhKllYL7ZmMmRiZWRrYzczZXQ0YzRn"
+  }
+]

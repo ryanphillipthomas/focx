@@ -1,0 +1,15 @@
+{
+  "authorized": true,
+  "authorizationError": null,
+  "subject": {
+    "CN": "staging.focx.ai"
+  },
+  "issuer": {
+    "C": "US",
+    "O": "Google Trust Services",
+    "CN": "WE1"
+  },
+  "valid_from": "Aug 31 19:15:49 2026 GMT",
+  "valid_to": "Nov 29 20:15:44 2026 GMT",
+  "subjectaltname": "DNS:staging.focx.ai"
+}

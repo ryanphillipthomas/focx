@@ -1,0 +1,33 @@
+{
+  "deployId": "dep-daavil3rjlhs7382bfqg",
+  "environment": "staging",
+  "service": {
+    "id": "srv-daatu9fqj5pc73b9ap0g",
+    "name": "focx-staging",
+    "publicUrl": "https://staging.focx.ai"
+  },
+  "expectedSha": "8cbe930e6a0a595dfb92ed0f855cb9c8f10982a9",
+  "deploy": {
+    "status": "live",
+    "servingSha": "8cbe930e6a0a595dfb92ed0f855cb9c8f10982a9",
+    "finishedAt": "2026-08-31T21:59:56.985806Z"
+  },
+  "health": {
+    "httpStatus": 200,
+    "tlsValid": true,
+    "certificateSubject": "CN=staging.focx.ai",
+    "checkedUrl": "https://staging.focx.ai/",
+    "contentMarker": "<title>Focx</title>"
+  },
+  "customDomains": [
+    { "name": "staging.focx.ai", "verified": true, "certificateIssued": true }
+  ],
+  "infraDrift": [],
+  "unverified": [],
+  "promotion": {
+    "prUrl": "https://github.com/ryanphillipthomas/focx/pull/17",
+    "commitRange": "f943045..8cbe930",
+    "merged": false
+  },
+  "outcome": "live"
+}

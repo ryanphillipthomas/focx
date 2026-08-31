@@ -1,0 +1,14 @@
+{
+  "id": "dep-daavrgjbc2fs73aobnpg",
+  "commit": {
+    "id": "508db742aea5237b50d8daec0043802f187631ec",
+    "message": "Merge branch 'main' into HEAD",
+    "createdAt": "2026-08-31T22:18:40Z"
+  },
+  "status": "live",
+  "trigger": "new_commit",
+  "createdAt": "2026-08-31T22:18:42.333272Z",
+  "updatedAt": "2026-08-31T22:18:49.961381Z",
+  "startedAt": "2026-08-31T22:18:42.331489Z",
+  "finishedAt": "2026-08-31T22:18:49.961066Z"
+}
