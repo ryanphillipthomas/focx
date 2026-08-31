@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260831-015124-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33348837687"
+  },
+  "prompt": "[drift-test] Deliberately drifted build — the drift gate must block this PR. Phase 2 negative test.",
+  "mode": "build",
+  "createdAt": "2026-08-31T01:51:24.634Z",
+  "branch": "run/run-20260831-015124-manual"
+}
