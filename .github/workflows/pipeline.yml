@@ -137,7 +137,19 @@ jobs:
           claude_args: >-
             --model claude-sonnet-5
             --max-turns 60
-            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*)"
+            --permission-mode acceptEdits
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+
+      - name: Agent transcript (debug)
+        if: always() && env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
+        run: |
+          FILE=/home/runner/work/_temp/claude-execution-output.json
+          if [ -f "$FILE" ]; then
+            echo "=== agent final messages ==="
+            jq -r '.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' "$FILE" | tail -80 || true
+            echo "=== permission denials ==="
+            jq -r '.[] | select(.type=="result") | .permission_denials[]? | "\(.tool_name): \(.tool_input | tostring | .[0:160])"' "$FILE" || true
+          fi
 
       # ---------------------------------------------- build (deterministic)
       - name: Fallback build (deterministic POC builder)
@@ -230,7 +242,8 @@ jobs:
           claude_args: >-
             --model claude-sonnet-5
             --max-turns 40
-            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*)"
+            --permission-mode acceptEdits
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
 
       - name: Commit QA verdict
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
