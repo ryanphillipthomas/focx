@@ -5,8 +5,12 @@
       "name": "Focx — DS-001 Shell - Today",
       "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
       "role": "parent",
-      "scopeHint": "Single page 'Cover' (0:1) today; roadmap per the cover: foundations → components → patterns → responsive screens. All content is focx.* scope until Connect pages exist.",
-      "contains": "focx design system foundation: variables (color, type, spacing, radius) and components"
+      "scopeHint": "Roadmap per the cover: foundations → components → patterns → responsive screens. All content is focx.* scope until Connect pages exist.",
+      "contains": "focx design system foundation: variables (color, type, spacing, radius) and components",
+      "componentSets": {
+        "Button/Primary": { "nodeId": "28:117", "variants": "Size(Small|Medium|Large) x Shape(Pill|Control) x State(Default|Hover|Focused|Disabled)" },
+        "Button/Destructive": { "nodeId": "31:117", "variants": "Size(Small|Medium|Large) x Shape(Pill|Control) x State(Default|Hover|Focused|Disabled)" }
+      }
     },
     "connect": {
       "name": "Focx — DS-001 Shell - Today",
@@ -19,7 +23,7 @@
   },
   "sync": {
     "tool": "figma-mcp",
-    "lastSync": "2026-08-31T01:14:48Z",
-    "syncedBy": "claude-code (bootstrap partial sync — variables consumed by Cover frame 9:7; full extraction when foundation frames land)"
+    "lastSync": "2026-08-31T01:42:42Z",
+    "syncedBy": "claude-code (variables consumed by Cover 9:7 + Button/Primary 28:117 + Button/Destructive 31:117)"
   }
 }
