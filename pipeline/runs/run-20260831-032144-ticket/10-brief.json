@@ -1,0 +1,31 @@
+{
+  "runId": "run-20260831-032144-ticket",
+  "objective": "Build the focx.ai marketing root page (apps/site/index.html + apps/site/styles.css) that replaces the placeholder redirect with a real hero — brand eyebrow, 'Focx' wordmark, a positioning line, and a primary-button link into /skills/connect — using only published DS-001 tokens and the Button/Primary component pattern.",
+  "successCriteria": [
+    "apps/site/index.html no longer contains the meta-refresh placeholder redirect; the umbrella root ('/') renders a real hero.",
+    "The hero shows three text elements in the requested typography: an eyebrow line (focx.style.brand-eyebrow), the 'Focx' wordmark (focx.style.brand-hero-desktop / The Fox Tail display family), and a positioning line (focx.style.ui-subheading).",
+    "A button-styled link into /skills/connect uses the Button/Primary component pattern at Medium size, Pill shape, and points at a root-relative path (not a hardcoded focx.ai domain).",
+    "Every color, dimension, radius, and type value in apps/site/styles.css resolves to a token in design/tokens/focx/tokens.json — node tools/drift-check/index.mjs exits clean.",
+    "/skills/connect remains reachable and apps/connect is untouched.",
+    "node tools/contracts/validate.mjs passes for every artifact this run writes."
+  ],
+  "constraints": [
+    "Published tokens and existing component patterns only — no raw values, no new visual inventions; the drift gate applies.",
+    "The Fox Tail is not hosted anywhere: use the focx.font.display token value with a sensible system fallback stack; no font files are embedded or fetched except the existing Google Fonts Geist link.",
+    "Single static page: apps/site/index.html + apps/site/styles.css only.",
+    "Do not touch .github/, tools/, docs/, design/tokens/, pipeline/contracts/, CODEOWNERS, render.yaml, or tools/site-compose/site-map.json.",
+    "No git commit/push and no dependency installs — the workflow commits after this run exits.",
+    "The page must remain fully served at '/' and /skills/connect must stay reachable via a relative link."
+  ],
+  "targetApp": "focx-site",
+  "route": {
+    "skipResearch": true,
+    "skipReason": "Every component and token this build needs (Button/Primary Medium/Pill, the brand-eyebrow/brand-hero/ui-subheading text styles) is already published in design/tokens/focx/tokens.json and design/figma.manifest.json from prior runs. There is no feasibility question or prior-art comparison to investigate — this is a direct build from an existing, synced design system."
+  },
+  "assumptions": [
+    "The prompt doesn't specify hero copy. Chosen text: eyebrow 'Autonomous development pipeline', wordmark 'Focx', positioning line 'Ticket in, reviewed pull request out — every stage built by bots, merged only by a human.', CTA label 'Explore Connect' — all consistent with how AGENTS.md/docs/pipeline.md describe the project.",
+    "The Figma manifest's componentSets list only Button/Primary and Button/Destructive, but its sync log ('variables consumed by Cover 9:7 + Button/Primary 28:117 + Button/Destructive 31:117') identifies fileKey GOlqIWU8MUzYZDQA39g6tv, nodeId 9:7 as the Cover frame the brief asks to mirror — that is cited as the hero's Figma reference.",
+    "The brief explicitly frames the dark treatment (surface-inverse background + text-inverse) as 'welcome', not mandatory, and defers the final call to Design. The synced tokens show focx.color.action-fill (#050505) is identical to focx.color.surface-inverse (#050505), so a default Button/Primary placed on a surface-inverse page background would render with zero fill contrast — an unusable CTA, not a mere aesthetic nitpick. With no live Figma access this run to check for an unpublished on-dark button variant, Design chooses the light treatment instead (surface-1 background, surface-inverse ink) — the exact combination already proven in apps/connect/styles.css — so the CTA stays a visibly legible button built from unmodified published tokens. This is recorded here rather than as a blocking design-system gap because the brief itself made dark optional and a fully non-inventive, already-precedented alternative exists.",
+    "'/skills/connect/' (root-relative, trailing slash) is used for the CTA href, matching the existing placeholder's link style and the site-compose mount path — not a hardcoded focx.ai domain."
+  ]
+}

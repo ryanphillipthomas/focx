@@ -1,0 +1,47 @@
+{
+  "runId": "run-20260831-032144-ticket",
+  "screens": [
+    {
+      "storyId": "S1",
+      "name": "Marketing hero — brand cover treatment + Connect CTA",
+      "figma": {
+        "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
+        "nodeId": "9:7"
+      },
+      "components": [
+        "focx/Button/Primary/Size=Medium, Shape=Pill, State=Default",
+        "focx/Button/Primary/Size=Medium, Shape=Pill, State=Hover",
+        "focx/Button/Primary/Size=Medium, Shape=Pill, State=Focused"
+      ],
+      "tokens": [
+        "focx.font.sans",
+        "focx.font.display",
+        "focx.weight.regular",
+        "focx.weight.medium",
+        "focx.text.brand-eyebrow",
+        "focx.text.brand-hero",
+        "focx.text.subheading",
+        "focx.text.label",
+        "focx.style.brand-eyebrow",
+        "focx.style.brand-hero-desktop",
+        "focx.style.ui-subheading",
+        "focx.color.surface-1",
+        "focx.color.surface-inverse",
+        "focx.color.action-fill",
+        "focx.color.action-fill-hover",
+        "focx.color.action-fill-text",
+        "focx.color.border-focus",
+        "focx.border.focus-ring",
+        "focx.control.h-lg",
+        "focx.control.h-md",
+        "focx.control.px-lg",
+        "focx.control.px-md",
+        "focx.radius.pill",
+        "focx.space.3"
+      ],
+      "notes": "fileKey/nodeId cited from figma.manifest.json's sync log (focx-foundation.sync.syncedBy: 'variables consumed by Cover 9:7 + Button/Primary 28:117 + Button/Destructive 31:117'), not from componentSets — no separate Cover component entry exists there yet, only the button sets. Layout: eyebrow (Brand/Eyebrow) / wordmark 'Focx' (Brand/Hero/Desktop, focx.font.display + system fallback) / positioning line (UI/Subheading), stacked, followed by the CTA built from the exact .btn/.btn--primary/.btn--md/.btn--pill classes and tokens apps/connect/styles.css already established. Background/ink pairing is surface-1/surface-inverse (the same pairing apps/connect already ships), not the surface-inverse/text-inverse dark pairing the brief called 'welcome' but left to Design's discretion: focx.color.action-fill (#050505) is identical to focx.color.surface-inverse (#050505), so a default Button/Primary on a surface-inverse page would have zero fill contrast and read as invisible/plain text, not a button. No on-dark Button/Primary variant is published in the mirror, and this run has no live Figma access to confirm one exists, so per AGENTS.md's no-invention guardrail the light, already-proven pairing is used instead. line-height 0.98 (wordmark) and 1.35 (positioning line) are copied verbatim from the published style tokens' own descriptions ('The Fox Tail Regular 64/0.98' and 'Geist Medium 17/1.35, tracking -0.4') rather than invented; the -0.4 tracking on the positioning line is left out since no discrete token expresses it. Generic layout spacing (hero padding/gap) reuses focx.control.h-lg / focx.control.px-lg, the same reuse-existing-control-tokens-for-page-layout pattern apps/connect/styles.css already uses for its own padding/margins."
+    }
+  ],
+  "tokensSynced": false,
+  "designSystemGaps": []
+}

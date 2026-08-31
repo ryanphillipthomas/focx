@@ -1,0 +1,30 @@
+{
+  "runId": "run-20260831-032144-ticket",
+  "stories": [
+    {
+      "id": "S1",
+      "story": "As a first-time visitor landing on focx.ai, I want to see the Focx brand hero (eyebrow, wordmark, positioning line) with a clear path into Connect, so that I understand what Focx is and can immediately try the first sub-app.",
+      "acceptanceCriteria": [
+        "apps/site/index.html renders a hero with three text elements — an eyebrow line, the 'Focx' wordmark, and a positioning line — and no longer contains the meta-refresh redirect.",
+        "The eyebrow line is styled per focx.style.brand-eyebrow (Geist Medium, brand-eyebrow size, uppercase with matching tracking).",
+        "The wordmark 'Focx' is styled per focx.style.brand-hero-desktop (focx.font.display family with a system fallback stack, brand-hero size).",
+        "The positioning line is styled per focx.style.ui-subheading (Geist Medium, subheading size).",
+        "A visible button-styled link into Connect uses the Button/Primary component pattern at Medium size, Pill shape (the same .btn/.btn--primary/.btn--md/.btn--pill classes and tokens established in apps/connect/styles.css) and its href is a root-relative path ('/skills/connect/'), not a hardcoded domain.",
+        "The page's background and text colors are drawn only from published focx color tokens, and the specific pairing chosen keeps the CTA button visibly legible (non-zero fill contrast against the page background).",
+        "node tools/drift-check/index.mjs exits 0 against apps/site/index.html and apps/site/styles.css.",
+        "apps/connect/index.html and apps/connect/styles.css are unchanged, so /skills/connect stays reachable."
+      ]
+    }
+  ],
+  "outOfScope": [
+    "Navigation, footer, additional marketing sections/copy, or links to any sub-app other than the single Connect CTA.",
+    "A full Button/Primary state/size/shape matrix — only Medium/Pill is used, with Default/Hover/Focused states for real interactivity (no Small/Large/Control variants, no Disabled state — there is nothing to disable on a live link).",
+    "Hosting, embedding, or fetching The Fox Tail font files — only the token's font-family value plus a system fallback stack.",
+    "Any change to apps/connect/, tools/site-compose/, render.yaml, or design/tokens/.",
+    "A full responsive breakpoint system — only a single reasonably mobile-safe layout (stacked, fluid width, no fixed pixel container)."
+  ],
+  "designSystemNeeds": [
+    "focx.style.brand-eyebrow, focx.style.brand-hero-desktop, focx.style.ui-subheading text styles (already published)",
+    "Button/Primary component, Size=Medium, Shape=Pill (already published)"
+  ]
+}
