@@ -1,0 +1,51 @@
+# Lightweight review for hand-written PRs into develop. Bot-opened PRs
+# (branch run/<run-id>, from pipeline.yml) already got the full build chain
+# plus an independent QA agent before they ever opened — this workflow skips
+# them and reviews everything else: whatever a human pushed by hand.
+#
+# Advisory only, on purpose: not a required status check, so it can never
+# block the merge button. It posts a real PR review (gh pr review) so the
+# signal is visible — a red X and written findings — without deadlocking on
+# the fact that PIPELINE_TOKEN attributes bot PRs to the same account a human
+# pushes from, which rules out required-approval as a gate here too.
+name: pr-review
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+
+jobs:
+  review:
+    if: env.HAS_ANTHROPIC == 'true' && !startsWith(github.head_ref, 'run/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: PR review agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          claude -p "PR_NUMBER is $PR_NUMBER. Read pipeline/prompts/pr-review-agent.md and execute that charter for this PR." \
+            --model claude-sonnet-5 \
+            --effort medium \
+            --max-turns 40 \
+            --permission-mode acceptEdits \
+            --allowedTools "Read,Glob,Grep,Bash(node:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*)"
