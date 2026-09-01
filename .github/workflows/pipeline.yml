@@ -39,7 +39,15 @@ env:
 
 jobs:
   intake:
-    if: github.event_name != 'issues' || github.event.label.name == 'pipeline:build'
+    # Issue-triggered runs must come from someone with write access. The
+    # build-request issue template auto-applies `pipeline:build` to any issue
+    # filed through it, regardless of who files it — that's how GitHub issue
+    # forms work, not a template bug — and this repo is public, so without
+    # this check anyone could fire a billed agent run for free.
+    if: >-
+      github.event_name != 'issues' ||
+      (github.event.label.name == 'pipeline:build' &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -142,6 +150,7 @@ jobs:
           set -euo pipefail
           claude -p "RUN_ID is $RUN_ID. Read pipeline/prompts/build-agent.md and execute that charter for this run, start to finish." \
             --model claude-sonnet-5 \
+            --effort high \
             --max-turns 60 \
             --permission-mode acceptEdits \
             --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
@@ -288,6 +297,7 @@ jobs:
           set -euo pipefail
           claude -p "RUN_ID is $RUN_ID. The run's PR is #$PR_NUMBER. DRIFT_CHECK_STATE is $DRIFT_CHECK_STATE and DRIFT_CHECK_URL is $DRIFT_CHECK_URL — you may confirm it yourself with 'gh pr checks $PR_NUMBER'. PREVIEW_URL is $PREVIEW_URL (state: $PREVIEW_STATE — ready means it answered HTTP 200; unreachable means record the limitation as before). Read pipeline/prompts/qa-agent.md and execute that charter for this run." \
             --model claude-sonnet-5 \
+            --effort medium \
             --max-turns 40 \
             --permission-mode acceptEdits \
             --allowedTools "Read,Glob,Grep,Write,Edit,Bash(node:*),Bash(mkdir:*),Bash(ls:*),Bash(cat:*),Bash(jq:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr checks:*),Bash(gh pr view:*),Bash(curl:*)"
