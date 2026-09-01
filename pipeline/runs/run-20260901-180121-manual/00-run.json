@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260901-180121-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "workflowRunId": "33541175917"
+  },
+  "prompt": "[drift-test] confirm bot PRs now target develop",
+  "mode": "build",
+  "createdAt": "2026-09-01T18:01:21.705Z",
+  "branch": "run/run-20260901-180121-manual"
+}
