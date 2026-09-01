@@ -37,6 +37,6 @@ You are an agent (or a human) working in the focx.ai autonomous development repo
 |---|---|
 | Design (visual truth) | Figma → mirrored to `design/tokens/` + `design/figma.manifest.json` |
 | Tickets | GitHub Issues (this repo) |
-| Code | This repo, `main` branch |
+| Code | This repo, `develop` branch |
 | Run state & audit trail | `pipeline/runs/<run-id>/` on the run branch + the PR |
 | Deployment | Render, via `render.yaml` |
