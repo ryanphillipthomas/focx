@@ -53,8 +53,10 @@
   ],
   "branded": [
     ".github/workflows/pipeline.yml",
+    ".github/workflows/pr-review.yml",
     "pipeline/prompts/qa-agent.md",
     "pipeline/prompts/deploy-agent.md",
+    "pipeline/prompts/pr-review-agent.md",
     "tools/drift-check/index.mjs",
     "tools/drift-check/package.json"
   ],
