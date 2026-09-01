@@ -37,3 +37,5 @@ This repository is built so that work can enter from a GitHub Issue, a manual in
 - **Grok bot:** POST a `repository_dispatch` event of type `grok-build` (see [`docs/triggers.md`](docs/triggers.md)).
 
 Every run lands as a draft PR with its artifacts under `pipeline/runs/<run-id>/`. The drift gate must pass and a human must review before anything merges.
+
+<!-- pr-review verification: 2026-09-01T18:02:39Z -->
