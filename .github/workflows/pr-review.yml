@@ -27,16 +27,20 @@ env:
 
 jobs:
   review:
-    if: env.HAS_ANTHROPIC == 'true' && !startsWith(github.head_ref, 'run/')
+    # env isn't available in a job-level if (only github/needs/vars/inputs
+    # are) — the HAS_ANTHROPIC gate has to live on the steps instead.
+    if: "!startsWith(github.head_ref, 'run/')"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Claude Code CLI
+        if: env.HAS_ANTHROPIC == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: PR review agent
+        if: env.HAS_ANTHROPIC == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}
