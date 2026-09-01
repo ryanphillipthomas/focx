@@ -91,6 +91,19 @@ instead: same Figma in → byte-identical POC out, at zero agent cost. Fallback
 runs produce only `00-run.json` and `50-build-report.json`; the full artifact
 trail is an agent-path feature.
 
+## Phase 4 (planned) — Paperclip-native execution
+
+The 2026-09-01 **Option B** decision is to move the same Chief → Product →
+Research → Design → Engineer → QA → Deploy role chain and contract-stage
+artifacts to Paperclip-registered Claude/Codex agents. This will replace GitHub
+Actions execution rather than wrap or dispatch work into the unchanged GitHub
+Actions pipeline. The drift gate, artifact contracts, and Render deploy target
+remain unchanged.
+
+Status: **not started**, tracked as Phase 1 on the focx Command Deck. Once the
+transition lands, `00-run.json`'s optional `trigger.paperclipTaskId` field will
+cross-reference the Paperclip task that owns the run.
+
 ## Run identity
 
 - Run ID format: `run-<UTC yyyymmdd-HHMMSS>-<trigger>` (e.g., `run-20260830-142201-ticket`).

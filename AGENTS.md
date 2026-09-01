@@ -39,4 +39,5 @@ You are an agent (or a human) working in the focx.ai autonomous development repo
 | Tickets | GitHub Issues (this repo) |
 | Code | This repo, `develop` branch |
 | Run state & audit trail | `pipeline/runs/<run-id>/` on the run branch + the PR |
+| Orchestration / execution substrate | GitHub Actions today; per the 2026-09-01 decision, migrating to Paperclip-registered agents (migration not yet started) |
 | Deployment | Render, via `render.yaml` |

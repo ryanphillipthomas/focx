@@ -17,7 +17,8 @@
         "issueNumber": { "type": "integer", "description": "Present when source=ticket" },
         "actor": { "type": "string", "description": "GitHub login or bot identity that fired the trigger" },
         "requestedBy": { "type": "string", "description": "Human on whose behalf a bot acted, when known" },
-        "workflowRunId": { "type": "string", "description": "GitHub Actions run id, for log traceability" }
+        "workflowRunId": { "type": "string", "description": "GitHub Actions run id, for log traceability" },
+        "paperclipTaskId": { "type": "string", "description": "Present once the run is dispatched or tracked by a Paperclip task, per the 2026-09-01 Option B decision" }
       }
     },
     "prompt": { "type": "string", "minLength": 1, "description": "The raw request text as received, unedited" },
