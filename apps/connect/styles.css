@@ -80,12 +80,6 @@ h1 {
   align-items: center;
 }
 
-.confirm-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -123,3 +117,6 @@ h1 {
 .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 .btn[disabled]:hover { background: var(--action-fill); }
 .btn--destructive[disabled]:hover { background: var(--status-danger); }
+
+/* DELIBERATE DRIFT (negative test): raw value, not a published token */
+.drift-injected { background: #ff00aa; }
