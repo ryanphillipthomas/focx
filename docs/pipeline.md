@@ -100,7 +100,7 @@ Actions execution rather than wrap or dispatch work into the unchanged GitHub
 Actions pipeline. The drift gate, artifact contracts, and Render deploy target
 remain unchanged.
 
-Status: **not started**, tracked as Phase 1 on the focx Command Deck. Once the
+Status: **not started**. Once the
 transition lands, `00-run.json`'s optional `trigger.paperclipTaskId` field will
 cross-reference the Paperclip task that owns the run.
 

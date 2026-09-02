@@ -31,4 +31,4 @@ described in [`docs/pipeline.md`'s Phase 3 section](../pipeline.md#phase-3-statu
 Per the 2026-09-01 decision, its execution substrate is planned to migrate to a
 Paperclip-registered agent using the Claude Code CLI adapter, with the same
 brief-derivation contract, routing responsibilities, and guardrails. The
-migration has not started and is tracked as Phase 1 on the focx Command Deck.
+migration has not started.
