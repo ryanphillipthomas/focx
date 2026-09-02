@@ -1,0 +1,27 @@
+Independently probed both candidate preview URLs for PR #30 (base develop), per the
+issue's instruction not to trust either URL blindly.
+
+$ curl -sI https://focx-pr-30.onrender.com
+HTTP/2 404
+x-render-routing: no-server
+(dead — matches the workflow's SERVICE=focx fallback for base=develop, which the
+issue flags as an undocumented bug in .github/workflows/pipeline.yml's case
+statement; confirmed still 404 at verification time)
+
+$ curl -sI https://focx-develop-pr-30.onrender.com
+HTTP/2 200
+last-modified: Wed, 02 Sep 2026 04:07:35 UTC
+rndr-id: b0b2be33-b23d-40f7
+
+$ curl -sI https://focx-develop-pr-30.onrender.com/skills/connect/
+HTTP/2 200
+rndr-id: 7f57c568-76b2-48dc
+
+$ curl -s -o /dev/null -w 'root: %{http_code}\n' https://focx-develop-pr-30.onrender.com
+root: 200
+$ curl -s -o /dev/null -w 'skills/connect/: %{http_code}\n' https://focx-develop-pr-30.onrender.com/skills/connect/
+skills/connect/: 200
+
+Conclusion: https://focx-develop-pr-30.onrender.com is the live preview for this PR;
+https://focx-pr-30.onrender.com is dead as the issue warned. Used the former for all
+rendered-preview verification below.

@@ -2,58 +2,58 @@
   "runId": "run-20260902-022419-manual",
   "driftGate": {
     "passed": true,
-    "checkRunUrl": "https://github.com/ryanphillipthomas/focx/actions/runs/33584185245/job/100104737641"
+    "checkRunUrl": "https://github.com/ryanphillipthomas/focx/actions/runs/33589591938/job/100120687134"
   },
   "criteria": [
     {
       "storyId": "S1",
       "criterion": "apps/connect/index.html has one new <footer> element after the last existing section, containing exactly one line of text identifying the page as the focx design-system showcase.",
       "result": "pass",
-      "evidence": "Read apps/connect/index.html on the checked-out run/run-20260902-022419-manual branch directly (not the pre-existing verdict's claims): lines 79-81 contain exactly one new <footer class=\"site-footer\"> immediately after the last </section> (the Confirmation actions section, line 78), containing exactly one <p class=\"caption\">Focx design system — Connect showcase</p> line. Confirmed via independent `git diff develop...run/run-20260902-022419-manual -- apps/connect/index.html` (evidence/app-diff.txt), which shows only 3 added lines, no removals. Source-level verification only — the Render preview at PREVIEW_URL (https://focx-pr-30.onrender.com) was independently re-probed and found unreachable (see evidence/preview-unreachable.txt and the dedicated preview criterion below), so this could not be confirmed against the rendered page."
+      "evidence": "git diff e579b0b..HEAD -- apps/connect/index.html (saved to evidence/qa2-app-diff.txt) shows exactly 3 added lines and 0 removed lines: a <footer class=\"site-footer\"> containing one <p class=\"caption\">Focx design system — Connect showcase</p>, inserted immediately after the last existing </section>. No other footer or duplicate text node exists in the file."
     },
     {
       "storyId": "S1",
       "criterion": "The footer has a top border using var(--border-hairline) as the width and var(--border-subtle) as the color, and no other decoration (no background, box-shadow, or border-radius).",
       "result": "pass",
-      "evidence": "apps/connect/styles.css lines 127-131: `.site-footer { margin-top: var(--control-px-lg); padding-top: var(--space-3); border-top: var(--border-hairline) solid var(--border-subtle); }`. Grepped design/tokens/focx/tokens.json and confirmed border-hairline resolves to 1px and border-subtle resolves to #ececec (both published tokens, not raw values in the CSS). No background, box-shadow, or border-radius property appears in the rule. Source-level only; the rendered result could not be confirmed (preview unreachable)."
+      "evidence": "apps/connect/styles.css lines 126-130: `.site-footer { margin-top: var(--control-px-lg); padding-top: var(--space-3); border-top: var(--border-hairline) solid var(--border-subtle); }` — only border-top is set; no background, box-shadow, or border-radius property appears in the rule (verified by direct read of the file, evidence/qa2-app-diff.txt). evidence/qa2-css-cascade-check.txt confirms no pre-existing `footer` element selector exists elsewhere in styles.css that could add conflicting decoration."
     },
     {
       "storyId": "S1",
       "criterion": "The footer's text is styled with font-size: var(--text-caption) and font-weight: var(--weight-regular), and no other font-size or font-weight rule applies to it.",
       "result": "pass",
-      "evidence": "apps/connect/styles.css lines 133-136: `.site-footer .caption { font-size: var(--text-caption); font-weight: var(--weight-regular); }`. Independently ran `grep -n \"caption\" apps/connect/styles.css` on the checked-out branch — the only match besides this new rule is the token definition `--text-caption: 12px` in :root; no pre-existing `.caption` class exists elsewhere. Inspected the universal `*` reset (line 40: box-sizing + margin only) and the `body` rule (lines 42-47: font-family, background, color, padding only) — neither sets font-size or font-weight, so no other rule competes. Source-level only; not confirmed rendered (preview unreachable)."
+      "evidence": "apps/connect/styles.css lines 132-135: `.site-footer .caption { font-size: var(--text-caption); font-weight: var(--weight-regular); }`. evidence/qa2-css-cascade-check.txt: grep for `^footer|^p |^p{|^p,|body {` in styles.css finds only the `body {}` rule, which sets font-family/background/color/padding — no font-size or font-weight — and no global `p` or `footer` selector exists. The universal `*` reset (styles.css line 40) sets only box-sizing and margin. No other rule in the file can apply font-size or font-weight to `.site-footer .caption`."
     },
     {
       "storyId": "S1",
       "criterion": "The footer's spacing (its margin above the rule and padding between the rule and the text) uses only token values already defined in apps/connect/styles.css's :root block (e.g. var(--space-3), var(--control-px-lg)) — no new pixel literals anywhere in the diff.",
       "result": "pass",
-      "evidence": "`.site-footer` uses margin-top: var(--control-px-lg) and padding-top: var(--space-3); both are pre-existing :root entries (styles.css lines 16 and 24, confirmed by direct read of the file). evidence/app-diff.txt (independently generated via `git diff develop...run/run-20260902-022419-manual -- apps/connect/index.html apps/connect/styles.css`) shows every added line in both files, and none contains a raw pixel literal, hex value, or inline font name — only var(--...) references and markup."
+      "evidence": "`.site-footer` uses margin-top: var(--control-px-lg) and padding-top: var(--space-3), both pre-existing :root entries (styles.css lines 16 and 24). evidence/qa2-app-diff.txt shows every added line across both files; none contains a raw pixel literal, hex value, or inline font-family string — only var(--...) references and markup."
     },
     {
       "storyId": "S1",
       "criterion": "node tools/drift-check/index.mjs exits 0 against the changed files.",
       "result": "pass",
-      "evidence": "Independently ran `node tools/drift-check/index.mjs` on the checked-out run branch: stdout 'drift-check: clean — no design drift detected.', exit code 0 (evidence/drift-check-rerun.txt). Cross-checked against `gh pr checks 30`, independently invoked and captured in evidence/gh-pr-checks-30.txt, which reports the 'drift' check as pass at https://github.com/ryanphillipthomas/focx/actions/runs/33584185245/job/100104737641 — matching driftGate.checkRunUrl above."
+      "evidence": "Independently ran `node tools/drift-check/index.mjs` on the checked-out run/run-20260902-022419-manual branch after fast-forwarding to origin (which merged develop PR #32, fixing the preview-service case statement noted in the issue): stdout 'drift-check: clean — no design drift detected.', exit 0 (evidence/qa2-drift-check-rerun.txt). Cross-checked with a fresh `gh pr checks 30` (evidence/qa2-gh-pr-checks-30.txt), which independently reports the 'drift' check state as pass at https://github.com/ryanphillipthomas/focx/actions/runs/33589591938/job/100120687134 — matching both DRIFT_CHECK_URL given in the issue and driftGate.checkRunUrl above."
     },
     {
       "storyId": "S1",
       "criterion": "No markup, class, or style outside the new footer changes in apps/connect/index.html or apps/connect/styles.css versus the pre-run committed version.",
       "result": "pass",
-      "evidence": "`git diff develop...run/run-20260902-022419-manual -- apps/connect/index.html apps/connect/styles.css`, independently run and saved to evidence/app-diff.txt, contains only added lines (no '-' lines) in both files: 3 lines appended to index.html (the new <footer>) and 11 lines appended to styles.css (the two new .site-footer rules). No existing selector, markup, or attribute was touched."
+      "evidence": "git diff against merge-base e579b0b (last commit on develop before this run branched) restricted to apps/connect/index.html and apps/connect/styles.css shows only additive hunks: +3 lines in index.html, +11 lines in styles.css, 0 deletions in either file (evidence/qa2-app-diff.txt). No existing selector, element, or attribute was touched."
     },
     {
       "storyId": "S1",
-      "criterion": "Design fidelity per 40-design-spec.json: cited tokens (focx.style.ui-caption via focx.text.caption/focx.weight.regular, focx.color.border-subtle, focx.border.hairline, focx.space.3, focx.control.px-lg) are the tokens actually used in the footer, and no component/decoration outside the spec was introduced.",
+      "criterion": "Design fidelity per 40-design-spec.json: the cited tokens (focx.style.ui-caption via focx.text.caption/focx.weight.regular, focx.color.border-subtle, focx.border.hairline, focx.space.3, focx.control.px-lg) are the tokens actually used, and nothing visual outside the spec was introduced.",
       "result": "pass",
-      "evidence": "Grepped design/tokens/focx/tokens.json directly and confirmed each cited token's CSS custom-property name matches what's consumed in the footer CSS: --weight-regular (fontWeight 400), --border-subtle (#ececec), --text-caption (fontSize 12px), --space-3 (6px), --control-px-lg (18px), --border-hairline (1px) — all present in :root and all referenced by var(...) in the new .site-footer rules, with no raw literals substituted. No dedicated Footer component exists in the Figma manifest per 40-design-spec.json's own notes, and the build correctly used the same discrete-sub-token pattern already established for the eyebrow style rather than inventing a component. Caveat: this is token-level source verification only — no Figma MCP access or reachable preview was available to this QA pass to perform a pixel-level visual comparison against the cited Figma node (fileKey GOlqIWU8MUzYZDQA39g6tv, node 9:7), so full visual design fidelity is unverified, not merely unconfirmed-but-assumed-fine."
+      "evidence": "Read design/tokens/focx/tokens.json directly and cross-checked each cited token's value against the CSS custom property consumed in the new footer rules (evidence/qa2-token-crosscheck.txt): --border-hairline=1px (focx.border.hairline), --border-subtle=#ececec (focx.color.border-subtle), --control-px-lg=18px (focx.control.px-lg), --space-3=6px (focx.space.3), --text-caption=12px (focx.text.caption), --weight-regular=400 (focx.weight.regular). All six match exactly; the footer references each via var(...), never a raw literal. 40-design-spec.json's own notes correctly record that no dedicated Footer component/frame exists in the Figma manifest, and componentsUsed in 50-build-report.json (focx/UI/Caption) matches the discrete-sub-token pattern already established for the eyebrow style elsewhere in this file — consistent with the design spec's prescribed approach, not an invented component. This was also confirmed against the live deployed preview (evidence/qa2-preview-content-diff.txt): the served index.html/styles.css at https://focx-develop-pr-30.onrender.com/skills/connect/ are byte-identical to the reviewed source, so nothing was rewritten or diverged at deploy time. No Figma MCP tool was available in this session to perform a pixel-level screenshot comparison against the cited Figma node (fileKey GOlqIWU8MUzYZDQA39g6tv, node 9:7); design fidelity here is verified at the token level against both source and deployed output, not by visual screenshot diff."
     },
     {
       "storyId": "S1",
-      "criterion": "The changed application files must be verifiable against the live Render deploy preview at PREVIEW_URL, per docs/roles/qa.md ('Verify every acceptance criterion against the deployed preview, not the code') and its explicit failure mode ('Preview unreachable → verdict is fail with evidence, not a wait').",
-      "result": "fail",
-      "evidence": "Independently probed https://focx-pr-30.onrender.com at verification time (2026-09-02T02:51:54Z, well after the build-time PREVIEW_STATE of 'unreachable' recorded in 50-build-report.json's trigger context, and after this QA pass's own 20+ minute-later re-check). `curl -sI` on `/`, `/skills/connect/`, `/skills/connect/index.html`, and `/apps/connect/index.html` all return HTTP 404 with header `x-render-routing: no-server` (evidence/preview-unreachable.txt), indicating no preview server is running for PR #30 at all, not a path-routing gap. No rendered/visual verification of the footer, its border, typography, or spacing was possible. This is a documented limitation per the assignment, but per this role's own explicit failure mode it forces the verdict below, not a pass on source-only evidence."
+      "criterion": "Deployed-preview verification, per docs/roles/qa.md ('Verify every acceptance criterion against the deployed preview, not the code') and its explicit failure mode ('Preview unreachable → verdict is fail with evidence, not a wait').",
+      "result": "pass",
+      "evidence": "Per the issue's own warning, independently probed both candidate preview URLs rather than trusting either blindly (evidence/qa2-preview-both-urls.txt). https://focx-pr-30.onrender.com — the URL the workflow's buggy SERVICE case-statement would compute for base=develop — is confirmed dead: HTTP 404, `x-render-routing: no-server`. https://focx-develop-pr-30.onrender.com is confirmed live: HTTP 200 at both `/` and `/skills/connect/` (curl -sI and -w '%{http_code}', re-verified at 2026-09-02T04:16Z, well after the build-time 'unreachable' state and after PR #32 enabled the develop preview service). Fetched the live-served index.html and styles.css from that URL and diffed them byte-for-byte against apps/connect/index.html and apps/connect/styles.css on this run branch: zero differences (evidence/qa2-preview-content-diff.txt). The live HTML's tail confirms the new <footer class=\"site-footer\"> with its <p class=\"caption\">Focx design system — Connect showcase</p> is actually served, not merely committed. Because this is a copy-only static deploy (render.yaml: tools/site-compose copies committed app directories into dist/ with no build-time rewriting) and the served files are identical to source, every source-level criterion verified above is thereby also confirmed against the live rendered preview."
     }
   ],
   "additionalDriftFound": [],
-  "verdict": "fail"
+  "verdict": "pass"
 }

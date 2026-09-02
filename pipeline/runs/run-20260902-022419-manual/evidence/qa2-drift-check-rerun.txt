@@ -1,0 +1,3 @@
+$ node tools/drift-check/index.mjs
+drift-check: clean — no design drift detected.
+exit: 0
