@@ -123,3 +123,14 @@ h1 {
 .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 .btn[disabled]:hover { background: var(--action-fill); }
 .btn--destructive[disabled]:hover { background: var(--status-danger); }
+
+.site-footer {
+  margin-top: var(--control-px-lg);
+  padding-top: var(--space-3);
+  border-top: var(--border-hairline) solid var(--border-subtle);
+}
+
+.site-footer .caption {
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+}

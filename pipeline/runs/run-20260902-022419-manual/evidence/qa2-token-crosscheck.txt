@@ -1,0 +1,8 @@
+Token cross-check: apps/connect/styles.css :root vs design/tokens/focx/tokens.json
+--border-hairline: 1px   vs focx.border.hairline.value = 1px
+--border-subtle: #ececec vs focx.color.border-subtle.value = #ececec
+--control-px-lg: 18px    vs focx.control.px-lg.value = 18px
+--space-3: 6px           vs focx.space.3.value = 6px
+--text-caption: 12px     vs focx.text.caption.value = 12px
+--weight-regular: 400    vs focx.weight.regular.value = 400
+All six values match published tokens exactly. No raw hex/px/font literals introduced in the footer diff (all footer rules reference var(--...)).

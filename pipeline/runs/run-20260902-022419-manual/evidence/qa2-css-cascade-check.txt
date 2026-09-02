@@ -1,0 +1,4 @@
+$ grep -n '^footer\|^p \|^p{\|^p,\|body {' apps/connect/styles.css
+42:body {
+
+No global 'footer' or 'p' element selector exists in styles.css that would set font-size, font-weight, background, box-shadow, or border-radius conflicting with .site-footer / .site-footer .caption. Universal selector '*' only sets box-sizing and margin:0. Confirms criteria 2 and 3 hold at the CSS-rule level (no other applicable rule).

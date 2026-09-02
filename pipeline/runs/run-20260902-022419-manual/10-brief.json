@@ -1,0 +1,28 @@
+{
+  "runId": "run-20260902-022419-manual",
+  "objective": "Add a single caption-styled footer line to apps/connect/index.html, separated from the content above by a hairline top rule, resolving entirely to published design tokens.",
+  "successCriteria": [
+    "apps/connect/index.html contains exactly one new footer element carrying a single line of text identifying the page as the focx design-system showcase.",
+    "The footer is visually separated from the content above it by a top border using the published hairline border-width token and the border-subtle color token.",
+    "The footer text is styled with the published UI/Caption type style, resolved to its published sub-tokens (text-caption font size, weight-regular font weight).",
+    "No raw hex, pixel, or font values are introduced anywhere in the diff; node tools/drift-check/index.mjs passes.",
+    "No content, section, or style outside the new footer is restyled, reorganized, or otherwise modified."
+  ],
+  "constraints": [
+    "Scope is exactly one footer; do not restyle, reorganize, or 'improve' anything else on the page.",
+    "Resolve every value to a published token in design/tokens/focx (or an explicit design/tokens/connect delta); no raw hex, pixel, or font values.",
+    "If a genuine design-system gap is found, halt and report it rather than inventing a value.",
+    "Codex may edit apps/ and/or packages/ only, per pipeline/prompts/build-agent.md's Engineer rules.",
+    "Do not run tools/poc-builder — it deterministically regenerates apps/connect/index.html and styles.css from design/tokens/focx/tokens.json alone and would erase the already hand-authored Confirmation actions section and this run's footer."
+  ],
+  "targetApp": "connect",
+  "route": {
+    "skipResearch": true,
+    "skipReason": "Single, fully-specified footer addition using only tokens already published and already consumed elsewhere in apps/connect/styles.css (text-caption, weight-regular, border-hairline, border-subtle, space-3, control-px-lg). No open question needs investigation."
+  },
+  "assumptions": [
+    "The issue does not specify exact caption wording; Product will choose literal copy that identifies the page as the focx design-system showcase (e.g. 'Focx design system — Connect showcase').",
+    "'Existing spacing' is interpreted as reusing spacing tokens already consumed in apps/connect/styles.css (--space-3, --control-px-lg) rather than introducing a new spacing value.",
+    "'The UI/Caption type style' maps to the published focx.style.ui-caption token (figmaName 'UI/Caption', value 'Geist Regular 12/1.35'). No single CSS custom property exists for this composite style, so it is implemented via its discrete published sub-tokens (text-caption font size, weight-regular font weight) — the same partial-implementation pattern already established for the eyebrow style (focx.style.brand-eyebrow) in apps/connect/styles.css, which likewise has no dedicated composite CSS variable."
+  ]
+}

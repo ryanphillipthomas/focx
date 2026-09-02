@@ -1,0 +1,16 @@
+$ curl -sI https://focx-pr-30.onrender.com
+HTTP/2 404 
+date: Wed, 02 Sep 2026 03:06:18 GMT
+content-type: text/plain; charset=utf-8
+content-length: 10
+x-content-type-options: nosniff
+x-render-routing: no-server
+cf-cache-status: DYNAMIC
+server: cloudflare
+cf-ray: a3494c467d4a25d8-EWR
+alt-svc: h3=":443"; ma=86400
+
+
+$ curl -s -o /dev/null -w 'HTTP_STATUS:%{http_code}
+' https://focx-pr-30.onrender.com
+HTTP_STATUS:404

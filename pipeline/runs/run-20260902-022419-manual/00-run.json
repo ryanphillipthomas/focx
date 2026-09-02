@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260902-022419-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "paperclip-development-agent",
+    "paperclipTaskId": "2e49673a-72f9-4e11-af90-a0fff7a57819"
+  },
+  "prompt": "Add a footer to the Connect design-system showcase page\n\nFirst real end-to-end run for the Development agent — keep it deliberately small.\n\nAdd a footer to apps/connect/index.html: a single caption-styled line identifying the page as the focx design-system showcase, separated from the content above by a hairline top rule.\n\nScope is exactly that one footer. Do not restyle, reorganize, or 'improve' anything else on the page.\n\nEverything it needs already exists in the published design system — the UI/Caption type style, border-subtle, the hairline border width, and existing spacing. Resolve every value to a published token; no raw hex, pixel, or font values. If you believe a genuine design-system gap exists, halt and report it rather than inventing a value.\n\nFollow your charter exactly, including the Codex handoff for the actual code and a fresh independent QA pass before you close this out.",
+  "mode": "build",
+  "createdAt": "2026-09-02T02:24:19Z",
+  "branch": "run/run-20260902-022419-manual"
+}

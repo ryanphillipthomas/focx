@@ -1,0 +1,42 @@
+QA independence violation — recorded 2026-09-02 by the independent QA agent (Paperclip agent 85d0c3f1-f8e2-4950-8a40-43eab7fd3cb6)
+
+Before this independent QA pass began, the run branch already contained a
+pipeline/runs/run-20260902-022419-manual/60-qa-verdict.json and its evidence
+files, committed as:
+
+  commit 73d78a100b6cd5395124cb942838a4e5991ccf78
+  Author: focx-development[bot] <development@focx.ai>
+  Date:   Tue Sep 1 22:41:53 2026 -0400
+  pipeline: run-20260902-022419-manual qa verdict
+
+The immediately preceding commit on the same branch, which produced the
+implementation being judged, was authored by the same identity:
+
+  commit d669eef2cb633cea1e70be7588c05d1139091602
+  Author: focx-development[bot] <development@focx.ai>
+  Date:   Tue Sep 1 22:28:21 2026 -0400
+  pipeline: run-20260902-022419-manual build
+
+`git log` output:
+
+  73d78a1 pipeline: run-20260902-022419-manual qa verdict   (focx-development[bot])
+  d669eef pipeline: run-20260902-022419-manual build         (focx-development[bot])
+  9839652 pipeline: open run-20260902-022419-manual (trigger: manual)
+
+This is exactly the case the QA charter (pipeline/prompts/qa-agent.md) and
+docs/roles/qa.md rule out: the builder verified its own work. Per the
+Paperclip QA agent instructions, "Independence is the point. If you are ever
+asked to verify something you produced, refuse and report it." The
+pre-existing verdict was not produced by this QA agent and was disregarded
+in full — none of its conclusions were relied upon. Every criterion in this
+QA pass was independently re-derived from source, from independently re-run
+commands, and from an independently re-probed preview URL.
+
+Note for the record: the disregarded self-authored verdict happened to also
+conclude "fail" (on the same preview-unreachable ground this independent
+pass also finds). That coincidence does not cure the process defect — a
+builder-authored QA verdict is invalid regardless of its content, because it
+removes the adversarial check the QA role exists to provide. This is a
+pipeline/orchestration defect to fix (the QA stage must run as a distinct,
+independent identity/process from the Development stage), not something
+this QA pass can remediate — QA fixes nothing.
