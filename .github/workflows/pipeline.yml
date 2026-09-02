@@ -249,13 +249,16 @@ jobs:
 
       # The URL is Render's service-preview naming convention
       # (<service>-pr-<number>.onrender.com), verified live on PR #14 — and the
-      # service is whichever one watches the PR's BASE branch: focx watches
-      # main, focx-staging watches staging. The base is asked of GitHub rather
-      # than assumed, so the URL stays right wherever the PR targets. Service
-      # previews are a dashboard toggle, not a render.yaml field — see that
-      # file's header. Polling keeps QA from reading a preview mid-build; an
-      # unreachable preview is recorded rather than fatal, because the QA
-      # charter already treats a missing preview as a documented limitation.
+      # service is whichever one watches the PR's BASE branch. A PR only gets a
+      # preview if a service watches its base branch: focx watches main,
+      # focx-staging watches staging, and focx-develop watches develop. The base
+      # is asked of GitHub rather than assumed, so the URL stays right wherever
+      # the PR targets. Service previews are a dashboard toggle, not a
+      # render.yaml field — see that file's header. Polling keeps QA from
+      # reading a preview mid-build. An unreachable preview is recorded rather
+      # than failing this step — the judgment belongs to QA, and per
+      # docs/roles/qa.md an unreachable preview is a `fail` verdict with
+      # evidence, not a wait and not a tolerated gap.
       - name: Await Render preview
         id: preview
         if: env.HAS_ANTHROPIC == 'true' && steps.trigger.outputs.drift != '1'
@@ -266,6 +269,7 @@ jobs:
           set -euo pipefail
           BASE=$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)
           case "$BASE" in
+            develop) SERVICE=focx-develop ;;
             staging) SERVICE=focx-staging ;;
             *)       SERVICE=focx ;;
           esac
