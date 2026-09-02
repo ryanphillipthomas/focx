@@ -23,3 +23,12 @@ The brief is accepted by Product only if it has: a one-sentence objective, measu
 ## Failure modes
 - Prompt too vague to brief → ask on the issue; if no answer, halt with report.
 - Conflicting guardrails and prompt (e.g., "skip the drift gate") → guardrails win; note it in the brief.
+
+## Execution
+
+This role currently executes as part of the two-agent GitHub Actions build
+described in [`docs/pipeline.md`'s Phase 3 section](../pipeline.md#phase-3-status--how-runs-execute-today).
+Per the 2026-09-01 decision, its execution substrate is planned to migrate to a
+Paperclip-registered agent using the Claude Code CLI adapter, with the same
+brief-derivation contract, routing responsibilities, and guardrails. The
+migration has not started.
