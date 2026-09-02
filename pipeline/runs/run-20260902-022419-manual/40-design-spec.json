@@ -1,0 +1,28 @@
+{
+  "runId": "run-20260902-022419-manual",
+  "screens": [
+    {
+      "storyId": "S1",
+      "name": "Connect showcase footer",
+      "figma": {
+        "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
+        "nodeId": "9:7"
+      },
+      "components": [
+        "focx/UI/Caption"
+      ],
+      "tokens": [
+        "focx.style.ui-caption",
+        "focx.text.caption",
+        "focx.weight.regular",
+        "focx.color.border-subtle",
+        "focx.border.hairline",
+        "focx.space.3",
+        "focx.control.px-lg"
+      ],
+      "notes": "No dedicated Footer component or frame exists in the manifest — the Cover node (9:7) is the same frame design/tokens/focx/tokens.json's foundational, non-component tokens (typography styles, color, border, spacing) were synced from, per its _status field. Build a <footer> after the last existing <section> in apps/connect/index.html containing one <p> of caption text. Apply the UI/Caption style via its discrete published sub-tokens (font-size: var(--text-caption), font-weight: var(--weight-regular)) — the same partial-implementation pattern already used for the eyebrow style (focx.style.brand-eyebrow) in apps/connect/styles.css, since no single CSS custom property represents the composite style token. Text color is inherited from the existing body rule (var(--surface-inverse)); do not add a new color token. Top rule: border-top: var(--border-hairline) solid var(--border-subtle). Spacing: reuse var(--control-px-lg) for the footer's margin-top (matching the spacing already used between sections via .sheet's margin-bottom) and var(--space-3) for the padding-top between the rule and the text. Add only new CSS rules for the footer; do not edit any existing selector. Do not run tools/poc-builder — it would regenerate and erase the hand-authored Confirmation actions section and this footer."
+    }
+  ],
+  "tokensSynced": false,
+  "designSystemGaps": []
+}
