@@ -1,0 +1,52 @@
+{
+  "runId": "run-20260902-022419-manual",
+  "driftGate": {
+    "passed": true,
+    "checkRunUrl": "https://github.com/ryanphillipthomas/focx/actions/runs/33583349219/job/100102168500"
+  },
+  "criteria": [
+    {
+      "storyId": "S1",
+      "criterion": "apps/connect/index.html has one new <footer> element after the last existing section, containing exactly one line of text identifying the page as the focx design-system showcase.",
+      "result": "pass",
+      "evidence": "git diff develop...run/run-20260902-022419-manual -- apps/connect/index.html (see evidence/app-diff.txt) shows one <footer class=\"site-footer\"> added immediately after the last </section> (the Confirmation actions section), containing exactly one <p class=\"caption\">Focx design system — Connect showcase</p> line. Verified via source inspection only — the Render preview at PREVIEW_URL was unreachable at verification time (see the preview-reachability criterion below), so this could not be confirmed against the deployed page as docs/roles/qa.md requires."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The footer has a top border using var(--border-hairline) as the width and var(--border-subtle) as the color, and no other decoration (no background, box-shadow, or border-radius).",
+      "result": "pass",
+      "evidence": "apps/connect/styles.css lines 128-131: `.site-footer { margin-top: var(--control-px-lg); padding-top: var(--space-3); border-top: var(--border-hairline) solid var(--border-subtle); }`. No background, box-shadow, or border-radius property present in the rule. Source-level only; not confirmed rendered (preview unreachable)."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The footer's text is styled with font-size: var(--text-caption) and font-weight: var(--weight-regular), and no other font-size or font-weight rule applies to it.",
+      "result": "pass",
+      "evidence": "apps/connect/styles.css lines 133-135: `.site-footer .caption { font-size: var(--text-caption); font-weight: var(--weight-regular); }`. Ran `grep -n \"caption\" apps/connect/styles.css` — the only other reference to 'caption' in the file is this new rule; no pre-existing `.caption` class exists. Checked the `body` rule (styles.css lines 42-46) and the universal `*` reset (line 40) for competing font-size/font-weight declarations — neither sets either property, so no other rule applies. Source-level only; not confirmed rendered (preview unreachable)."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The footer's spacing (its margin above the rule and padding between the rule and the text) uses only token values already defined in apps/connect/styles.css's :root block (e.g. var(--space-3), var(--control-px-lg)) — no new pixel literals anywhere in the diff.",
+      "result": "pass",
+      "evidence": "`.site-footer` uses `margin-top: var(--control-px-lg)` and `padding-top: var(--space-3)`; both custom properties are pre-existing entries in the :root block (styles.css lines 16 and 24, confirmed via grep). evidence/app-diff.txt shows no raw pixel literals in any added line — every new declaration references a var(--...) token."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "node tools/drift-check/index.mjs exits 0 against the changed files.",
+      "result": "pass",
+      "evidence": "Independently re-ran `node tools/drift-check/index.mjs` on the checked-out run branch: stdout 'drift-check: clean — no design drift detected.', exit code 0 (see evidence/drift-check-rerun.txt). Cross-checked against `gh pr checks 30`, which reports the 'drift' check as pass at https://github.com/ryanphillipthomas/focx/actions/runs/33583349219/job/100102168500 (evidence/gh-pr-checks-30.txt), matching the recorded DRIFT_CHECK_STATE/DRIFT_CHECK_URL."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "No markup, class, or style outside the new footer changes in apps/connect/index.html or apps/connect/styles.css versus the pre-run committed version.",
+      "result": "pass",
+      "evidence": "`git diff develop...run/run-20260902-022419-manual -- apps/connect/index.html apps/connect/styles.css` (evidence/app-diff.txt) contains only added lines (no `-` lines) in both files: 3 lines appended to index.html (the new <footer>) and 11 lines appended to styles.css (the two new .site-footer rules). No existing selector, markup, or attribute was touched."
+    },
+    {
+      "storyId": "S1",
+      "criterion": "The changed application files must be verifiable against the live Render deploy preview at PREVIEW_URL, per docs/roles/qa.md ('Verify every acceptance criterion against the deployed preview, not the code') and its explicit failure mode ('Preview unreachable → verdict is fail with evidence, not a wait').",
+      "result": "fail",
+      "evidence": "Independently re-checked https://focx-pr-30.onrender.com at verification time (2026-09-02T02:41Z), after the build-time PREVIEW_STATE of 'unreachable' recorded in 50-build-report.json's context. `curl -sI` returns HTTP 404 with header `x-render-routing: no-server`, indicating no preview server is running for PR #30, not merely a path-routing issue. Also probed `/`, `/apps/connect/index.html`, `/skills/connect`, `/skills/connect/`, and `/skills/connect/index.html` (the latter three per tools/site-compose/site-map.json's mount of apps/connect at skills/connect) — all return 404 (see evidence/preview-unreachable.txt). No rendered/visual verification of the footer, its border, typography, or spacing was possible."
+    }
+  ],
+  "verdict": "fail"
+}

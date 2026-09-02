@@ -1,0 +1,20 @@
+Re-checked 2026-09-02, independent QA pass on run-20260902-022419-manual / PR #30
+
+$ curl -sI --max-time 15 https://focx-pr-30.onrender.com
+HTTP/2 404 
+date: Wed, 02 Sep 2026 02:41:25 GMT
+content-type: text/plain; charset=utf-8
+content-length: 10
+x-content-type-options: nosniff
+x-render-routing: no-server
+cf-cache-status: DYNAMIC
+server: cloudflare
+cf-ray: a34927d4693d422b-EWR
+alt-svc: h3=":443"; ma=86400
+
+
+GET https://focx-pr-30.onrender.com/ -> HTTP 404
+GET https://focx-pr-30.onrender.com/apps/connect/index.html -> HTTP 404
+GET https://focx-pr-30.onrender.com/skills/connect -> HTTP 404
+GET https://focx-pr-30.onrender.com/skills/connect/ -> HTTP 404
+GET https://focx-pr-30.onrender.com/skills/connect/index.html -> HTTP 404
