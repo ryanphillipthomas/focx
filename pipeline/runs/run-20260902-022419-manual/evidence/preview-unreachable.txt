@@ -1,20 +1,48 @@
-Re-checked 2026-09-02, independent QA pass on run-20260902-022419-manual / PR #30
-
-$ curl -sI --max-time 15 https://focx-pr-30.onrender.com
+=== curl -sI https://focx-pr-30.onrender.com (2026-09-02, QA re-check) ===
 HTTP/2 404 
-date: Wed, 02 Sep 2026 02:41:25 GMT
+date: Wed, 02 Sep 2026 02:51:54 GMT
 content-type: text/plain; charset=utf-8
 content-length: 10
 x-content-type-options: nosniff
 x-render-routing: no-server
 cf-cache-status: DYNAMIC
 server: cloudflare
-cf-ray: a34927d4693d422b-EWR
+cf-ray: a349372ffe1c4253-EWR
 alt-svc: h3=":443"; ma=86400
 
+=== curl -sI https://focx-pr-30.onrender.com/skills/connect/ ===
+HTTP/2 404 
+date: Wed, 02 Sep 2026 02:51:54 GMT
+content-type: text/plain; charset=utf-8
+content-length: 10
+x-content-type-options: nosniff
+x-render-routing: no-server
+cf-cache-status: DYNAMIC
+server: cloudflare
+cf-ray: a3493730bba357b0-EWR
+alt-svc: h3=":443"; ma=86400
 
-GET https://focx-pr-30.onrender.com/ -> HTTP 404
-GET https://focx-pr-30.onrender.com/apps/connect/index.html -> HTTP 404
-GET https://focx-pr-30.onrender.com/skills/connect -> HTTP 404
-GET https://focx-pr-30.onrender.com/skills/connect/ -> HTTP 404
-GET https://focx-pr-30.onrender.com/skills/connect/index.html -> HTTP 404
+=== curl -sI https://focx-pr-30.onrender.com/skills/connect/index.html ===
+HTTP/2 404 
+date: Wed, 02 Sep 2026 02:51:54 GMT
+content-type: text/plain; charset=utf-8
+content-length: 10
+x-content-type-options: nosniff
+x-render-routing: no-server
+cf-cache-status: DYNAMIC
+server: cloudflare
+cf-ray: a349373168a86a5e-EWR
+alt-svc: h3=":443"; ma=86400
+
+=== curl -sI https://focx-pr-30.onrender.com/apps/connect/index.html ===
+HTTP/2 404 
+date: Wed, 02 Sep 2026 02:51:54 GMT
+content-type: text/plain; charset=utf-8
+content-length: 10
+x-content-type-options: nosniff
+x-render-routing: no-server
+cf-cache-status: DYNAMIC
+server: cloudflare
+cf-ray: a34937321e5c43a5-EWR
+alt-svc: h3=":443"; ma=86400
+

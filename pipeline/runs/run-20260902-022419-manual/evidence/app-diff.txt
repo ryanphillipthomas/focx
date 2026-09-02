@@ -30,3 +30,17 @@ index 5d6af9d..6fd9172 100644
 +  font-size: var(--text-caption);
 +  font-weight: var(--weight-regular);
 +}
+ apps/connect/index.html                            |  3 ++
+ apps/connect/styles.css                            | 11 +++++
+ .../runs/run-20260902-022419-manual/00-run.json    | 12 +++++
+ .../runs/run-20260902-022419-manual/10-brief.json  | 28 ++++++++++++
+ .../20-product-spec.json                           | 29 ++++++++++++
+ .../run-20260902-022419-manual/40-design-spec.json | 28 ++++++++++++
+ .../50-build-report.json                           | 24 ++++++++++
+ .../run-20260902-022419-manual/60-qa-verdict.json  | 52 ++++++++++++++++++++++
+ .../evidence/app-diff.txt                          | 32 +++++++++++++
+ .../evidence/contracts-validate-rerun.txt          |  2 +
+ .../evidence/drift-check-rerun.txt                 |  2 +
+ .../evidence/gh-pr-checks-30.txt                   |  2 +
+ .../evidence/preview-unreachable.txt               | 20 +++++++++
+ 13 files changed, 245 insertions(+)
