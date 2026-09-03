@@ -19,7 +19,15 @@ export function createFakeApi({ companyId, requireAuth = true, seedAgents = [] }
       { id: 'sec-claude-0001', key: 'claude_subscription_token', name: 'claude_subscription_token', scope: 'company' },
       { id: 'sec-github-0002', key: 'github_focx_write_token', name: 'github_focx_write_token', scope: 'company' },
     ],
-    skills: [{ key: 'design' }, { key: 'artifact-design' }, { key: 'design:design-handoff' },
+    // Paperclip's own registry keys, then the Claude Code plugin skills. Both
+    // shapes are served from one endpoint, and P7 resolves desiredSkills
+    // against it — the five core keys are what a real company registry returns.
+    skills: [{ key: 'paperclipai/paperclip/paperclip' },
+      { key: 'paperclipai/paperclip/paperclip-board' },
+      { key: 'paperclipai/paperclip/paperclip-converting-plans-to-tasks' },
+      { key: 'paperclipai/paperclip/paperclip-create-agent' },
+      { key: 'paperclipai/paperclip/para-memory-files' },
+      { key: 'design' }, { key: 'artifact-design' }, { key: 'design:design-handoff' },
       { key: 'design:ux-copy' }, { key: 'design:design-critique' },
       { key: 'design:accessibility-review' }, { key: 'design:design-system' }],
     models: {
