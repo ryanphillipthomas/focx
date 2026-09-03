@@ -11,11 +11,13 @@ This repository is built so that work can enter from a GitHub Issue, a manual in
 | [`AGENTS.md`](AGENTS.md) | Operating manual — start here if you are a bot or a new human |
 | [`docs/sources-of-truth.md`](docs/sources-of-truth.md) | The canonical home for every concern, and the handoffs between them |
 | [`docs/pipeline.md`](docs/pipeline.md) | How a run flows through the roles, with an artifact at every stage |
+| [`docs/org.md`](docs/org.md) | The operating company: which agents exist, who they report to, and which pipeline stage each one runs |
 | [`docs/triggers.md`](docs/triggers.md) | How each of the three trigger sources invokes the pipeline |
 | [`docs/drift-gate.md`](docs/drift-gate.md) | The design-drift fail-safe: what drift is, how it is measured, how it blocks |
 | [`docs/roles/`](docs/roles/) | Role definitions: inputs, outputs, handoff contracts |
 | [`pipeline/contracts/`](pipeline/contracts/) | JSON Schemas for every role-to-role handoff artifact |
 | [`pipeline/runs/`](pipeline/runs/) | Auditable per-run artifacts, committed on run branches |
+| [`pipeline/org/`](pipeline/org/) | The agent roster and instruction bundles — desired state for the Paperclip company |
 | [`design/`](design/) | Figma manifest + extracted design tokens (parent `focx`, child `connect`) |
 | [`packages/design-focx/`](packages/design-focx/) | Parent design-system package |
 | [`packages/design-connect/`](packages/design-connect/) | Connect's design system — extends `design-focx` |

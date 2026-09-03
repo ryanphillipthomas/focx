@@ -1,0 +1,10 @@
+{
+  "name": "@focx/paperclip-org",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reconcile the Paperclip operating company to pipeline/org/roster.json",
+  "bin": { "paperclip-org": "./index.mjs" },
+  "scripts": { "test": "node --test test.mjs" },
+  "engines": { "node": ">=22" }
+}

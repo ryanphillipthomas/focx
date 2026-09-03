@@ -6,9 +6,10 @@ You are an agent (or a human) working in the focx.ai autonomous development repo
 
 1. This file.
 2. [`docs/sources-of-truth.md`](docs/sources-of-truth.md) — where every concern canonically lives.
-3. [`docs/pipeline.md`](docs/pipeline.md) — how a run flows and what artifact each stage produces.
-4. The role file for the role you are playing, in [`docs/roles/`](docs/roles/).
-5. The JSON Schema for the artifact you must produce, in [`pipeline/contracts/`](pipeline/contracts/).
+3. [`docs/org.md`](docs/org.md) — the operating company: who exists, who they report to, and which pipeline stage each agent runs.
+4. [`docs/pipeline.md`](docs/pipeline.md) — how a run flows and what artifact each stage produces.
+5. The role file for the role you are playing, in [`docs/roles/`](docs/roles/).
+6. The JSON Schema for the artifact you must produce, in [`pipeline/contracts/`](pipeline/contracts/).
 
 ## Non-negotiable guardrails
 
@@ -39,5 +40,6 @@ You are an agent (or a human) working in the focx.ai autonomous development repo
 | Tickets | GitHub Issues (this repo) |
 | Code | This repo, `develop` branch |
 | Run state & audit trail | `pipeline/runs/<run-id>/` on the run branch + the PR |
-| Orchestration / execution substrate | GitHub Actions today; per the 2026-09-01 decision, migrating to Paperclip-registered agents (migration not yet started) |
+| Orchestration / execution substrate | Paperclip company `Focx.ai`. The org is defined by [`pipeline/org/roster.json`](pipeline/org/roster.json) and documented in [`docs/org.md`](docs/org.md); GitHub Actions is retained for the drift gate and deploy verification |
+| Who runs which pipeline stage | [`docs/org.md`](docs/org.md) |
 | Deployment | Render, via `render.yaml` |

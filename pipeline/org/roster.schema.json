@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focx.ai/contracts/org-roster.schema.json",
+  "title": "Focx operating-company roster (pipeline/org/roster.json)",
+  "description": "Desired state for the Paperclip company. Deliberately NOT in pipeline/contracts/ — those are per-run artifact contracts in the parity structure tier. This schema documents the roster for humans and editors; tools/paperclip-org/index.mjs enforces it, plus the structural invariants a JSON Schema cannot express (single root, no cycles, budget arithmetic, env composition).",
+  "type": "object",
+  "required": ["version", "expectedAgentCount", "goal", "company", "budgetPolicy", "secrets", "env", "workspaces", "networkAllowlist", "designChain", "agents", "routines"],
+  "properties": {
+    "comment": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "expectedAgentCount": { "type": "integer", "minimum": 1, "description": "Must equal agents.length. Guards against silent count drift." },
+    "goal": { "type": "string", "minLength": 1, "description": "Rendered into every instruction bundle; success condition 12 checks for it." },
+
+    "company": {
+      "type": "object",
+      "required": ["id", "name", "budgetMonthlyCents", "timezone"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "prefix": { "type": "string" },
+        "budgetMonthlyCents": { "type": "integer", "minimum": 0, "description": "Integer cents. Must be >= the sum of agent budgets." },
+        "timezone": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "budgetPolicy": {
+      "type": "object",
+      "required": ["company", "agent"],
+      "properties": {
+        "comment": { "type": "string" },
+        "company": { "$ref": "#/$defs/budgetPolicyEntry" },
+        "agent": { "$ref": "#/$defs/budgetPolicyEntry" }
+      },
+      "additionalProperties": false
+    },
+
+    "secrets": {
+      "type": "array",
+      "description": "Secret NAMES only. Values live in Paperclip's secret store; this file is committed to git.",
+      "items": {
+        "type": "object",
+        "required": ["name", "usedFor"],
+        "properties": { "name": { "type": "string" }, "usedFor": { "type": "string" } },
+        "additionalProperties": false
+      }
+    },
+
+    "env": {
+      "type": "object",
+      "description": "Composable env blocks. common applies to every agent; claudeAuth to every claude_local agent; gitWrite to every agent with git: write.",
+      "required": ["common", "claudeAuth", "gitWrite"],
+      "properties": {
+        "common": { "$ref": "#/$defs/envBlock" },
+        "claudeAuth": { "$ref": "#/$defs/envBlock" },
+        "gitWrite": { "$ref": "#/$defs/envBlock" }
+      },
+      "additionalProperties": false
+    },
+
+    "workspaces": {
+      "type": "object",
+      "description": "Named workspace presets. Every agent's workspace field must name one of these keys.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "comment": { "type": "string" },
+          "cwd": { "type": "string" },
+          "workspaceStrategy": { "type": "string" },
+          "repository": { "type": ["string", "null"] },
+          "baseBranch": { "type": "string" },
+          "filesystemScope": { "type": "string" },
+          "filesystemExtraPaths": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "networkAllowlist": { "type": "array", "items": { "type": "string" } },
+
+    "designChain": {
+      "type": "object",
+      "required": ["proposer", "approver", "verdictToken", "modeToken", "figmaWrite", "figmaRead", "discoveryOnlySkills", "modes", "modeEscalation"],
+      "properties": {
+        "comment": { "type": "string" },
+        "proposer": { "type": "string", "description": "Agent slug. Must differ from approver." },
+        "approver": { "type": "string" },
+        "verdictToken": { "type": "string" },
+        "modeToken": { "type": "string" },
+        "figmaWrite": { "type": "array", "items": { "type": "string" } },
+        "figmaRead": { "type": "array", "items": { "type": "string" }, "description": "Must be disjoint from figmaWrite." },
+        "canonicalHome": { "type": "string" },
+        "mirror": { "type": "string" },
+        "discoveryOnlySkills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "desiredSkills entries reachable only from discovery mode. A missing one warns rather than blocking."
+        },
+        "modes": {
+          "type": "object",
+          "description": "Exactly one mode must have default: true, and that mode must have usesClaudeDesign: false.",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["default", "usesClaudeDesign", "mayAddComponents", "mayAddVariables", "review"],
+            "properties": {
+              "default": { "type": "boolean" },
+              "usesClaudeDesign": { "type": "boolean" },
+              "mayAddComponents": { "type": "boolean" },
+              "mayAddVariables": { "type": "boolean" },
+              "review": { "enum": ["conformance", "system-fit"] },
+              "declaredVia": { "type": "string" },
+              "declaredBy": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "modeEscalation": {
+          "type": "object",
+          "required": ["from", "to", "raisedBy", "decidedBy"],
+          "properties": {
+            "from": { "type": "string" },
+            "to": { "type": "string" },
+            "raisedBy": { "type": "string", "description": "Must differ from decidedBy: the escalator is not the decider." },
+            "decidedBy": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "agents": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/agent" } },
+    "routines": { "type": "array", "items": { "$ref": "#/$defs/routine" } }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "envBlock": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Values may reference a declared secret as '[secret: <name>]'. A literal credential here is rejected by the tool."
+    },
+
+    "budgetPolicyEntry": {
+      "type": "object",
+      "required": ["windowKind", "warnPercent", "hardStopEnabled", "notifyEnabled"],
+      "properties": {
+        "windowKind": { "enum": ["calendar_month_utc", "lifetime"] },
+        "warnPercent": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "hardStopEnabled": { "type": "boolean" },
+        "notifyEnabled": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "agent": {
+      "type": "object",
+      "required": ["slug", "name", "title", "role", "icon", "reportsTo", "tier", "workspace", "git", "capabilities", "adapter", "run", "permissions", "budgetMonthlyCents", "instructions", "desiredSkills"],
+      "properties": {
+        "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "Stable identity. Written to metadata.focx.slug and used as the reconciler's idempotency key — names are editable in the UI, slugs are not." },
+        "name": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "role": { "enum": ["ceo", "cto", "cmo", "cfo", "security", "engineer", "designer", "pm", "qa", "devops", "researcher", "general"] },
+        "icon": { "enum": ["bot", "cpu", "brain", "zap", "rocket", "code", "terminal", "shield", "eye", "search", "wrench", "hammer", "lightbulb", "sparkles", "star", "heart", "flame", "bug", "cog", "database", "globe", "lock", "mail", "message-square", "file-code", "git-branch", "package", "puzzle", "target", "wand", "atom", "circuit-board", "radar", "swords", "telescope", "microscope", "crown", "gem", "hexagon", "pentagon", "fingerprint"] },
+        "reportsTo": { "type": ["string", "null"], "description": "Another agent's SLUG, not a UUID — the UUID does not exist until the manager is created. Exactly one agent may be null (the root)." },
+        "tier": { "enum": ["manager", "ic"], "description": "Drives maxConcurrentRuns and canAssignTasks only. 'manager' means may assign work, NOT has direct reports — Chief of Staff is a manager with zero reports." },
+        "workspace": { "type": "string", "description": "Key into the workspaces map. Drives adapterConfig and repo-discipline bundle selection — never confuse with tier." },
+        "git": { "enum": ["write", "read", "none"], "description": "write injects GH_TOKEN and the git credential helper. Withholding it is how a reviewer is mechanically prevented from writing what it approves." },
+        "capabilities": { "type": "string", "minLength": 1 },
+        "adapter": {
+          "type": "object",
+          "required": ["type", "model", "reasoning"],
+          "properties": {
+            "type": { "enum": ["claude_local", "codex_local"] },
+            "model": { "type": "string", "description": "Validated at preflight against the live adapter catalog. Bare 'gpt-5.6' is rejected in favour of 'gpt-5.6-sol'." },
+            "reasoning": { "type": "string", "description": "One human-facing field. Rendered as 'effort' (low|medium|high) for claude_local, 'modelReasoningEffort' (minimal|low|medium|high|xhigh) for codex_local, and validated against the target adapter's vocabulary." }
+          },
+          "additionalProperties": false
+        },
+        "run": {
+          "type": "object",
+          "required": ["heartbeat", "wakeOnDemand", "maxConcurrentRuns"],
+          "properties": {
+            "heartbeat": { "type": "boolean", "description": "False everywhere: agents wake from assigned work, mentions, and routines, not idle polling." },
+            "wakeOnDemand": { "type": "boolean" },
+            "maxConcurrentRuns": { "type": "integer", "minimum": 1, "maximum": 2 }
+          },
+          "additionalProperties": false
+        },
+        "permissions": {
+          "type": "object",
+          "required": ["canCreateAgents", "canCreateSkills", "canAssignTasks", "trustPreset"],
+          "properties": {
+            "canCreateAgents": { "const": false, "description": "Always false. An agent that can hire breaks both the agent-count invariant and the company budget ceiling." },
+            "canCreateSkills": { "type": "boolean" },
+            "canAssignTasks": { "type": "boolean", "description": "Not settable at create time — applied in a separate PATCH /api/agents/{id}/permissions pass." },
+            "trustPreset": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "budgetMonthlyCents": { "type": "integer", "minimum": 0 },
+        "instructions": { "type": "string", "description": "Filename under pipeline/org/instructions/." },
+        "desiredSkills": { "type": "array", "items": { "type": "string" } },
+        "figmaAccess": { "enum": ["write", "read"], "description": "Present only for design-chain agents; must agree with designChain.figmaWrite / figmaRead." }
+      },
+      "additionalProperties": false
+    },
+
+    "routine": {
+      "type": "object",
+      "required": ["key", "title", "owner", "priority", "status", "concurrencyPolicy", "catchUpPolicy", "activityGatePolicy", "cron", "timezone", "description"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "Routines have no metadata field, so this is emitted as a 'focx-routine-key:' first line in the description and matched alongside the title." },
+        "title": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "description": "Agent slug." },
+        "priority": { "type": "string" },
+        "status": { "enum": ["active", "paused", "archived"] },
+        "concurrencyPolicy": { "enum": ["coalesce_if_active", "always_enqueue", "skip_if_active"] },
+        "catchUpPolicy": { "enum": ["skip_missed", "enqueue_missed_with_cap"] },
+        "activityGatePolicy": { "enum": ["always", "require_external_activity"] },
+        "activityGateScope": { "enum": ["company", "project"] },
+        "cron": { "type": "string", "description": "Five whitespace-separated fields." },
+        "timezone": { "type": "string" },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
