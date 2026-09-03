@@ -107,9 +107,9 @@ h1 {
 .btn--pill { border-radius: var(--radius-pill); }
 .btn--control { border-radius: var(--radius-control); }
 
-/* Button/Primary */
-.btn--primary { background: var(--action-fill); }
-.btn--primary:hover, .btn--primary.is-hover { background: var(--action-fill-hover); }
+/* Legacy Primary rule retained only for the out-of-scope confirmation sheet. */
+.confirm-actions .btn--primary { background: var(--action-fill); }
+.confirm-actions .btn--primary:hover { background: var(--action-fill-hover); }
 
 /* Button/Destructive */
 .btn--destructive { background: var(--status-danger); }
@@ -121,7 +121,7 @@ h1 {
   outline-offset: var(--border-focus-ring);
 }
 .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
-.btn[disabled]:hover { background: var(--action-fill); }
+.confirm-actions .btn--primary[disabled]:hover { background: var(--action-fill); }
 .btn--destructive[disabled]:hover { background: var(--status-danger); }
 
 .site-footer {
