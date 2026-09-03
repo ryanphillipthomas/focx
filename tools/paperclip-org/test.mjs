@@ -580,6 +580,37 @@ test('--apply refuses when --confirm-terminate does not match, before writing an
   } finally { await fake.close() }
 })
 
+// The skills step used to POST { desiredSkills } with no mode. The API requires
+// one and 422s without it, so every agent's skills were silently skipped while
+// the run still exited 0 with a green board — verify never reads skills.
+test('--apply syncs skills with mode replace, and exits 0', async () => {
+  const { roster } = load()
+  const fake = createFakeApi({ companyId: roster.company.id })
+  const url = await fake.listen()
+  try {
+    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url })
+    assert.equal(r.code, 0, r.stderr)
+    const syncs = fake.state.calls.filter((c) => /\/skills\/sync$/.test(c.path))
+    const wanted = roster.agents.filter((a) => (a.desiredSkills ?? []).length).length
+    assert.equal(syncs.length, wanted, 'every agent with desiredSkills is synced')
+    for (const c of syncs) {
+      assert.equal(c.body.mode, 'replace', 'the roster is the complete desired set, so replace')
+      assert.ok(Array.isArray(c.body.desiredSkills) && c.body.desiredSkills.length)
+    }
+  } finally { await fake.close() }
+})
+
+test('a failed skills sync is a partial apply, not a green run', async () => {
+  const { roster } = load()
+  const fake = createFakeApi({ companyId: roster.company.id, failSkillSync: true })
+  const url = await fake.listen()
+  try {
+    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url })
+    assert.equal(r.code, 4, 'exit 4 — mixed state, rerun must be deliberate')
+    assert.match(r.stderr, /PARTIAL APPLY/)
+  } finally { await fake.close() }
+})
+
 test('the create payload never sends canAssignTasks — the API rejects it there', () => {
   const { roster, fragments } = load()
   const rendered = renderAll(roster, fragments)

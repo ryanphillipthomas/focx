@@ -8,9 +8,10 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
-export function createFakeApi({ companyId, requireAuth = true, seedAgents = [] } = {}) {
+export function createFakeApi({ companyId, requireAuth = true, seedAgents = [], failSkillSync = false } = {}) {
   const state = {
     company: { id: companyId, name: 'Focx.ai (fake)', budgetMonthlyCents: 0 },
+    projectName: 'Connect',
     agents: [...seedAgents],
     routines: [],
     triggers: new Map(),
@@ -94,7 +95,21 @@ export function createFakeApi({ companyId, requireAuth = true, seedAgents = [] }
       const a = state.agents.find((x) => x.id === m[1]); if (!a) return send(404, {})
       a.budgetMonthlyCents = body.budgetMonthlyCents; return send(200, a)
     }
-    if ((m = path.match(/^\/api\/agents\/([^/]+)\/skills\/sync$/)) && req.method === 'POST') return send(200, {})
+    // The roster binds routines to a Paperclip project, and preflight resolves it
+    // by id before any apply. Without this route an apply cannot be tested at all.
+    if ((m = path.match(/^\/api\/projects\/([^/]+)$/)) && req.method === 'GET') {
+      return send(200, { id: m[1], name: state.projectName })
+    }
+    if ((m = path.match(/^\/api\/agents\/([^/]+)\/skills\/sync$/)) && req.method === 'POST') {
+      // The real API requires `mode` and 422s without it. Enforcing that here is
+      // the difference between catching a missing mode in tests and catching it
+      // after a live apply has silently skipped every agent's skills.
+      if (failSkillSync) return send(500, { message: 'skill sync exploded' })
+      if (!['add', 'remove', 'replace'].includes(body?.mode)) {
+        return send(422, { message: 'Skill sync requires mode: "add", "remove", or "replace". Use "replace" only to overwrite the complete desired skill set.' })
+      }
+      return send(200, {})
+    }
     if ((m = path.match(/^\/api\/agents\/([^/]+)\/runtime-state$/))) return send(200, { status: 'idle', activeRuns: 0 })
     if ((m = path.match(/^\/api\/agents\/([^/]+)\/configuration$/))) {
       const a = state.agents.find((x) => x.id === m[1]); if (!a) return send(404, {})

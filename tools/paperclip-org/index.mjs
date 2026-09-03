@@ -1306,11 +1306,22 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
 
   // --- D: skills ----------------------------------------------------------
   const withSkills = roster.agents.filter((a) => (a.desiredSkills ?? []).length)
+  const skillFailures = []
   if (withSkills.length) {
     step(`D  skills sync (${withSkills.length})`)
     for (const agent of withSkills) {
-      try { await api.post(`/api/agents/${idBySlug.get(agent.slug)}/skills/sync`, { desiredSkills: agent.desiredSkills }); mutated = true }
-      catch (err) { console.log(warn(`  ${agent.slug}: skills sync failed — ${err.message}`)) }
+      // mode is REQUIRED — the API 422s without it. 'replace' is the only value
+      // that means what this tool means: the roster is the complete desired set.
+      // 'add' would let a skill deleted from the roster linger on the agent
+      // forever, which is the drift this tool exists to prevent.
+      try {
+        await api.post(`/api/agents/${idBySlug.get(agent.slug)}/skills/sync`,
+          { mode: 'replace', desiredSkills: agent.desiredSkills })
+        mutated = true
+      } catch (err) {
+        skillFailures.push(agent.slug)
+        console.log(warn(`  ${agent.slug}: skills sync failed — ${err.message}`))
+      }
     }
   }
 
@@ -1389,7 +1400,19 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
     fresh.routines = listOf(await api.get(`/api/companies/${companyId}/routines`))
     fresh.company = await api.get(`/api/companies/${companyId}`)
   } catch (err) { console.error(warn(`  could not re-read live state: ${err.message}`)); return 4 }
-  return await runVerify(api, companyId, roster, fresh, rendered, flags)
+  const verdict = await runVerify(api, companyId, roster, fresh, rendered, flags)
+
+  // A failed skills sync must not exit 0. verify reads agents, bundles, config,
+  // budgets and routines — it never reads skills, so a green board below says
+  // nothing about whether step D landed. Left silent, every agent could miss
+  // every skill and this would still report success.
+  if (skillFailures.length) {
+    const shown = skillFailures.slice(0, 3).join(', ')
+    console.error(bad(`D  skills sync failed for ${skillFailures.length} agent(s): ${shown}${skillFailures.length > 3 ? ', …' : ''}`))
+    console.error(bad('   verify does not read skills, so the rows above do not vouch for them — this is a PARTIAL APPLY.'))
+    return 4
+  }
+  return verdict
 }
 
 async function runVerify(api, companyId, roster, live, rendered, flags) {
