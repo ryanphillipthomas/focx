@@ -10,6 +10,14 @@ Design is a **routed two-agent chain**. Product Designer proposes and executes; 
              │                              │
              ▼                              │
      ┌────────────────┐                     │
+     │ DESIGN RESEARCH│  generative:        │
+     │ prior art      │  what do people do  │
+     │ existing data  │  today, and why does│
+     │ the DS's answer│  the DS not fit?    │
+     └───────┬────────┘                     │
+             │ research brief               │
+             ▼                              │
+     ┌────────────────┐                     │
      │  CLAUDE DESIGN │                     │
      │  explore       │                     │
      │  prototype     │                     │
@@ -17,15 +25,21 @@ Design is a **routed two-agent chain**. Product Designer proposes and executes; 
      │  motion        │                     │
      │  states        │                     │
      └───────┬────────┘                     │
+             │ design candidate             │
+             ▼                              │
+     ┌────────────────┐  evaluative:        │
+     │ DESIGN RESEARCH│  walkthrough,       │
+     │                │  heuristics, states │
+     └───────┬────────┘  DESIGN_EVIDENCE    │
              │                              │
-      design candidate         spec from the existing Figma DS
              └──────────────┬───────────────┘
+                            │   spec from the existing Figma DS
                             ▼
                   ┌──────────────────┐
                   │  DESIGN STEWARD  │  checklist selected by mode
                   │  Focx DS · a11y  │  discovery  → system fit
                   │  UX consistency  │  production → conformance
-                  └────────┬─────────┘
+                  └────────┬─────────┘  evidence informs, never gates
                            │ DESIGN_APPROVAL verdict=approved mode=<mode>
                            ▼
              FIGMA (canonical) — Product Designer promotes
@@ -34,6 +48,12 @@ Design is a **routed two-agent chain**. Product Designer proposes and executes; 
                            │ sync
                            ▼
                     design/tokens/ ──▶ Engineers
+                           │ after ship
+                           ▼
+                  ┌──────────────────┐
+                  │ DESIGN RESEARCH  │  validation — covers production
+                  │                  │  runs too: did friction fall?
+                  └──────────────────┘
 ```
 
 ### Modes
@@ -80,6 +100,16 @@ DESIGN_APPROVAL verdict=changes-requested mode=<mode> run=<RUN_ID>
 ```
 
 followed by the human-readable review and its evidence. The `mode=` must echo the declared `DESIGN_MODE`. The verdict lives on the Paperclip issue rather than in a contract artifact, for the same parity reason as the mode token.
+
+### Design Research informs; it never gates
+
+**Design Research** enters the discovery route twice — before exploration, to frame it, and after a candidate exists, to evaluate it. It enters **every** route once more after ship, to check whether the change actually helped. Production runs are not slowed by it before ship, for the same reason they skip Claude Design: routine system work has nothing to discover.
+
+Its findings arrive as a `DESIGN_EVIDENCE` token. **They do not gate approval.** Design Steward approves with or without them, and records which it had. Research that could block a design would be deciding, and this org's standing rule is that research produces evidence, not build orders.
+
+Three different agents touch a discovery candidate — Product Designer makes it, Design Research evaluates it, Design Steward approves it — and no two may be the same agent.
+
+**For the Steward, one thing about that evidence matters above the rest:** `kind=user-study` means a human gathered evidence from actual people. Every other `kind` is expert inference, however careful. Treat a heuristic walkthrough as what it is, and never record it as though a user had been in the room. If a finding reads as user evidence but carries a non-`user-study` kind, that is a defect in the finding — send it back.
 
 ### Where your tooling comes from
 
