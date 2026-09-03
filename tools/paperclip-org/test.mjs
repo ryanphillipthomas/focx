@@ -15,6 +15,7 @@ import {
   REPO_ROOT, validateRoster, topoOrder, composeEnv, composeAdapterConfig,
   renderBundle, planActions, loadRoster, renderAll, buildAgentPayload,
   PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
+  resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -151,9 +152,9 @@ test('rejects an escalator that is also the decider', () => rejects((r) => {
 }, 'must not also be the decider'))
 
 // --- secrets ---
-test('rejects an undeclared secret reference', () => rejects((r) => {
-  r.env.gitWrite.GH_TOKEN = '[secret: not_declared]'
-}, "undeclared secret 'not_declared'"))
+test('rejects the legacy string form even when the secret name is real', () => rejects((r) => {
+  r.env.gitWrite.GH_TOKEN = '[secret: github_focx_write_token]'
+}, 'stores as a PLAIN value'))
 test('rejects a literal credential pasted into env', () => rejects((r) => {
   r.env.gitWrite.GH_TOKEN = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789'
 }, 'literal credential'))
@@ -211,6 +212,7 @@ test('composeEnv gives GH_TOKEN and the credential helper to git:write agents on
       assert.equal(env.GIT_CONFIG_COUNT, '1')
       assert.equal(env.GIT_CONFIG_KEY_0, 'credential.helper')
       assert.ok(env.GIT_CONFIG_VALUE_0.includes('x-access-token'))
+      assert.equal(env.GH_TOKEN.secret, 'github_focx_write_token', 'referenced by name, not inlined')
     }
   }
 })
@@ -246,6 +248,63 @@ test('QA Engineer gets a pinned cwd and repo agents do not share one', () => {
     if (a.slug === 'qa-engineer') continue
     assert.notEqual(composeAdapterConfig(roster, a).cwd, qa.cwd, `${a.slug} shares QA's clone`)
   }
+})
+
+test('resolveEnv turns a named secret into a real secret_ref', () => {
+  const ids = new Map([['claude_subscription_token', 'uuid-1']])
+  const out = resolveEnv({ PATH: '/bin', TOK: { secret: 'claude_subscription_token' } }, ids)
+  assert.deepEqual(out.PATH, { type: 'plain', value: '/bin' })
+  assert.deepEqual(out.TOK, { type: 'secret_ref', secretId: 'uuid-1' })
+})
+
+test('resolveEnv refuses to fall back to a plain value when a secret does not resolve', () => {
+  // The original bug: an unresolved reference became a literal string on every
+  // agent, and nothing complained until first run.
+  assert.throws(() => resolveEnv({ TOK: { secret: 'missing' } }, new Map()),
+    /did not resolve to an id — refusing to write a plain value/)
+})
+
+test('the roster references secrets by name, never with the string form', () => {
+  const { roster } = load()
+  assert.deepEqual(roster.env.claudeAuth.CLAUDE_CODE_OAUTH_TOKEN, { secret: 'claude_subscription_token' })
+  assert.deepEqual(roster.env.gitWrite.GH_TOKEN, { secret: 'github_focx_write_token' })
+})
+
+test('rejects the "[secret: name]" string form that Paperclip stores as plain', () => rejects((r) => {
+  r.env.claudeAuth.CLAUDE_CODE_OAUTH_TOKEN = '[secret: claude_subscription_token]'
+}, 'stores as a PLAIN value'))
+
+test('rejects a secret reference to something not declared', () => rejects((r) => {
+  r.env.gitWrite.GH_TOKEN = { secret: 'nope' }
+}, "undeclared secret 'nope'"))
+
+test('no agent config carries a Bubblewrap-only key on a non-Linux host', () => {
+  const { roster } = load()
+  for (const a of roster.agents) {
+    const cfg = composeAdapterConfig(roster, a)
+    for (const k of BUBBLEWRAP_KEYS) assert.ok(!(k in cfg), `${a.slug} sets ${k}`)
+    assert.deepEqual(checkAdapterConfig(a.adapter.type, cfg, { platform: 'darwin' }), [])
+  }
+})
+
+test('checkAdapterConfig catches the two failures that actually happened', () => {
+  // filesystemScope on macOS -> "bwrap was not found in PATH" at first run
+  const bw = checkAdapterConfig('claude_local', { filesystemScope: 'workspace' }, { platform: 'darwin' })
+  assert.equal(bw.length, 1)
+  assert.match(bw[0], /Bubblewrap, which is Linux only/)
+  assert.deepEqual(checkAdapterConfig('claude_local', { filesystemScope: 'workspace' }, { platform: 'linux' }), [])
+
+  // keys that are not documented at all are accepted by the API and ignored
+  const unknown = checkAdapterConfig('claude_local', { repository: 'x', baseBranch: 'develop' }, { platform: 'darwin' })
+  assert.equal(unknown.length, 2)
+  assert.match(unknown[0], /not a documented adapterConfig key/)
+})
+
+test('every documented reasoning key belongs to its own adapter', () => {
+  assert.ok(ADAPTER_KEYS.claude_local.includes('effort'))
+  assert.ok(!ADAPTER_KEYS.claude_local.includes('modelReasoningEffort'))
+  assert.ok(ADAPTER_KEYS.codex_local.includes('modelReasoningEffort'))
+  assert.ok(!ADAPTER_KEYS.codex_local.includes('effort'))
 })
 
 // ---------------------------------------------------------------------------
@@ -346,11 +405,16 @@ test('the researcher bundle refuses to claim user evidence it does not have', ()
 // planActions — idempotency
 // ---------------------------------------------------------------------------
 
+const FAKE_SECRET_IDS = new Map([
+  ['claude_subscription_token', 'sec-claude-0001'],
+  ['github_focx_write_token', 'sec-github-0002'],
+])
+
 const asLive = (roster, rendered) => roster.agents.map((a, i) => ({
   id: `id-${i}`, name: a.name, status: 'idle',
   reportsTo: a.reportsTo ? `id-${roster.agents.findIndex((x) => x.slug === a.reportsTo)}` : null,
   adapterType: a.adapter.type,
-  adapterConfig: composeAdapterConfig(roster, a),
+  adapterConfig: composeAdapterConfig(roster, a, FAKE_SECRET_IDS),
   runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true, maxConcurrentRuns: a.run.maxConcurrentRuns } },
   budgetMonthlyCents: a.budgetMonthlyCents,
   permissions: { canCreateAgents: false, canAssignTasks: a.permissions.canAssignTasks },

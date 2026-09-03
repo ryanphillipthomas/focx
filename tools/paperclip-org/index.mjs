@@ -57,6 +57,32 @@ export const REASONING = Object.freeze({
   codex_local: { key: 'modelReasoningEffort', values: ['minimal', 'low', 'medium', 'high', 'xhigh'] },
 })
 
+// The adapterConfig keys each adapter actually documents. adapterConfig is a
+// z.record of unknown server-side, so an unknown key is ACCEPTED at create time
+// and simply ignored — or worse, a known-but-unsupported one fails at first run.
+// Lifted from the adapters' own self-documentation.
+export const ADAPTER_KEYS = Object.freeze({
+  claude_local: Object.freeze(['engine', 'cwd', 'instructionsFilePath', 'model', 'effort', 'chrome',
+    'promptTemplate', 'maxTurnsPerRun', 'dangerouslySkipPermissions', 'command', 'extraArgs', 'env',
+    'workspaceStrategy', 'workspaceRuntime', 'filesystemScope', 'filesystemExtraPaths',
+    'filesystemSandboxCommand', 'networkScope', 'networkAllowlist', 'agentCommand', 'mode', 'stateDir',
+    'nonInteractivePermissions', 'warmHandleIdleMs', 'timeoutSec', 'graceSec']),
+  codex_local: Object.freeze(['engine', 'cwd', 'instructionsFilePath', 'model', 'modelReasoningEffort',
+    'promptTemplate', 'search', 'fastMode', 'dangerouslyBypassApprovalsAndSandbox', 'command', 'extraArgs',
+    'env', 'workspaceStrategy', 'workspaceRuntime', 'filesystemScope', 'filesystemExtraPaths',
+    'filesystemSandboxCommand', 'networkScope', 'networkAllowlist', 'timeoutSec', 'graceSec',
+    'outputInactivityTimeoutMs', 'agentCommand', 'mode', 'nonInteractivePermissions', 'stateDir',
+    'warmHandleIdleMs']),
+})
+
+// Spawn-level confinement. Both adapters document these as requiring Bubblewrap,
+// and filesystemSandboxCommand as "Linux only". Setting any of them on a host
+// without bwrap makes every run die with "bwrap was not found in PATH" — at
+// first run, long after the config was accepted.
+export const BUBBLEWRAP_KEYS = Object.freeze([
+  'filesystemScope', 'networkScope', 'networkAllowlist', 'filesystemExtraPaths', 'filesystemSandboxCommand',
+])
+
 // Paperclip's ISSUE_PRIORITIES, which routines reuse. The API rejects anything
 // else with a bare "400 Validation error" that names no field, so validating
 // offline is the difference between a clear message and a guessing game.
@@ -205,8 +231,17 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
   for (const [block, vars] of Object.entries(roster.env ?? {})) {
     for (const [k, v] of Object.entries(vars ?? {})) {
       const at = `env.${block}.${k}`
-      const m = String(v).match(SECRET_REF)
-      if (m && !declared.has(m[1])) push(`${at} references undeclared secret '${m[1]}' — add it to roster.secrets`)
+      if (v && typeof v === 'object') {
+        if (typeof v.secret !== 'string') push(`${at} must be a string or { secret: "<name>" }`)
+        else if (!declared.has(v.secret)) push(`${at} references undeclared secret '${v.secret}' — add it to roster.secrets`)
+        continue
+      }
+      // The bare-string form is coerced to { type: "plain" } by Paperclip, so a
+      // "[secret: name]" string silently becomes a literal value on every agent.
+      // That happened; do not let it happen again.
+      if (SECRET_REF.test(String(v))) {
+        push(`${at} uses the "[secret: name]" string form, which Paperclip stores as a PLAIN value — use { "secret": "name" } instead`)
+      }
       for (const pat of CREDENTIAL_PATTERNS) {
         if (pat.test(String(v))) {
           push(`${at} looks like a literal credential — secrets are referenced by name, never inlined; this file is committed to git`)
@@ -214,6 +249,13 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
         }
       }
     }
+  }
+  // Every agent's rendered adapterConfig, against the adapter's documented keys.
+  for (const a of agents) {
+    if (!a.adapter?.type || !REASONING[a.adapter.type]) continue
+    try {
+      for (const problem of checkAdapterConfig(a.adapter.type, composeAdapterConfig(roster, a))) push(`${a.slug}: ${problem}`)
+    } catch (err) { push(`${a.slug}: could not compose adapterConfig — ${err.message}`) }
   }
 
   // --- design chain -------------------------------------------------------
@@ -345,6 +387,11 @@ export function topoOrder(agents) {
 // agent hand-listing it — and so a missing GH_TOKEN is a structural fact.
 // ---------------------------------------------------------------------------
 
+// Paperclip's env value union is { type: "plain", value } | { type: "secret_ref",
+// secretId } | { type: "user_secret_ref", key } | a bare string. A bare string is
+// COERCED to plain — which is how "[secret: name]" once became a literal 34-character
+// token on every agent. The roster says { secret: "<name>" }; resolveEnv turns that
+// into a real secret_ref, and refuses to emit anything it could not resolve.
 export function composeEnv(roster, agent) {
   const env = { ...(roster.env?.common ?? {}) }
   if (agent.adapter?.type === 'claude_local') Object.assign(env, roster.env?.claudeAuth ?? {})
@@ -354,24 +401,33 @@ export function composeEnv(roster, agent) {
   return env
 }
 
-export function composeAdapterConfig(roster, agent) {
+export function resolveEnv(env, secretIds) {
+  const out = {}
+  for (const [k, v] of Object.entries(env)) {
+    if (v && typeof v === 'object' && typeof v.secret === 'string') {
+      const id = secretIds?.get(v.secret)
+      if (!id) throw new Error(`env ${k}: secret '${v.secret}' did not resolve to an id — refusing to write a plain value in its place`)
+      out[k] = { type: 'secret_ref', secretId: id }
+    } else {
+      out[k] = { type: 'plain', value: String(v) }
+    }
+  }
+  return out
+}
+
+export function composeAdapterConfig(roster, agent, secretIds = null) {
   const ws = roster.workspaces?.[agent.workspace] ?? {}
   const spec = REASONING[agent.adapter.type]
+  const env = composeEnv(roster, agent)
   const cfg = {
     model: agent.adapter.model,
     [spec.key]: agent.adapter.reasoning,
-    workspaceStrategy: ws.workspaceStrategy,
-    filesystemScope: ws.filesystemScope,
-    filesystemExtraPaths: ws.filesystemExtraPaths ?? [],
-    networkScope: 'allowlist',
-    networkAllowlist: roster.networkAllowlist ?? [],
-    env: composeEnv(roster, agent),
+    env: secretIds ? resolveEnv(env, secretIds) : env,
     timeoutSec: 3600,
     graceSec: 60,
   }
-  if (ws.cwd) cfg.cwd = ws.cwd
-  if (ws.repository !== undefined) cfg.repository = ws.repository
-  if (ws.baseBranch) cfg.baseBranch = ws.baseBranch
+  const cwd = ws.cwd ?? (ws.cwdTemplate ? ws.cwdTemplate.replaceAll('{slug}', agent.slug) : null)
+  if (cwd) cfg.cwd = cwd
 
   if (agent.adapter.type === 'claude_local') {
     // Defaults to TRUE server-side. Written explicitly so no agent silently
@@ -385,6 +441,25 @@ export function composeAdapterConfig(roster, agent) {
     cfg.outputInactivityTimeoutMs = 900000
   }
   return cfg
+}
+
+// P4, offline half. adapterConfig is unvalidated server-side, so this is the only
+// place a bad key is caught before it becomes a runtime mystery.
+export function checkAdapterConfig(type, cfg, { platform = process.platform } = {}) {
+  const problems = []
+  const known = ADAPTER_KEYS[type]
+  if (!known) return [`unknown adapter type '${type}'`]
+  for (const k of Object.keys(cfg)) {
+    if (!known.includes(k)) problems.push(`${type}: '${k}' is not a documented adapterConfig key — it will be accepted and ignored`)
+  }
+  if (platform !== 'linux') {
+    for (const k of Object.keys(cfg)) {
+      if (BUBBLEWRAP_KEYS.includes(k)) {
+        problems.push(`${type}: '${k}' requires Bubblewrap, which is Linux only — on ${platform} every run fails with "bwrap was not found in PATH"`)
+      }
+    }
+  }
+  return problems
 }
 
 // ---------------------------------------------------------------------------
@@ -464,7 +539,7 @@ export function bundleSha256(text) {
 // Payload building
 // ---------------------------------------------------------------------------
 
-export function buildAgentPayload(roster, agent, bundleText, reportsToId) {
+export function buildAgentPayload(roster, agent, bundleText, reportsToId, secretIds = null) {
   return {
     name: agent.name,
     role: agent.role,
@@ -474,7 +549,7 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId) {
     capabilities: agent.capabilities,
     desiredSkills: agent.desiredSkills ?? [],
     adapterType: agent.adapter.type,
-    adapterConfig: composeAdapterConfig(roster, agent),
+    adapterConfig: composeAdapterConfig(roster, agent, secretIds),
     instructionsBundle: { entryFile: 'AGENTS.md', files: { 'AGENTS.md': bundleText } },
     runtimeConfig: {
       heartbeat: {
@@ -760,9 +835,17 @@ export function verify(roster, live, renderedBySlug) {
     if (wantsClaude !== ('CLAUDE_CODE_OAUTH_TOKEN' in env)) envBad.push(`${slug} claude token mismatch`)
     const wantsGit = w.git === 'write'
     if (wantsGit !== ('GH_TOKEN' in env)) envBad.push(`${slug} GH_TOKEN mismatch`)
-    for (const v of Object.values(env)) {
-      for (const p of CREDENTIAL_PATTERNS) if (p.test(String(v))) { envBad.push(`${slug} literal credential in env`); break }
+    // Presence is not enough: a bare string is stored as { type: "plain" }, which
+    // is how every agent once ended up with a literal "[secret: name]" for a token.
+    for (const key of ['CLAUDE_CODE_OAUTH_TOKEN', 'GH_TOKEN']) {
+      const v = env[key]
+      if (v && v.type !== 'secret_ref') envBad.push(`${slug} ${key} is type '${v.type ?? typeof v}', not secret_ref`)
     }
+    for (const v of Object.values(env)) {
+      const s = typeof v === 'object' ? String(v.value ?? '') : String(v)
+      for (const p of CREDENTIAL_PATTERNS) if (p.test(s)) { envBad.push(`${slug} literal credential in env`); break }
+    }
+    for (const problem of checkAdapterConfig(w.adapter.type, cfg.get(a.id)?.adapterConfig ?? {})) envBad.push(`${slug} ${problem}`)
   }
   rows.push({ n: '—', condition: 'env and secrets composed correctly', pass: envBad.length === 0, detail: envBad.slice(0, 3).join('; ') })
 
@@ -971,10 +1054,14 @@ async function main(argv) {
 
   // ---- P8 secret references ----------------------------------------------
   const declared = (roster.secrets ?? []).map((s) => s.name)
+  const secretIds = new Map()
   if (declared.length) {
     try {
       const secrets = listOf(await api.get(`/api/companies/${companyId}/secrets`))
-      const have = new Set(secrets.map((s) => s.name ?? s.key ?? s.id))
+      for (const s of secrets) {
+        for (const n of [s.name, s.key].filter(Boolean)) if (s.id) secretIds.set(n, s.id)
+      }
+      const have = new Set(secretIds.keys())
       const absent = declared.filter((n) => !have.has(n))
       if (absent.length) {
         console.error(bad(`P8  secret(s) not found in the Paperclip store: ${absent.join(', ')}`))
@@ -982,9 +1069,12 @@ async function main(argv) {
         console.error('      agent that starts and can authenticate to nothing. Ryan must create these first.')
         return 3
       }
-      console.log(ok(`P8  all ${declared.length} secret references resolve`))
+      console.log(ok(`P8  all ${declared.length} secret name(s) resolved to ids`))
     } catch (err) {
-      console.log(warn(`P8  could not read the secret store (${err.message}) — references not confirmed`))
+      console.error(bad(`P8  could not read the secret store (${err.message})`))
+      console.error('      Refusing to continue: without resolved ids the tool would write plain values,')
+      console.error('      and every agent would start with a literal string where its token should be.')
+      return 3
     }
   }
 
@@ -1048,7 +1138,7 @@ async function main(argv) {
     return 3
   }
 
-  return await runApply(api, companyId, roster, live, rendered, plan, flags)
+  return await runApply(api, companyId, roster, live, rendered, plan, flags, secretIds)
 }
 
 // ---------------------------------------------------------------------------
@@ -1061,7 +1151,7 @@ async function main(argv) {
 // it must be a deliberate act, not a blind retry.
 // ---------------------------------------------------------------------------
 
-async function runApply(api, companyId, roster, live, rendered, plan, flags) {
+async function runApply(api, companyId, roster, live, rendered, plan, flags, secretIds) {
   let mutated = false
   const step = (label) => console.log(paint(C.bold, `\n${label}`))
   const fail = (msg) => { console.error(bad(`  ${msg}`)); return mutated ? 4 : 3 }
@@ -1112,7 +1202,7 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags) {
     const agent = roster.agents.find((x) => x.slug === slug)
     const parentId = agent.reportsTo != null ? idBySlug.get(agent.reportsTo) : null
     if (agent.reportsTo != null && !parentId) return fail(`${slug}: manager '${agent.reportsTo}' has no id yet — topological order was violated`)
-    const payload = buildAgentPayload(roster, agent, rendered.get(slug), parentId)
+    const payload = buildAgentPayload(roster, agent, rendered.get(slug), parentId, secretIds)
     try {
       const res = await api.post(`/api/companies/${companyId}/agents`, payload)
       mutated = true
@@ -1133,7 +1223,7 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags) {
     step(`B' converge ${existing.length} existing`)
     for (const agent of existing) {
       const parentId = agent.reportsTo != null ? idBySlug.get(agent.reportsTo) : null
-      const payload = buildAgentPayload(roster, agent, rendered.get(agent.slug), parentId)
+      const payload = buildAgentPayload(roster, agent, rendered.get(agent.slug), parentId, secretIds)
       delete payload.permissions // not accepted on PATCH
       try {
         await api.patch(`/api/agents/${idBySlug.get(agent.slug)}`, { ...payload, replaceAdapterConfig: true })

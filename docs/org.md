@@ -179,6 +179,29 @@ The design chain's tooling — Claude Design and the design review skills — ar
 
 Confusing the two fails preflight for a reason nobody would guess, so `validateRoster` rejects a `plugin:skill` name in `desiredSkills` and a `vendor/pack/skill` key in `claudeCodeSkills`. Discovery-mode design depends on Claude Design being present in the local install; if it is absent, that is a local installation blocker, not a Paperclip configuration one.
 
+## Confinement: there is none on this host
+
+The adapters offer spawn-level confinement through `filesystemScope` and `networkScope`, and **both require Bubblewrap**, which the adapter documentation marks *Linux only*. This instance runs on macOS, so both are omitted — setting them makes every run die with `bwrap was not found in PATH`, which is exactly how the first live agent run failed.
+
+So there is **no OS-level sandbox around any agent**. What remains, and what the org actually leans on:
+
+- the `git` tier — who holds `GH_TOKEN` at all
+- each agent's `cwd`, and the 10 agents with no repository on the filesystem
+- the CLI's own permission system (`dangerouslySkipPermissions: false`, `dangerouslyBypassApprovalsAndSandbox: false`)
+- `CODEOWNERS` and branch protection
+
+That is a weaker posture than the original plan assumed, and it is worth stating rather than leaving implied. Running Paperclip on Linux — or in a Linux container — would restore both controls; `roster.confinement` records the decision and the exact keys involved.
+
+## Secrets are referenced by name, resolved to ids
+
+The roster names a secret (`{ "secret": "claude_subscription_token" }`); the reconciler resolves that name against the live store and writes Paperclip's real reference shape:
+
+```json
+{ "type": "secret_ref", "secretId": "<uuid>" }
+```
+
+This matters more than it looks. Paperclip's env union also accepts a **bare string**, and coerces it to `{ "type": "plain" }`. An earlier roster used a `"[secret: name]"` string, so every agent was created with that literal 34-character string where its token belonged — accepted by the API, invisible until first run. `validateRoster` now rejects the string form outright, `resolveEnv` throws rather than falling back to a plain value, and `verify` checks the **stored type** rather than mere presence.
+
 ## Known gaps
 
 - **`pipeline/org/` and `tools/paperclip-org/` are deliberately absent from [`tools/pipeline-parity/manifest.json`](../tools/pipeline-parity/manifest.json).** The manifest is itself parity `identical`, so listing them would create a `studio-810` mirror obligation that cannot be satisfied from this machine. Unlisted files are simply not compared, so parity still passes — the precedent is `pipeline/prompts/paperclip-development-agent.md`, already unlisted. A completeness pass is a future paired PR.

@@ -40,10 +40,14 @@
       "PATH": "/Users/ryanthomas/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     },
     "claudeAuth": {
-      "CLAUDE_CODE_OAUTH_TOKEN": "[secret: claude_subscription_token]"
+      "CLAUDE_CODE_OAUTH_TOKEN": {
+        "secret": "claude_subscription_token"
+      }
     },
     "gitWrite": {
-      "GH_TOKEN": "[secret: github_focx_write_token]",
+      "GH_TOKEN": {
+        "secret": "github_focx_write_token"
+      },
       "GIT_CONFIG_COUNT": "1",
       "GIT_CONFIG_KEY_0": "credential.helper",
       "GIT_CONFIG_VALUE_0": "!f() { [ \"$1\" = get ] || exit 0; host=; while IFS='=' read -r k v; do [ \"$k\" = host ] && host=\"$v\"; done; [ \"$host\" = github.com ] || exit 0; echo username=x-access-token; echo \"password=$GH_TOKEN\"; }; f"
@@ -51,37 +55,17 @@
   },
   "workspaces": {
     "repo-per-agent": {
-      "comment": "Paperclip-managed per-agent clone. cwd is deliberately unset: a shared working tree would interleave commits from many agents on one branch.",
-      "workspaceStrategy": "per-agent",
-      "repository": "https://github.com/ryanphillipthomas/focx.git",
-      "baseBranch": "develop",
-      "filesystemScope": "workspace",
-      "filesystemExtraPaths": []
+      "comment": "Per-agent clone under worktreeParentDir. cwd is never shared: two agents in one working tree interleave commits.",
+      "cwdTemplate": "/Users/ryanthomas/Documents/GitHub/focx-agents/{slug}"
     },
     "repo-qa-clone": {
-      "comment": "QA Engineer only. A distinct top-level clone so independence is visible in config, not merely implied by strategy.",
-      "cwd": "/Users/ryanthomas/Documents/GitHub/focx-qa",
-      "workspaceStrategy": "fixed",
-      "filesystemScope": "workspace",
-      "filesystemExtraPaths": []
+      "comment": "QA Engineer only. A distinct top-level clone so independence is visible in config.",
+      "cwd": "/Users/ryanthomas/Documents/GitHub/focx-qa"
     },
     "none": {
-      "comment": "No repository on the filesystem at all. That, not prose, is what stops a non-technical agent editing application code.",
-      "workspaceStrategy": "per-agent",
-      "repository": null,
-      "filesystemScope": "workspace",
-      "filesystemExtraPaths": []
+      "comment": "No repository on the filesystem. That, not prose, is what stops a non-technical agent editing application code."
     }
   },
-  "networkAllowlist": [
-    "127.0.0.1",
-    "ops.focx.ai",
-    "github.com",
-    "api.github.com",
-    "codeload.github.com",
-    "registry.npmjs.org",
-    "api.render.com"
-  ],
   "designChain": {
     "comment": "Design is a routed two-agent chain. production is the default; discovery is opt-in and is the only route that uses Claude Design.",
     "proposer": "product-designer",
@@ -1095,5 +1079,16 @@
       "timezone": "America/New_York",
       "description": "Produce progress toward 2,000 users, the forecast, major wins, misses, lessons, next-week priorities, risks, budget issues, and the decisions Ryan must make."
     }
-  ]
+  ],
+  "confinement": {
+    "comment": "filesystemScope and networkScope are spawn-level confinement and BOTH require Bubblewrap, which is Linux only (adapter docs: 'filesystemSandboxCommand ... Linux only'). This host is macOS, so they are omitted: setting them makes every run fail with \"bwrap was not found in PATH\". Without them there is no OS-level sandbox, and the controls that remain are the git tier (who holds GH_TOKEN), each agent's cwd, the CLI's own permission system, and CODEOWNERS plus branch protection.",
+    "requiresBubblewrap": [
+      "filesystemScope",
+      "networkScope",
+      "networkAllowlist",
+      "filesystemExtraPaths",
+      "filesystemSandboxCommand"
+    ],
+    "availableOnThisHost": false
+  }
 }
