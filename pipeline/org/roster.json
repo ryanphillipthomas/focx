@@ -1,0 +1,1049 @@
+{
+  "comment": "The Focx.ai operating company. Source of truth for who exists, who they report to, what model they run, what they cost, what they may write, and what they are scheduled to do. Applied by tools/paperclip-org/index.mjs. This file is desired state; Paperclip holds live state. Secrets are referenced by name only - never inline a credential here, this file is committed to git.",
+  "version": 1,
+  "expectedAgentCount": 25,
+  "goal": "Reach 2,000 registered Focx Connect users within 180 days of public launch, with evidence of strong activation, retention, trust, and sustainable unit economics.",
+  "company": {
+    "id": "5f772ef2-25ce-466f-9392-027be5055470",
+    "name": "Focx.ai",
+    "prefix": "FOC",
+    "budgetMonthlyCents": 6000,
+    "timezone": "America/New_York"
+  },
+  "budgetPolicy": {
+    "comment": "Agent policies warn but do not hard stop: claude_local and codex_local run against subscriptions, so per-agent spend may be an estimate or unattributed, and a hard stop on estimated cents would pause an agent that cost nothing real. The company policy is the single real backstop.",
+    "company": {
+      "windowKind": "calendar_month_utc",
+      "warnPercent": 80,
+      "hardStopEnabled": true,
+      "notifyEnabled": true
+    },
+    "agent": {
+      "windowKind": "calendar_month_utc",
+      "warnPercent": 80,
+      "hardStopEnabled": false,
+      "notifyEnabled": true
+    }
+  },
+  "secrets": [
+    {
+      "name": "claude_subscription_token",
+      "usedFor": "CLAUDE_CODE_OAUTH_TOKEN on every claude_local agent"
+    },
+    {
+      "name": "github_focx_write_token",
+      "usedFor": "GH_TOKEN on every agent with git: write"
+    }
+  ],
+  "env": {
+    "common": {
+      "PATH": "/Users/ryanthomas/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    },
+    "claudeAuth": {
+      "CLAUDE_CODE_OAUTH_TOKEN": "[secret: claude_subscription_token]"
+    },
+    "gitWrite": {
+      "GH_TOKEN": "[secret: github_focx_write_token]",
+      "GIT_CONFIG_COUNT": "1",
+      "GIT_CONFIG_KEY_0": "credential.helper",
+      "GIT_CONFIG_VALUE_0": "!f() { [ \"$1\" = get ] || exit 0; host=; while IFS='=' read -r k v; do [ \"$k\" = host ] && host=\"$v\"; done; [ \"$host\" = github.com ] || exit 0; echo username=x-access-token; echo \"password=$GH_TOKEN\"; }; f"
+    }
+  },
+  "workspaces": {
+    "repo-per-agent": {
+      "comment": "Paperclip-managed per-agent clone. cwd is deliberately unset: a shared working tree would interleave commits from many agents on one branch.",
+      "workspaceStrategy": "per-agent",
+      "repository": "https://github.com/ryanphillipthomas/focx.git",
+      "baseBranch": "develop",
+      "filesystemScope": "workspace",
+      "filesystemExtraPaths": []
+    },
+    "repo-qa-clone": {
+      "comment": "QA Engineer only. A distinct top-level clone so independence is visible in config, not merely implied by strategy.",
+      "cwd": "/Users/ryanthomas/Documents/GitHub/focx-qa",
+      "workspaceStrategy": "fixed",
+      "filesystemScope": "workspace",
+      "filesystemExtraPaths": []
+    },
+    "none": {
+      "comment": "No repository on the filesystem at all. That, not prose, is what stops a non-technical agent editing application code.",
+      "workspaceStrategy": "per-agent",
+      "repository": null,
+      "filesystemScope": "workspace",
+      "filesystemExtraPaths": []
+    }
+  },
+  "networkAllowlist": [
+    "127.0.0.1",
+    "ops.focx.ai",
+    "github.com",
+    "api.github.com",
+    "codeload.github.com",
+    "registry.npmjs.org",
+    "api.render.com"
+  ],
+  "designChain": {
+    "comment": "Design is a routed two-agent chain. production is the default; discovery is opt-in and is the only route that uses Claude Design.",
+    "proposer": "product-designer",
+    "approver": "design-steward",
+    "verdictToken": "DESIGN_APPROVAL",
+    "modeToken": "DESIGN_MODE",
+    "figmaWrite": [
+      "product-designer"
+    ],
+    "figmaRead": [
+      "design-steward"
+    ],
+    "canonicalHome": "Figma",
+    "mirror": "design/tokens/",
+    "discoveryOnlySkills": [
+      "design",
+      "artifact-design"
+    ],
+    "modes": {
+      "production": {
+        "default": true,
+        "usesClaudeDesign": false,
+        "mayAddComponents": false,
+        "mayAddVariables": false,
+        "review": "conformance"
+      },
+      "discovery": {
+        "default": false,
+        "usesClaudeDesign": true,
+        "mayAddComponents": true,
+        "mayAddVariables": true,
+        "review": "system-fit",
+        "declaredVia": "DESIGN_MODE token on the Paperclip design issue, with a reason",
+        "declaredBy": "head-of-product"
+      }
+    },
+    "modeEscalation": {
+      "from": "production",
+      "to": "discovery",
+      "raisedBy": "design-steward",
+      "decidedBy": "head-of-product"
+    }
+  },
+  "agents": [
+    {
+      "slug": "ceo",
+      "name": "Focx CEO",
+      "title": "Chief Executive Officer",
+      "role": "ceo",
+      "icon": "crown",
+      "reportsTo": null,
+      "tier": "manager",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Runs Focx as a company. Owns strategy, top priorities, cross-functional tradeoffs, resource allocation, and goal health for the 2,000-user target. Kills low-value work and resolves conflicts between departments.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 2
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": true,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "ceo.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "chief-of-staff",
+      "name": "Chief of Staff",
+      "title": "Chief of Staff",
+      "role": "general",
+      "icon": "target",
+      "reportsTo": "ceo",
+      "tier": "manager",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Keeps the company coordinated. Opens and closes pipeline runs, routes between roles, owns the operating cadence, dependency management, task ownership, and escalation.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 2
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": true,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "chief-of-staff.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "head-of-product",
+      "name": "Head of Product",
+      "title": "Head of Product",
+      "role": "pm",
+      "icon": "lightbulb",
+      "reportsTo": "ceo",
+      "tier": "manager",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Makes Connect useful enough that people activate, return, and recommend it. Owns roadmap, prioritization, PRDs, acceptance criteria, and what gets built. Declares the design mode for every design-bearing run.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 2
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": true,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "head-of-product.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "cto",
+      "name": "CTO",
+      "title": "Chief Technology Officer",
+      "role": "cto",
+      "icon": "cpu",
+      "reportsTo": "ceo",
+      "tier": "manager",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Owns technical architecture and keeps implementation coherent, secure, scalable, and aligned to Product. Assigns build work across Web, Apple, and Backend, and is accountable for the drift gate staying green.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 2
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": true,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "cto.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "head-of-growth",
+      "name": "Head of Growth",
+      "title": "Head of Growth",
+      "role": "cmo",
+      "icon": "flame",
+      "reportsTo": "ceo",
+      "tier": "manager",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Finds repeatable ways to acquire retained Connect users. Owns acquisition strategy, growth experimentation, channel prioritization, forecasting, and scale/kill decisions.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 2
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": true,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "head-of-growth.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "business-operations",
+      "name": "Business Operations",
+      "title": "Head of Business Operations",
+      "role": "general",
+      "icon": "cog",
+      "reportsTo": "ceo",
+      "tier": "manager",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Coordinates the business side of Focx across Customer Success and Finance.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 2
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": true,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "business-operations.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "legal-privacy",
+      "name": "Legal & Privacy",
+      "title": "Legal & Privacy Counsel",
+      "role": "security",
+      "icon": "lock",
+      "reportsTo": "ceo",
+      "tier": "ic",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Identifies legal, privacy, policy, and regulatory risk. Owns privacy review, Terms and policy drafts, AI disclosure review, data-retention review, vendor risk, and marketplace compliance analysis. Research and drafting only.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "legal-privacy.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "product-research",
+      "name": "Product Research",
+      "title": "Product Researcher",
+      "role": "researcher",
+      "icon": "microscope",
+      "reportsTo": "head-of-product",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Continuously discovers user problems, market shifts, competitive opportunities, and sources of friction. Produces evidence, never build orders.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "product-research.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "product-designer",
+      "name": "Product Designer",
+      "title": "Product Designer",
+      "role": "designer",
+      "icon": "wand",
+      "reportsTo": "head-of-product",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Owns the Connect experience. Specifies from the design system in production mode, explores in Claude Design in discovery mode, and promotes Steward-approved work into Figma before syncing the token mirror.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "product-designer.md",
+      "desiredSkills": [
+        "design",
+        "artifact-design",
+        "design:design-handoff",
+        "design:ux-copy"
+      ],
+      "figmaAccess": "write"
+    },
+    {
+      "slug": "design-steward",
+      "name": "Design Steward",
+      "title": "Design Steward",
+      "role": "designer",
+      "icon": "gem",
+      "reportsTo": "head-of-product",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "read",
+      "capabilities": "Reviews every design candidate against the Focx design system, WCAG 2.1 AA accessibility, and UX consistency. Approves or requests changes; never writes the record it approves.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "design-steward.md",
+      "desiredSkills": [
+        "design:design-critique",
+        "design:accessibility-review",
+        "design:design-system"
+      ],
+      "figmaAccess": "read"
+    },
+    {
+      "slug": "ai-experience",
+      "name": "AI Experience",
+      "title": "AI Experience Lead",
+      "role": "designer",
+      "icon": "sparkles",
+      "reportsTo": "head-of-product",
+      "tier": "ic",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Owns how Connect behaves, communicates, infers, and explains itself: AI tone, inference wording, relationship suggestions, uncertainty, provenance presentation, reply assistance, and trust boundaries.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-opus-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "ai-experience.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "product-analytics",
+      "name": "Product Analytics",
+      "title": "Product Analyst",
+      "role": "researcher",
+      "icon": "radar",
+      "reportsTo": "head-of-product",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Makes product performance measurable. Owns activation, funnels, cohorts, retention, experimentation, event quality, product-health monitoring, and acquisition-quality analysis.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "product-analytics.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "web-engineer",
+      "name": "Web Engineer",
+      "title": "Web Engineer",
+      "role": "engineer",
+      "icon": "globe",
+      "reportsTo": "cto",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Implements and maintains Connect web experiences against the design spec and the token mirror.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "web-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "apple-engineer",
+      "name": "Apple Engineer",
+      "title": "Apple Engineer",
+      "role": "engineer",
+      "icon": "terminal",
+      "reportsTo": "cto",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Implements and maintains Connect native Apple experiences across iOS, iPadOS, and macOS targets.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "apple-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "backend-ai-engineer",
+      "name": "Backend & AI Engineer",
+      "title": "Backend & AI Engineer",
+      "role": "engineer",
+      "icon": "database",
+      "reportsTo": "cto",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Builds the data, intelligence, and service layer: person/context systems, provenance, temporal intelligence, open loops, AI pipelines, model interfaces, retrieval, and service logic.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "backend-ai-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "ai-evals-engineer",
+      "name": "AI Evals Engineer",
+      "title": "AI Evaluations Engineer",
+      "role": "engineer",
+      "icon": "telescope",
+      "reportsTo": "cto",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Continuously tests Connect AI behavior: hallucinated facts, incorrect provenance, unsafe inference, context leakage, poor relationship recommendations, temporal mistakes, reply quality, tone, and model regressions.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "ai-evals-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "qa-engineer",
+      "name": "QA Engineer",
+      "title": "QA Engineer",
+      "role": "qa",
+      "icon": "eye",
+      "reportsTo": "cto",
+      "tier": "ic",
+      "workspace": "repo-qa-clone",
+      "git": "write",
+      "capabilities": "Independently verifies built work against acceptance criteria and the drift gate, from a clone the builder never touched. Certifies nothing it authored.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "qa-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "security-engineer",
+      "name": "Security Engineer",
+      "title": "Security Engineer",
+      "role": "security",
+      "icon": "shield",
+      "reportsTo": "cto",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Protects Connect relationship data and infrastructure. Owns security reviews, data handling, authorization, secret handling, deletion/export testing, prompt-injection risk, and cross-user isolation.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "security-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "release-engineer",
+      "name": "Release Engineer",
+      "title": "Release Engineer",
+      "role": "devops",
+      "icon": "rocket",
+      "reportsTo": "cto",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Prepares and validates release candidates and assembles the promotion case. Cannot approve a production release.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "low"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "release-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "brand-content",
+      "name": "Brand & Content",
+      "title": "Brand & Content Lead",
+      "role": "general",
+      "icon": "message-square",
+      "reportsTo": "head-of-growth",
+      "tier": "ic",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Creates content that builds awareness, trust, and acquisition: website messaging, launch copy, founder-content drafts, social, scripts, release messaging, educational content, and App Store copy.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "brand-content.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "community-creators",
+      "name": "Community & Creators",
+      "title": "Community & Creators Lead",
+      "role": "general",
+      "icon": "heart",
+      "reportsTo": "head-of-growth",
+      "tier": "ic",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Builds acquisition through communities and trusted niche creators across friendship, communication, relationships, family, wellbeing, loneliness, long-distance relationships, and life transitions. Makes no autonomous paid commitments.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "community-creators.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "lifecycle-referral",
+      "name": "Lifecycle & Referral",
+      "title": "Lifecycle & Referral Lead",
+      "role": "general",
+      "icon": "mail",
+      "reportsTo": "head-of-growth",
+      "tier": "ic",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Increases activation, retention, reactivation, and referral through lifecycle messaging, onboarding nudges, referral flows, notification experiments, and retention campaigns.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "lifecycle-referral.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "growth-engineer",
+      "name": "Growth Engineer",
+      "title": "Growth Engineer",
+      "role": "engineer",
+      "icon": "zap",
+      "reportsTo": "head-of-growth",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "write",
+      "capabilities": "Implements technical growth experiments quickly: landing pages, referral mechanics, campaign infrastructure, SEO tooling, and acquisition instrumentation.",
+      "adapter": {
+        "type": "codex_local",
+        "model": "gpt-5.6-sol",
+        "reasoning": "medium"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "growth-engineer.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "customer-success",
+      "name": "Customer Success",
+      "title": "Customer Success Lead",
+      "role": "general",
+      "icon": "puzzle",
+      "reportsTo": "business-operations",
+      "tier": "ic",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Supports users and converts customer problems into actionable product intelligence. Escalates product issues to Product Research, probable bugs to Engineering, and privacy or security complaints immediately to Security and Legal.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "low"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "customer-success.md",
+      "desiredSkills": []
+    },
+    {
+      "slug": "finance",
+      "name": "Finance",
+      "title": "Finance Lead",
+      "role": "cfo",
+      "icon": "star",
+      "reportsTo": "business-operations",
+      "tier": "ic",
+      "workspace": "none",
+      "git": "none",
+      "capabilities": "Keeps Connect financially sustainable. Owns AI costs, infrastructure, SaaS spend, CAC, acquisition spend, unit economics, pricing scenarios, and forecasts.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "finance.md",
+      "desiredSkills": []
+    }
+  ],
+  "routines": [
+    {
+      "key": "morning-brief",
+      "title": "Morning Brief",
+      "owner": "chief-of-staff",
+      "priority": "high",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 7 * * 1-5",
+      "timezone": "America/New_York",
+      "description": "Assemble the company morning brief. Cover progress toward 2,000 users, current acquisition pace, activation, retention, what shipped, major learnings, active growth experiments, blockers, risks, AI-budget anomalies, decisions Ryan needs to make, and today’s highest-priority work. One page, no more."
+    },
+    {
+      "key": "daily-company-priorities",
+      "title": "Daily Company Priorities",
+      "owner": "ceo",
+      "priority": "high",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "30 7 * * 1-5",
+      "timezone": "America/New_York",
+      "description": "Read the Morning Brief and name the few priorities that matter most today. Say what is not a priority, and why. Fewer is better."
+    },
+    {
+      "key": "blocked-work-review",
+      "title": "Blocked Work Review",
+      "owner": "chief-of-staff",
+      "priority": "high",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 13 * * 1-5",
+      "timezone": "America/New_York",
+      "description": "Identify blocked work, missing ownership, unresolved dependencies, missing reviews, and stalled tasks. Assign an owner and a next action to each, or escalate it."
+    },
+    {
+      "key": "nightly-research-scan",
+      "title": "Nightly Research Scan",
+      "owner": "product-research",
+      "priority": "normal",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 21 * * *",
+      "timezone": "America/New_York",
+      "description": "Review product feedback, customer themes, market changes, competitors, new user behavior, and potential opportunities. Output is evidence, never an automatic build order."
+    },
+    {
+      "key": "nightly-opportunity-review",
+      "title": "Nightly Opportunity Review",
+      "owner": "chief-of-staff",
+      "priority": "normal",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "require_external_activity",
+      "activityGateScope": "company",
+      "cron": "45 21 * * 0-4",
+      "timezone": "America/New_York",
+      "description": "Weigh inputs from Product Research, Analytics, Customer Success, and Growth. Possible outputs: no action, further research, a product hypothesis, a design exploration, or a low-risk prototype recommendation. No action is a legitimate and common outcome."
+    },
+    {
+      "key": "weekly-product-review",
+      "title": "Weekly Product Review",
+      "owner": "head-of-product",
+      "priority": "normal",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 10 * * 2",
+      "timezone": "America/New_York",
+      "description": "Review activation, retention, funnel friction, user feedback, roadmap priorities, and experiment results. Decide what changes next week."
+    },
+    {
+      "key": "weekly-growth-review",
+      "title": "Weekly Growth Review",
+      "owner": "head-of-growth",
+      "priority": "normal",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 10 * * 3",
+      "timezone": "America/New_York",
+      "description": "For every acquisition experiment decide Scale, Continue, Modify, or Kill. Track the quality of users acquired, not just signup volume."
+    },
+    {
+      "key": "weekly-finance-review",
+      "title": "Weekly Finance Review",
+      "owner": "finance",
+      "priority": "normal",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 10 * * 4",
+      "timezone": "America/New_York",
+      "description": "Review AI spend, infrastructure, growth spend, CAC, cost per active user, forecast, and unit economics. Flag any agent or department trending over budget."
+    },
+    {
+      "key": "weekly-security-privacy-review",
+      "title": "Weekly Security & Privacy Review",
+      "owner": "legal-privacy",
+      "priority": "normal",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 10 * * 5",
+      "timezone": "America/New_York",
+      "description": "With Security Engineer contributing, review new sensitive features, new data use, security findings, privacy risks, AI provider changes, and policy concerns."
+    },
+    {
+      "key": "weekly-company-review",
+      "title": "Weekly Company Review",
+      "owner": "ceo",
+      "priority": "high",
+      "status": "active",
+      "concurrencyPolicy": "coalesce_if_active",
+      "catchUpPolicy": "skip_missed",
+      "activityGatePolicy": "always",
+      "cron": "0 16 * * 5",
+      "timezone": "America/New_York",
+      "description": "Produce progress toward 2,000 users, the forecast, major wins, misses, lessons, next-week priorities, risks, budget issues, and the decisions Ryan must make."
+    }
+  ]
+}
