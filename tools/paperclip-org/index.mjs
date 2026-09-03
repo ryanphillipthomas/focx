@@ -57,6 +57,11 @@ export const REASONING = Object.freeze({
   codex_local: { key: 'modelReasoningEffort', values: ['minimal', 'low', 'medium', 'high', 'xhigh'] },
 })
 
+// Paperclip's ISSUE_PRIORITIES, which routines reuse. The API rejects anything
+// else with a bare "400 Validation error" that names no field, so validating
+// offline is the difference between a clear message and a guessing game.
+export const ROUTINE_PRIORITIES = Object.freeze(['critical', 'high', 'medium', 'low'])
+
 // Bare 'gpt-5.6' is silently aliased to gpt-5.6-sol, but OpenAI ships no model
 // metadata for the bare slug, so the Codex CLI warns and falls back to generic
 // context limits. Reject it by name rather than letting it degrade quietly.
@@ -257,6 +262,9 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
     titles.add(r.title)
     if (keys.has(r.key)) push(`${at} duplicate key`)
     keys.add(r.key)
+    if (!ROUTINE_PRIORITIES.includes(r.priority)) {
+      push(`${at} priority '${r.priority}' is not valid (${ROUTINE_PRIORITIES.join('|')})`)
+    }
     const fields = String(r.cron ?? '').trim().split(/\s+/)
     if (fields.length !== 5) push(`${at} cron '${r.cron}' has ${fields.length} fields, expected 5`)
     if (!r.timezone) push(`${at} timezone is required`)

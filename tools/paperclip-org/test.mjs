@@ -14,7 +14,7 @@ import { promisify } from 'node:util'
 import {
   REPO_ROOT, validateRoster, topoOrder, composeEnv, composeAdapterConfig,
   renderBundle, planActions, loadRoster, renderAll, buildAgentPayload,
-  PaperclipClient, verify, liveSlug, checkCharterCoupling,
+  PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -118,6 +118,17 @@ test('rejects the bare gpt-5.6 alias', () => rejects((r) => {
 }, 'gpt-5.6-sol'))
 test('rejects a missing instructions file', () => rejects((r) => { r.agents[0].instructions = 'nope.md' }, 'not found'))
 test('rejects a duplicate routine title', () => rejects((r) => { r.routines[1].title = r.routines[0].title }, 'duplicate title'))
+test('rejects an invalid routine priority', () => rejects((r) => {
+  r.routines[0].priority = 'normal'
+}, "priority 'normal' is not valid"))
+
+test('every routine priority is one Paperclip accepts', () => {
+  const { roster } = load()
+  for (const r of roster.routines) {
+    assert.ok(ROUTINE_PRIORITIES.includes(r.priority), `${r.key}: ${r.priority}`)
+  }
+})
+
 test('rejects a 4-field cron', () => rejects((r) => { r.routines[0].cron = '0 7 * *' }, 'expected 5'))
 test('rejects canCreateAgents true', () => rejects((r) => { r.agents[0].permissions.canCreateAgents = true }, 'canCreateAgents must be false'))
 test('rejects an IC that can assign tasks', () => rejects((r) => {

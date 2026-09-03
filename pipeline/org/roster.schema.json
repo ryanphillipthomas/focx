@@ -609,7 +609,13 @@
           "description": "Agent slug."
         },
         "priority": {
-          "type": "string"
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Paperclip's ISSUE_PRIORITIES. 'normal' is not one of them \u2014 the API rejects it with a bare 400 Validation error."
         },
         "status": {
           "enum": [
