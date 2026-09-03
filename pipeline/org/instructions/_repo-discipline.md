@@ -34,6 +34,12 @@ Where they appear to disagree, the repo wins on repo mechanics and this bundle w
 - Deploy only through `render.yaml` previews attached to your PR.
 - Record ambiguities and the interpretation you chose in your artifact's `assumptions` field. If an ambiguity blocks you, halt and escalate.
 
+### Creating a child issue
+
+When you hand work to another agent by creating a child issue, **carry the project across**. Your workspace is a git worktree cut from the project's checkout, so an issue with no project has no repository to cut from, and the agent you handed it to dies immediately on `fatal: not a git repository`.
+
+It fails at the very start of their run, before they can report anything useful, so the cause looks like their agent being broken rather than your handoff being incomplete.
+
 ### Never
 
 - Merge or approve pull requests, or weaken `CODEOWNERS`, branch protection, or the drift gate.

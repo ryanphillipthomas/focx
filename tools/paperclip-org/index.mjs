@@ -281,6 +281,13 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
     push('roster.project.id is required when any workspace uses git_worktree — worktrees are cut from the project checkout')
   }
 
+  // --- routines need a project when their owner works in a repo ----------
+  const repoTier = new Set(agents.filter((a) => roster.workspaces?.[a.workspace]?.workspaceStrategy).map((a) => a.slug))
+  const repoRoutines = (roster.routines ?? []).filter((r) => repoTier.has(r.owner))
+  if (repoRoutines.length && !roster.project?.id) {
+    push(`roster.project.id is required: ${repoRoutines.length} routine(s) are owned by repo-tier agents, and a routine with no project produces issues with no project — the worktree has no source checkout and the agent fails with "not a git repository"`)
+  }
+
   // --- design chain -------------------------------------------------------
   const dc = roster.designChain
   if (!dc) {
@@ -610,6 +617,11 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId, secret
 
 export function buildRoutinePayload(roster, routine, assigneeAgentId) {
   return {
+    // Worktrees are cut from the PROJECT's checkout, so an issue with no project
+    // has no repository to cut from and the agent dies on "not a git repository".
+    // Routine-created issues inherit the routine's project, so this is where the
+    // binding has to happen.
+    ...(roster.project?.id ? { projectId: roster.project.id } : {}),
     title: routine.title,
     // Routines have no metadata field, so identity rides in the description.
     description: `focx-routine-key: ${routine.key}\n\n${routine.description}`,
@@ -1137,6 +1149,16 @@ async function main(argv) {
       console.error(bad(`     project ${roster.project?.id} is not reachable — ${err.message}`))
       console.error('       Worktrees are cut from its checkout; without it no repo-tier agent has a workspace.')
       workspacesReady = false
+    }
+  }
+
+  // ---- live routines must be bound to the project -------------------------
+  if (roster.project?.id && live.routines.length) {
+    const unbound = live.routines.filter((r) => !r.projectId).map((r) => r.title)
+    if (unbound.length) {
+      console.log(warn(`     ${unbound.length} live routine(s) have no project — their issues get no worktree:`))
+      for (const t of unbound.slice(0, 4)) console.log(`       ${t}`)
+      console.log(paint(C.dim, '     --apply rebinds them.'))
     }
   }
 
