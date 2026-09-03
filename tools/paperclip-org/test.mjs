@@ -635,7 +635,7 @@ test('verify passes against a live org built from the roster, and catches drift'
   const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
   const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
   const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
-  const live = { agents, routines, triggers, configurations: cfgs, bundles, company: { budgetMonthlyCents: 6000 } }
+  const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
   const rows = verify(roster, live, rendered)
   const failed = rows.filter((r) => !r.pass)
@@ -694,7 +694,7 @@ test('verify does not read Paperclip-owned live keys as drift', () => {
   const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
   const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
   const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
-  const live = { agents, routines, triggers, configurations: cfgs, bundles, company: { budgetMonthlyCents: 6000 } }
+  const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
   const ctoId = agents[roster.agents.findIndex((a) => a.slug === 'cto')].id
   const envRow = (configurations) => verify(roster, { ...live, configurations }, rendered)
@@ -711,6 +711,52 @@ test('verify does not read Paperclip-owned live keys as drift', () => {
   const platform = Object.fromEntries(PAPERCLIP_WRITES.map((k) => [k, 'set-by-paperclip']))
   assert.ok(envRow(withKeys(platform)).pass, 'a live CTO carrying Paperclip\'s keys is not drift')
   assert.ok(!envRow(withKeys({ instructionsRootPathh: 'typo' })).pass, 'an undocumented key is still drift')
+})
+
+// A worktree is cut from the project's checkout. An issue with no project gives
+// its agent no source repo, and the run dies in workspace provisioning with
+// "fatal: not a git repository" before the adapter starts — which is what took
+// out every engineer's runs. Routines were fixed structurally; agent-created
+// child issues were left to prose in _repo-discipline.md, and prose lost.
+test('an open worktree-agent issue with no project is drift', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const agents = asLive(roster, rendered)
+  const cfgs = new Map(agents.map((a) => [a.id, {
+    adapterType: a.adapterType, adapterConfig: a.adapterConfig,
+    runtimeConfig: a.runtimeConfig, permissions: a.permissions,
+  }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const base = { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, company: { budgetMonthlyCents: 6000 } }
+  const row = (issues) => verify(roster, { ...base, issues }, rendered)
+    .find((r) => r.condition === 'Open worktree-agent issues all carry a project')
+
+  const wt = agents[roster.agents.findIndex((a) => roster.workspaces[a.workspace]?.workspaceStrategy)].id
+  const desk = agents[roster.agents.findIndex((a) => !roster.workspaces[a.workspace]?.workspaceStrategy)].id
+
+  assert.ok(row([]).pass, 'no issues is not drift')
+  assert.ok(row([{ id: 'i1', status: 'todo', assigneeAgentId: wt, projectId: 'p1', title: 'ok' }]).pass,
+    'a worktree issue WITH a project is fine')
+  assert.ok(!row([{ id: 'i2', status: 'todo', assigneeAgentId: wt, projectId: null, title: 'no project' }]).pass,
+    'a worktree issue with no project is drift')
+  assert.ok(row([{ id: 'i3', status: 'done', assigneeAgentId: wt, projectId: null, title: 'closed' }]).pass,
+    'a CLOSED issue is history, not something an agent will try to run')
+  assert.ok(row([{ id: 'i4', status: 'todo', assigneeAgentId: desk, projectId: null, title: 'no repo' }]).pass,
+    'an agent with no worktree needs no project — that is the point of workspace none')
+})
+
+test('verify refuses to vouch for issues it could not read', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const agents = asLive(roster, rendered)
+  const cfgs = new Map(agents.map((a) => [a.id, { adapterType: a.adapterType, adapterConfig: a.adapterConfig, runtimeConfig: a.runtimeConfig, permissions: a.permissions }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  // null is what the caller sets when the fetch throws. An unread list must not
+  // verify as a clean one — that is how the skills sync went green while failing.
+  const rows = verify(roster, { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, issues: null, company: { budgetMonthlyCents: 6000 } }, rendered)
+  const row = rows.find((r) => r.condition === 'Open worktree-agent issues all carry a project')
+  assert.equal(row.pass, false)
+  assert.match(row.detail, /could not read issues/)
 })
 
 test('PaperclipClient never puts the key in an error message', async () => {
