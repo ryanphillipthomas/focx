@@ -912,6 +912,34 @@ export function verify(roster, live, renderedBySlug) {
   }
   rows.push({ n: '—', condition: 'env and secrets composed correctly', pass: envBad.length === 0, detail: envBad.slice(0, 3).join('; ') })
 
+  // Worktrees are cut from the PROJECT's checkout, so an issue with no project
+  // leaves its agent no source repo: the run dies inside workspace provisioning
+  // with "fatal: not a git repository" before the adapter ever starts, and the
+  // agent shows setup_failed with nothing else to go on.
+  //
+  // Binding routines to the project fixed that lane. An agent opening a child
+  // issue is still only ASKED to carry the project across, in prose, in
+  // _repo-discipline.md — and prose in a bundle is a request. This makes it a
+  // fact the same way the credential tiers are.
+  const OPEN_STATUSES = new Set(['backlog', 'todo', 'in_progress', 'in_review', 'blocked'])
+  const worktreeAgentSlug = new Map()
+  for (const [slug, a] of bySlug) {
+    const w = want.get(slug)
+    if (w && roster.workspaces?.[w.workspace]?.workspaceStrategy) worktreeAgentSlug.set(a.id, slug)
+  }
+  // A read that failed must not read as a clean board — live.issues is null only
+  // when the caller could not fetch, and that is a failure, not an absence.
+  const issuesReadable = Array.isArray(live.issues)
+  const projectless = !issuesReadable ? [] : live.issues
+    .filter((i) => OPEN_STATUSES.has(i.status) && i.assigneeAgentId && worktreeAgentSlug.has(i.assigneeAgentId) && !i.projectId)
+    .map((i) => `${worktreeAgentSlug.get(i.assigneeAgentId)}: ${String(i.title ?? i.id).slice(0, 44)}`)
+  rows.push({
+    n: '—',
+    condition: 'Open worktree-agent issues all carry a project',
+    pass: issuesReadable && projectless.length === 0,
+    detail: !issuesReadable ? 'could not read issues — this check could not run' : projectless.slice(0, 3).join('; '),
+  })
+
   return rows
 }
 
@@ -1142,9 +1170,11 @@ async function main(argv) {
   }
 
   // ---- P9 live inventory --------------------------------------------------
-  const live = { agents: [], routines: [], company, configurations: new Map(), bundles: new Map(), triggers: new Map() }
+  const live = { agents: [], routines: [], issues: null, company, configurations: new Map(), bundles: new Map(), triggers: new Map() }
   live.agents = listOf(await api.get(`/api/companies/${companyId}/agents`))
   try { live.routines = listOf(await api.get(`/api/companies/${companyId}/routines`)) } catch { live.routines = [] }
+  // null on failure, never [] — an unread list must not verify as a clean one.
+  try { live.issues = listOf(await api.get(`/api/companies/${companyId}/issues?limit=500`)) } catch { live.issues = null }
   console.log(ok(`P9  live: ${live.agents.filter((a) => a.status !== 'terminated').length} active agents, ${live.routines.length} routines`))
 
   // ---- project checkout ---------------------------------------------------
@@ -1411,12 +1441,13 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
 
   // --- G: verify -----------------------------------------------------------
   step('G  verify')
-  const fresh = { agents: [], routines: [], company: live.company, configurations: new Map(), bundles: new Map(), triggers: new Map() }
+  const fresh = { agents: [], routines: [], issues: null, company: live.company, configurations: new Map(), bundles: new Map(), triggers: new Map() }
   try {
     fresh.agents = listOf(await api.get(`/api/companies/${companyId}/agents`))
     fresh.routines = listOf(await api.get(`/api/companies/${companyId}/routines`))
     fresh.company = await api.get(`/api/companies/${companyId}`)
   } catch (err) { console.error(warn(`  could not re-read live state: ${err.message}`)); return 4 }
+  try { fresh.issues = listOf(await api.get(`/api/companies/${companyId}/issues?limit=500`)) } catch { fresh.issues = null }
   const verdict = await runVerify(api, companyId, roster, fresh, rendered, flags)
 
   // A failed skills sync must not exit 0. verify reads agents, bundles, config,

@@ -8,10 +8,11 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
-export function createFakeApi({ companyId, requireAuth = true, seedAgents = [], failSkillSync = false } = {}) {
+export function createFakeApi({ companyId, requireAuth = true, seedAgents = [], failSkillSync = false, seedIssues = [] } = {}) {
   const state = {
     company: { id: companyId, name: 'Focx.ai (fake)', budgetMonthlyCents: 0 },
     projectName: 'Connect',
+    issues: [...seedIssues],
     agents: [...seedAgents],
     routines: [],
     triggers: new Map(),
@@ -97,6 +98,9 @@ export function createFakeApi({ companyId, requireAuth = true, seedAgents = [], 
     }
     // The roster binds routines to a Paperclip project, and preflight resolves it
     // by id before any apply. Without this route an apply cannot be tested at all.
+    if (path.startsWith(`/api/companies/${companyId}/issues`) && req.method === 'GET') {
+      return send(200, state.issues)
+    }
     if ((m = path.match(/^\/api\/projects\/([^/]+)$/)) && req.method === 'GET') {
       return send(200, { id: m[1], name: state.projectName })
     }
