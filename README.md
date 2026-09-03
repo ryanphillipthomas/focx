@@ -4,6 +4,44 @@ Autonomous development repository for **focx.ai** — an umbrella organization c
 
 This repository is built so that work can enter from a GitHub Issue, a manual invocation, or a grok bot — and flow through a role-based bot pipeline (Chief → Product → Research → Design → Engineer → QA) that produces reviewable, drift-free pull requests. **Bots build; humans merge.**
 
+## Drift Check GitHub Action
+
+Drift Check is a dependency-free GitHub Action that blocks raw visual values and invalid design-token overrides. It reads only the checked-out repository and sends no telemetry.
+
+### Quickstart
+
+Add one workflow file at `.github/workflows/drift-check.yml`:
+
+```yaml
+name: drift-check
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ryanphillipthomas/drift-check@v1
+```
+
+The defaults preserve focx's original layout: parent namespace `focx`, token files at `design/tokens/{namespace}/tokens.json`, scan directories `apps` and `packages`, and extensions `.js`, `.jsx`, `.ts`, `.tsx`, `.css`, `.scss`, `.svelte`, `.vue`, and `.html`.
+
+To customize them, add `drift-check.config.json` at the repository root:
+
+```json
+{
+  "parentNamespace": "acme",
+  "tokenPathPattern": "design/tokens/{namespace}/tokens.json",
+  "scanDirs": ["src", "components"],
+  "scanExtensions": [".ts", ".tsx", ".css"]
+}
+```
+
+Workflow inputs with the names `parent-namespace`, `token-path-pattern`, `scan-dirs`, and `scan-extensions` override the corresponding config values when supplied. List inputs are comma-separated. Violations exit non-zero and are emitted as GitHub file/line annotations on the pull request diff; reviewed exceptions can include `drift-allow` on the affected line.
+
 ## Map
 
 | Path | What lives here |

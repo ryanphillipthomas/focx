@@ -1,0 +1,25 @@
+name: Drift Check
+description: Block design drift by finding raw visual values and invalid token-layer overrides.
+author: focx
+
+inputs:
+  parent-namespace:
+    description: Parent design-token namespace. Overrides drift-check.config.json when set.
+    required: false
+  token-path-pattern:
+    description: Repository-relative token path containing a {namespace} segment. Overrides config when set.
+    required: false
+  scan-dirs:
+    description: Comma-separated repository-relative directories to scan. Overrides config when set.
+    required: false
+  scan-extensions:
+    description: Comma-separated file extensions to scan. Overrides config when set.
+    required: false
+
+runs:
+  using: node20
+  main: tools/drift-check/index.mjs
+
+branding:
+  icon: shield
+  color: purple
