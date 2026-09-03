@@ -179,6 +179,14 @@ The design chain's tooling — Claude Design and the design review skills — ar
 
 Confusing the two fails preflight for a reason nobody would guess, so `validateRoster` rejects a `plugin:skill` name in `desiredSkills` and a `vendor/pack/skill` key in `claudeCodeSkills`. Discovery-mode design depends on Claude Design being present in the local install; if it is absent, that is a local installation blocker, not a Paperclip configuration one.
 
+## Workspaces are real checkouts, and the tool will not proceed without them
+
+Sixteen agents have a `cwd`: fifteen repo-tier agents at `focx-agents/<slug>/`, and QA Engineer at `focx-qa/` — deliberately outside that directory so its independence is visible in the path.
+
+Paperclip creates a missing `cwd`, but it creates an **empty directory, not a clone**. An agent then starts cleanly and has no repository at all: a failure that looks like success. Preflight therefore checks *every* agent workspace — that `.git` exists and `HEAD` points at the expected branch — and refuses to apply until they all do. It never runs `git` itself; it prints the commands and stops.
+
+Clones are independent, not `--shared`: an alternates dependency on the parent repo would let a later `git gc` there dangle objects these clones reference, and the repo is small enough that the saving is not worth the failure mode.
+
 ## Confinement: there is none on this host
 
 The adapters offer spawn-level confinement through `filesystemScope` and `networkScope`, and **both require Bubblewrap**, which the adapter documentation marks *Linux only*. This instance runs on macOS, so both are omitted — setting them makes every run die with `bwrap was not found in PATH`, which is exactly how the first live agent run failed.

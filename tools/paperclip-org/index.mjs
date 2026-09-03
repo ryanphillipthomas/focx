@@ -1084,29 +1084,42 @@ async function main(argv) {
   try { live.routines = listOf(await api.get(`/api/companies/${companyId}/routines`)) } catch { live.routines = [] }
   console.log(ok(`P9  live: ${live.agents.filter((a) => a.status !== 'terminated').length} active agents, ${live.routines.length} routines`))
 
-  // ---- QA clone, without ever invoking git -------------------------------
-  let qaCloneReady = true
-  const qa = roster.agents.find((a) => roster.workspaces[a.workspace]?.cwd)
-  if (qa) {
-    const cwd = roster.workspaces[qa.workspace].cwd
+  // ---- workspaces, without ever invoking git ------------------------------
+  //
+  // Every agent with a cwd needs a real checkout there. Paperclip will create a
+  // missing cwd, but it creates an empty DIRECTORY, not a clone — so an agent
+  // starts successfully and then has no repository, no AGENTS.md and nothing to
+  // work on. Checking only QA's clone let 15 non-existent workspaces through.
+  let workspacesReady = true
+  const missingWorkspaces = []
+  for (const agent of roster.agents) {
+    const ws = roster.workspaces?.[agent.workspace] ?? {}
+    const cwd = ws.cwd ?? (ws.cwdTemplate ? ws.cwdTemplate.replaceAll('{slug}', agent.slug) : null)
+    if (!cwd) continue
+    const branch = ws.baseBranch ?? roster.company?.baseBranch ?? 'develop'
     const dotGit = join(cwd, '.git')
-    let cloneOk = false
+    let state = 'missing'
     if (existsSync(dotGit)) {
-      // A worktree's .git is a file, not a directory. Accept both; read HEAD directly
-      // rather than shelling out — this tool never invokes git.
       try {
-        const headPath = statSync(dotGit).isDirectory() ? join(dotGit, 'HEAD') : null
-        cloneOk = headPath ? readFileSync(headPath, 'utf8').trim() === `ref: refs/heads/${roster.workspaces[qa.workspace].baseBranch ?? 'develop'}` : true
-      } catch { cloneOk = false }
+        // A worktree's .git is a file, not a directory; accept both. Read HEAD
+        // directly — this tool never invokes git.
+        const head = statSync(dotGit).isDirectory() ? readFileSync(join(dotGit, 'HEAD'), 'utf8').trim() : null
+        state = head === null || head === `ref: refs/heads/${branch}` ? 'ok' : `on ${head.replace('ref: refs/heads/', '')}`
+      } catch { state = 'unreadable' }
     }
-    if (!cloneOk) {
-      console.log(warn(`     ${qa.name}'s independent clone is missing or not on develop at ${cwd}`))
-      console.log(`       git -C ${dirname(cwd)} clone https://github.com/ryanphillipthomas/focx.git ${cwd.split('/').pop()}`)
-      console.log(`       git -C ${cwd} checkout develop`)
-    } else {
-      console.log(ok(`     ${qa.name} independent clone present at ${cwd}`))
-    }
-    qaCloneReady = cloneOk
+    if (state !== 'ok') { workspacesReady = false; missingWorkspaces.push({ slug: agent.slug, cwd, state, branch }) }
+  }
+  if (missingWorkspaces.length) {
+    console.log(warn(`     ${missingWorkspaces.length} agent workspace(s) are not a checkout on the expected branch:`))
+    for (const m of missingWorkspaces.slice(0, 6)) console.log(`       ${m.slug}: ${m.cwd} (${m.state})`)
+    if (missingWorkspaces.length > 6) console.log(`       … and ${missingWorkspaces.length - 6} more`)
+    console.log(paint(C.dim, '     The tool never runs git. Create them with:'))
+    console.log(paint(C.dim, `       for d in ${missingWorkspaces.slice(0, 2).map((m) => m.cwd).join(' ')} …; do`))
+    console.log(paint(C.dim, `         git clone ${roster.company?.repository ?? 'https://github.com/ryanphillipthomas/focx.git'} "$d" && git -C "$d" checkout develop`))
+    console.log(paint(C.dim, '       done'))
+  } else {
+    const n = roster.agents.filter((a) => { const w = roster.workspaces?.[a.workspace] ?? {}; return w.cwd || w.cwdTemplate }).length
+    console.log(ok(`     ${n} agent workspace(s) present and on branch`))
   }
 
   // ---- plan ---------------------------------------------------------------
@@ -1133,8 +1146,10 @@ async function main(argv) {
     return 2
   }
 
-  if (!qaCloneReady) {
-    console.error(bad("paperclip-org: refusing to apply without QA's independent clone — independence is the point, and it has to exist before QA has a workspace."))
+  if (!workspacesReady) {
+    console.error(bad(`paperclip-org: refusing to apply with ${missingWorkspaces.length} missing workspace(s).`))
+    console.error('  An agent pointed at an empty directory starts fine and then has no repository at all —')
+    console.error("  it is a failure that looks like success. Create the checkouts listed above, then re-run.")
     return 3
   }
 
