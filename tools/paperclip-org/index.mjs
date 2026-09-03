@@ -139,6 +139,19 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
     if (instructionFiles && !instructionFiles.has(a.instructions)) {
       push(`${at} instructions file '${a.instructions}' not found in pipeline/org/instructions/`)
     }
+    // Two different skill systems, and confusing them fails at preflight for a
+    // reason nobody will guess. Paperclip keys look like 'vendor/pack/skill';
+    // Claude Code plugin skills look like 'plugin:skill' or a bare name.
+    for (const s of a.desiredSkills ?? []) {
+      if (!String(s).includes('/')) {
+        push(`${at} desiredSkills '${s}' is not a Paperclip registry key (vendor/pack/skill). Claude Code plugin skills belong in claudeCodeSkills.`)
+      }
+    }
+    for (const s of a.claudeCodeSkills ?? []) {
+      if (String(s).includes('/')) {
+        push(`${at} claudeCodeSkills '${s}' looks like a Paperclip registry key — those belong in desiredSkills.`)
+      }
+    }
   }
 
   // --- hierarchy: exactly one root, fully reachable, acyclic --------------
@@ -225,6 +238,10 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
       if (m.mayAddComponents && !m.usesClaudeDesign && m.default) {
         push(`designChain: default mode '${name}' may add components — reuse must be the default`)
       }
+    }
+    const allCc = new Set(agents.flatMap((a) => a.claudeCodeSkills ?? []))
+    for (const s of dc.discoveryOnlySkills ?? []) {
+      if (!allCc.has(s)) push(`designChain.discoveryOnlySkills names '${s}', which no agent lists in claudeCodeSkills`)
     }
     const esc = dc.modeEscalation ?? {}
     if (esc.raisedBy === esc.decidedBy) push('designChain.modeEscalation: the escalator must not also be the decider')
@@ -885,20 +902,35 @@ async function main(argv) {
   console.log(ok(`P5  models validated against the live catalog`))
 
   // ---- P7 skills ----------------------------------------------------------
-  const discoveryOnly = new Set(roster.designChain?.discoveryOnlySkills ?? [])
+  //
+  // Only desiredSkills is checked, because only desiredSkills is sent to
+  // Paperclip. claudeCodeSkills names Claude Code plugin skills, which come from
+  // the local Claude Code install and are never in Paperclip's registry —
+  // checking them here would fail every time, for the wrong reason.
   const wantedSkills = [...new Set(roster.agents.flatMap((a) => a.desiredSkills ?? []))]
   if (wantedSkills.length) {
     try {
       const skills = listOf(await api.get(`/api/companies/${companyId}/skills`))
       const have = new Set(skills.flatMap((s) => [s.id, s.key, s.slug, s.name].filter(Boolean)))
       const unresolved = wantedSkills.filter((s) => !have.has(s))
-      const blocking = unresolved.filter((s) => !discoveryOnly.has(s))
-      const warned = unresolved.filter((s) => discoveryOnly.has(s))
-      if (warned.length) console.log(warn(`P7  discovery-only skill(s) unresolved: ${warned.join(', ')} — discovery-mode design is unavailable; production mode is unaffected`))
-      if (blocking.length) { console.error(bad(`P7  required skill(s) unresolved: ${blocking.join(', ')}`)); return 3 }
+      if (unresolved.length) {
+        console.error(bad(`P7  Paperclip skill(s) not in the company registry: ${unresolved.join(', ')}`))
+        console.error(`      registry holds: ${[...have].filter((k) => String(k).includes('/')).join(', ') || '(none)'}`)
+        return 3
+      }
+      console.log(ok(`P7  ${wantedSkills.length} Paperclip skill(s) resolve`))
     } catch (err) {
       console.log(warn(`P7  could not read the skills registry (${err.message}) — skills not confirmed`))
     }
+  } else {
+    console.log(ok('P7  no Paperclip-registry skills requested'))
+  }
+  const ccSkills = [...new Set(roster.agents.flatMap((a) => a.claudeCodeSkills ?? []))]
+  if (ccSkills.length) {
+    const discoveryOnly = new Set(roster.designChain?.discoveryOnlySkills ?? [])
+    const gated = ccSkills.filter((s) => discoveryOnly.has(s))
+    console.log(paint(C.dim, `     Claude Code plugin skills (local CLI, not Paperclip): ${ccSkills.join(', ')}`))
+    if (gated.length) console.log(paint(C.dim, `     discovery-mode design needs ${gated.join(' + ')} present in the local Claude Code install`))
   }
 
   // ---- P8 secret references ----------------------------------------------

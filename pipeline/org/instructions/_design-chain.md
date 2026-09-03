@@ -81,6 +81,12 @@ DESIGN_APPROVAL verdict=changes-requested mode=<mode> run=<RUN_ID>
 
 followed by the human-readable review and its evidence. The `mode=` must echo the declared `DESIGN_MODE`. The verdict lives on the Paperclip issue rather than in a contract artifact, for the same parity reason as the mode token.
 
+### Where your tooling comes from
+
+Claude Design and the design review skills are **Claude Code plugin skills**, supplied by the local Claude Code installation you run inside. They are not Paperclip skills and are not registered in Paperclip's skill registry — nothing in your Paperclip configuration grants or withholds them.
+
+Practically: if `/design` or a review skill is unavailable, that is a local Claude Code installation issue, and it is a blocker to report — not a reason to improvise a substitute. Discovery mode in particular depends on Claude Design being present; if it is not, say so and let Head of Product decide whether to wait or re-declare the run as `production`.
+
 ### Figma access is split on purpose
 
 - **Product Designer holds Figma write.** It is the only agent that promotes to Figma, and the only one that runs the Figma → `design/tokens/` sync — the sole sanctioned path into the token mirror.

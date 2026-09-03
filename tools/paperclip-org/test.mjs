@@ -36,6 +36,31 @@ test('the committed roster is valid', () => {
   assert.deepEqual(validateRoster(roster, { instructionFiles }), [])
 })
 
+test('Paperclip skills and Claude Code plugin skills are kept apart', () => {
+  const { roster } = load()
+  // desiredSkills is sent to Paperclip and must name its registry keys.
+  // claudeCodeSkills is documentation of local Claude Code plugin skills.
+  for (const a of roster.agents) {
+    for (const s of a.desiredSkills ?? []) assert.ok(s.includes('/'), `${a.slug}: '${s}' is not a Paperclip key`)
+    for (const s of a.claudeCodeSkills ?? []) assert.ok(!s.includes('/'), `${a.slug}: '${s}' looks like a Paperclip key`)
+  }
+  const design = bySlug(roster, 'product-designer')
+  assert.deepEqual(design.desiredSkills, [], 'nothing in Paperclip\'s registry is relevant to the designer')
+  assert.ok(design.claudeCodeSkills.includes('design'))
+})
+
+test('rejects a Claude Code plugin skill placed in desiredSkills', () => rejects((r) => {
+  bySlug(r, 'product-designer').desiredSkills = ['design:ux-copy']
+}, 'belong in claudeCodeSkills'))
+
+test('rejects a Paperclip registry key placed in claudeCodeSkills', () => rejects((r) => {
+  bySlug(r, 'product-designer').claudeCodeSkills = ['paperclipai/paperclip/paperclip']
+}, 'belong in desiredSkills'))
+
+test('rejects discoveryOnlySkills naming a skill no agent lists', () => rejects((r) => {
+  r.designChain.discoveryOnlySkills = ['not-a-skill-anyone-has']
+}, 'no agent lists in claudeCodeSkills'))
+
 test('the committed roster matches the agreed shape', () => {
   const { roster } = load()
   assert.equal(roster.agents.length, 25)

@@ -1,5 +1,5 @@
 {
-  "comment": "The Focx.ai operating company. Source of truth for who exists, who they report to, what model they run, what they cost, what they may write, and what they are scheduled to do. Applied by tools/paperclip-org/index.mjs. This file is desired state; Paperclip holds live state. Secrets are referenced by name only - never inline a credential here, this file is committed to git.",
+  "comment": "The Focx.ai operating company. Source of truth for who exists, who they report to, what model they run, what they cost, what they may write, and what they are scheduled to do. Applied by tools/paperclip-org/index.mjs. This file is desired state; Paperclip holds live state. desiredSkills means Paperclip-registered skills; claudeCodeSkills is documentation of the local Claude Code plugin skills an agent relies on, and is never sent to the API. Secrets are referenced by name only - never inline a credential here, this file is committed to git.",
   "version": 1,
   "expectedAgentCount": 25,
   "goal": "Reach 2,000 registered Focx Connect users within 180 days of public launch, with evidence of strong activation, retention, trust, and sustainable unit economics.",
@@ -123,7 +123,8 @@
       "to": "discovery",
       "raisedBy": "design-steward",
       "decidedBy": "head-of-product"
-    }
+    },
+    "skillNote": "desiredSkills addresses Paperclip's own skill registry. The design chain's tooling is Claude Code plugin skills, which reach a claude_local agent through the local CLI and are never registered in Paperclip \u2014 they are recorded per agent as claudeCodeSkills, for humans, and are never sent to the API."
   },
   "agents": [
     {
@@ -403,7 +404,8 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "product-designer.md",
-      "desiredSkills": [
+      "desiredSkills": [],
+      "claudeCodeSkills": [
         "design",
         "artifact-design",
         "design:design-handoff",
@@ -440,7 +442,8 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "design-steward.md",
-      "desiredSkills": [
+      "desiredSkills": [],
+      "claudeCodeSkills": [
         "design:design-critique",
         "design:accessibility-review",
         "design:design-system"
@@ -925,7 +928,7 @@
       "activityGatePolicy": "always",
       "cron": "0 7 * * 1-5",
       "timezone": "America/New_York",
-      "description": "Assemble the company morning brief. Cover progress toward 2,000 users, current acquisition pace, activation, retention, what shipped, major learnings, active growth experiments, blockers, risks, AI-budget anomalies, decisions Ryan needs to make, and today’s highest-priority work. One page, no more."
+      "description": "Assemble the company morning brief. Cover progress toward 2,000 users, current acquisition pace, activation, retention, what shipped, major learnings, active growth experiments, blockers, risks, AI-budget anomalies, decisions Ryan needs to make, and today\u2019s highest-priority work. One page, no more."
     },
     {
       "key": "daily-company-priorities",
