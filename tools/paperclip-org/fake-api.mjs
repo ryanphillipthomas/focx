@@ -15,7 +15,10 @@ export function createFakeApi({ companyId, requireAuth = true, seedAgents = [] }
     routines: [],
     triggers: new Map(),
     policies: [],
-    secrets: [{ name: 'claude_subscription_token' }, { name: 'github_focx_write_token' }],
+    secrets: [
+      { id: 'sec-claude-0001', key: 'claude_subscription_token', name: 'claude_subscription_token', scope: 'company' },
+      { id: 'sec-github-0002', key: 'github_focx_write_token', name: 'github_focx_write_token', scope: 'company' },
+    ],
     skills: [{ key: 'design' }, { key: 'artifact-design' }, { key: 'design:design-handoff' },
       { key: 'design:ux-copy' }, { key: 'design:design-critique' },
       { key: 'design:accessibility-review' }, { key: 'design:design-system' }],
