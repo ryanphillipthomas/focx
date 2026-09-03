@@ -240,14 +240,50 @@ test('composeAdapterConfig maps reasoning to each adapter\'s own key and disarms
   assert.equal(codex.dangerouslyBypassApprovalsAndSandbox, false)
 })
 
-test('QA Engineer gets a pinned cwd and repo agents do not share one', () => {
+test('repo agents get a per-issue worktree, never a shared cwd', () => {
   const { roster } = load()
-  const qa = composeAdapterConfig(roster, bySlug(roster, 'qa-engineer'))
-  assert.equal(qa.cwd, '/Users/ryanthomas/Documents/GitHub/focx-qa')
   for (const a of roster.agents) {
-    if (a.slug === 'qa-engineer') continue
-    assert.notEqual(composeAdapterConfig(roster, a).cwd, qa.cwd, `${a.slug} shares QA's clone`)
+    const cfg = composeAdapterConfig(roster, a)
+    const wantsRepo = Boolean(roster.workspaces[a.workspace]?.workspaceStrategy)
+    assert.equal(Boolean(cfg.workspaceStrategy), wantsRepo, a.slug)
+    // cwd is not a workable placement: the claude ACP lane ignores it.
+    assert.ok(!('cwd' in cfg), `${a.slug} still pins a cwd`)
   }
+})
+
+test('worktree baseRef is remote-tracking, so Paperclip fetches before branching', () => {
+  const { roster } = load()
+  for (const [name, ws] of Object.entries(roster.workspaces)) {
+    if (ws.workspaceStrategy?.type !== 'git_worktree') continue
+    assert.ok(String(ws.workspaceStrategy.baseRef).includes('/'), `${name} baseRef must be <remote>/<branch>`)
+  }
+})
+
+test('rejects a bare baseRef — the silent-staleness bug', () => rejects((r) => {
+  r.workspaces['repo-worktree'].workspaceStrategy.baseRef = 'develop'
+}, 'is not remote-tracking'))
+
+test('rejects a branchTemplate with no placeholder — the shared-branch bug', () => rejects((r) => {
+  // Single braces render literally: every agent and issue collide on one branch.
+  r.workspaces['repo-worktree'].workspaceStrategy.branchTemplate = 'agent/{agentSlug}/{issueId}'
+}, 'renders literally'))
+
+test('accepts a branchTemplate that actually interpolates', () => {
+  const { roster, instructionFiles } = load()
+  const r = clone(roster)
+  r.workspaces['repo-worktree'].workspaceStrategy.branchTemplate = '{{issue.identifier}}-{{slug}}'
+  assert.deepEqual(validateRoster(r, { instructionFiles }), [])
+})
+
+test("QA's independence is git-enforced rather than a static path", () => {
+  const { roster } = load()
+  const qa = bySlug(roster, roster.independence.verifier)
+  const ws = roster.workspaces[qa.workspace].workspaceStrategy
+  assert.equal(ws.type, 'git_worktree')
+  // No branchTemplate => the per-issue default, so QA's child issue gets its own
+  // branch and directory, distinct from the build it verifies.
+  assert.ok(!ws.branchTemplate)
+  assert.equal(qa.git, 'write', 'QA must still push its verdict and evidence')
 })
 
 test('resolveEnv turns a named secret into a real secret_ref', () => {

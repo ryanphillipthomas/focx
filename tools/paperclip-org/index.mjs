@@ -258,6 +258,29 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
     } catch (err) { push(`${a.slug}: could not compose adapterConfig — ${err.message}`) }
   }
 
+  // --- workspaces ---------------------------------------------------------
+  for (const [name, ws] of Object.entries(roster.workspaces ?? {})) {
+    const strat = ws.workspaceStrategy
+    if (!strat) continue
+    if (strat.type === 'git_worktree') {
+      const ref = String(strat.baseRef ?? '')
+      // Paperclip only fetches when baseRef parses as <remote>/<branch>
+      // (refreshRemoteTrackingBaseRef returns early otherwise). A bare
+      // 'develop' therefore branches from whatever the local checkout happens
+      // to be, silently, forever.
+      if (!ref.includes('/')) {
+        push(`workspaces.${name}: baseRef '${ref}' is not remote-tracking — Paperclip will not fetch before branching, so worktrees silently use a stale local ref. Use '<remote>/${ref || 'branch'}'.`)
+      }
+      if (strat.branchTemplate && !/\{\{.+\}\}/.test(strat.branchTemplate)) {
+        push(`workspaces.${name}: branchTemplate '${strat.branchTemplate}' has no {{...}} placeholder — it renders literally, putting every agent and issue on one shared branch and worktree. Omit it to take the per-issue default.`)
+      }
+    }
+    if (ws.cwdTemplate) push(`workspaces.${name}: cwdTemplate is no longer used — the claude ACP lane ignores cwd; use a git_worktree strategy`)
+  }
+  if (roster.agents?.some((a) => roster.workspaces?.[a.workspace]?.workspaceStrategy) && !roster.project?.id) {
+    push('roster.project.id is required when any workspace uses git_worktree — worktrees are cut from the project checkout')
+  }
+
   // --- design chain -------------------------------------------------------
   const dc = roster.designChain
   if (!dc) {
@@ -426,8 +449,11 @@ export function composeAdapterConfig(roster, agent, secretIds = null) {
     timeoutSec: 3600,
     graceSec: 60,
   }
-  const cwd = ws.cwd ?? (ws.cwdTemplate ? ws.cwdTemplate.replaceAll('{slug}', agent.slug) : null)
-  if (cwd) cfg.cwd = cwd
+  // The claude ACP lane ignores cwd entirely and runs in Paperclip's own
+  // workspace dir, so cwd is not a workable way to place a repo agent. A
+  // git_worktree gives both lanes a real checkout, per issue.
+  if (ws.workspaceStrategy) cfg.workspaceStrategy = { ...ws.workspaceStrategy }
+  if (ws.cwd) cfg.cwd = ws.cwd
 
   if (agent.adapter.type === 'claude_local') {
     // Defaults to TRUE server-side. Written explicitly so no agent silently
@@ -803,9 +829,14 @@ export function verify(roster, live, renderedBySlug) {
     bundleBad.length === 0 && deptOk, bundleBad.length ? `drifted: ${bundleBad.slice(0, 3).join(', ')}` : '')
 
   const dc = roster.designChain
-  const qaCwd = (cfg.get(bySlug.get('qa-engineer')?.id)?.adapterConfig ?? {}).cwd
-  const qaUnique = Boolean(qaCwd) && [...bySlug].filter(([s]) => s !== 'qa-engineer')
-    .every(([, a]) => (cfg.get(a.id)?.adapterConfig ?? {}).cwd !== qaCwd)
+  // Independence moved from "QA has a unique cwd" to git enforcing it: QA works
+  // its own child issue, so the default {{issue.identifier}}-{{slug}} template
+  // gives it a different branch and directory from the build it verifies.
+  const verifier = roster.independence?.verifier ?? 'qa-engineer'
+  const qaStrategy = (cfg.get(bySlug.get(verifier)?.id)?.adapterConfig ?? {}).workspaceStrategy
+  const qaUnique = qaStrategy?.type === 'git_worktree'
+    && String(qaStrategy.baseRef ?? '').includes('/')
+    && !qaStrategy.branchTemplate
   const stewardEnv = (cfg.get(bySlug.get(dc.approver)?.id)?.adapterConfig ?? {}).env ?? {}
   const stewardNoToken = !('GH_TOKEN' in stewardEnv)
   const hireBad = active.filter((a) => (cfg.get(a.id)?.permissions ?? {}).canCreateAgents === true)
@@ -816,7 +847,7 @@ export function verify(roster, live, renderedBySlug) {
   }
   check(11, 'Implementation and verification independent, in both chains',
     qaUnique && stewardNoToken && hireBad.length === 0 && assignBad.length === 0 && dc.proposer !== dc.approver,
-    [!qaUnique && 'QA cwd not unique', !stewardNoToken && 'Design Steward has GH_TOKEN',
+    [!qaUnique && `${verifier} is not on a per-issue worktree`, !stewardNoToken && 'Design Steward has GH_TOKEN',
       hireBad.length && 'canCreateAgents true somewhere', assignBad.length && `canAssignTasks wrong: ${assignBad.slice(0, 2)}`]
       .filter(Boolean).join('; '))
 
@@ -835,6 +866,9 @@ export function verify(roster, live, renderedBySlug) {
     if (wantsClaude !== ('CLAUDE_CODE_OAUTH_TOKEN' in env)) envBad.push(`${slug} claude token mismatch`)
     const wantsGit = w.git === 'write'
     if (wantsGit !== ('GH_TOKEN' in env)) envBad.push(`${slug} GH_TOKEN mismatch`)
+    const wantsWorktree = Boolean(roster.workspaces?.[w.workspace]?.workspaceStrategy)
+    const hasWorktree = Boolean((cfg.get(a.id)?.adapterConfig ?? {}).workspaceStrategy)
+    if (wantsWorktree !== hasWorktree) envBad.push(`${slug} workspaceStrategy mismatch`)
     // Presence is not enough: a bare string is stored as { type: "plain" }, which
     // is how every agent once ended up with a literal "[secret: name]" for a token.
     for (const key of ['CLAUDE_CODE_OAUTH_TOKEN', 'GH_TOKEN']) {
@@ -1084,42 +1118,26 @@ async function main(argv) {
   try { live.routines = listOf(await api.get(`/api/companies/${companyId}/routines`)) } catch { live.routines = [] }
   console.log(ok(`P9  live: ${live.agents.filter((a) => a.status !== 'terminated').length} active agents, ${live.routines.length} routines`))
 
-  // ---- workspaces, without ever invoking git ------------------------------
+  // ---- project checkout ---------------------------------------------------
   //
-  // Every agent with a cwd needs a real checkout there. Paperclip will create a
-  // missing cwd, but it creates an empty DIRECTORY, not a clone — so an agent
-  // starts successfully and then has no repository, no AGENTS.md and nothing to
-  // work on. Checking only QA's clone let 15 non-existent workspaces through.
+  // Worktrees are cut from the Connect project's checkout, and Paperclip owns
+  // that directory. The tool checks the project EXISTS rather than reaching into
+  // its filesystem — and leans on P0 having already rejected any baseRef that
+  // would skip the pre-branch fetch.
   let workspacesReady = true
-  const missingWorkspaces = []
-  for (const agent of roster.agents) {
-    const ws = roster.workspaces?.[agent.workspace] ?? {}
-    const cwd = ws.cwd ?? (ws.cwdTemplate ? ws.cwdTemplate.replaceAll('{slug}', agent.slug) : null)
-    if (!cwd) continue
-    const branch = ws.baseBranch ?? roster.company?.baseBranch ?? 'develop'
-    const dotGit = join(cwd, '.git')
-    let state = 'missing'
-    if (existsSync(dotGit)) {
-      try {
-        // A worktree's .git is a file, not a directory; accept both. Read HEAD
-        // directly — this tool never invokes git.
-        const head = statSync(dotGit).isDirectory() ? readFileSync(join(dotGit, 'HEAD'), 'utf8').trim() : null
-        state = head === null || head === `ref: refs/heads/${branch}` ? 'ok' : `on ${head.replace('ref: refs/heads/', '')}`
-      } catch { state = 'unreadable' }
+  const worktreeAgents = roster.agents.filter((a) => roster.workspaces?.[a.workspace]?.workspaceStrategy)
+  if (worktreeAgents.length) {
+    try {
+      const project = await api.get(`/api/projects/${roster.project.id}`)
+      const name = project?.project?.name ?? project?.name
+      if (!name) throw new ApiError('project returned no name', 0)
+      const refs = [...new Set(worktreeAgents.map((a) => roster.workspaces[a.workspace].workspaceStrategy.baseRef))]
+      console.log(ok(`     project '${name}' backs ${worktreeAgents.length} worktree agent(s) from ${refs.join(', ')}`))
+    } catch (err) {
+      console.error(bad(`     project ${roster.project?.id} is not reachable — ${err.message}`))
+      console.error('       Worktrees are cut from its checkout; without it no repo-tier agent has a workspace.')
+      workspacesReady = false
     }
-    if (state !== 'ok') { workspacesReady = false; missingWorkspaces.push({ slug: agent.slug, cwd, state, branch }) }
-  }
-  if (missingWorkspaces.length) {
-    console.log(warn(`     ${missingWorkspaces.length} agent workspace(s) are not a checkout on the expected branch:`))
-    for (const m of missingWorkspaces.slice(0, 6)) console.log(`       ${m.slug}: ${m.cwd} (${m.state})`)
-    if (missingWorkspaces.length > 6) console.log(`       … and ${missingWorkspaces.length - 6} more`)
-    console.log(paint(C.dim, '     The tool never runs git. Create them with:'))
-    console.log(paint(C.dim, `       for d in ${missingWorkspaces.slice(0, 2).map((m) => m.cwd).join(' ')} …; do`))
-    console.log(paint(C.dim, `         git clone ${roster.company?.repository ?? 'https://github.com/ryanphillipthomas/focx.git'} "$d" && git -C "$d" checkout develop`))
-    console.log(paint(C.dim, '       done'))
-  } else {
-    const n = roster.agents.filter((a) => { const w = roster.workspaces?.[a.workspace] ?? {}; return w.cwd || w.cwdTemplate }).length
-    console.log(ok(`     ${n} agent workspace(s) present and on branch`))
   }
 
   // ---- plan ---------------------------------------------------------------

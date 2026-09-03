@@ -40,30 +40,9 @@ End at a **draft PR**. Bots build, never merge.
 
 ## Phase 2 — live operations. Only after Ryan merges and exports the token.
 
-Create the agent workspaces first. The tool never invokes `git`, deliberately, so this is yours.
+Agent workspaces need no setup. Repo-tier agents use a **git worktree per issue**, cut automatically from the Connect project's checkout, so there are no clones to create and nothing to keep in sync — `baseRef: origin/develop` makes Paperclip fetch before every worktree.
 
-Every agent with a `cwd` needs a real checkout there. Paperclip *will* create a missing `cwd`, but it creates an empty **directory**, not a clone — so the agent starts successfully and then has no repository, no `AGENTS.md`, and nothing to work on. That is a failure that looks like success, which is why preflight refuses to apply until every workspace exists.
-
-```bash
-# QA's independent clone — deliberately outside focx-agents/
-git -C /Users/ryanthomas/Documents/GitHub clone https://github.com/ryanphillipthomas/focx.git focx-qa
-git -C /Users/ryanthomas/Documents/GitHub/focx-qa checkout develop
-
-# One clone per repo-tier agent, named by slug
-mkdir -p /Users/ryanthomas/Documents/GitHub/focx-agents
-for slug in $(node -e '
-  const r=require("/Users/ryanthomas/Documents/GitHub/focx/pipeline/org/roster.json");
-  const w=r.workspaces;
-  console.log(r.agents.filter(a=>w[a.workspace]?.cwdTemplate).map(a=>a.slug).join(" "))'); do
-  d=/Users/ryanthomas/Documents/GitHub/focx-agents/$slug
-  [ -e "$d/.git" ] || git clone --quiet https://github.com/ryanphillipthomas/focx.git "$d"
-  git -C "$d" checkout --quiet develop
-done
-```
-
-Do **not** use `git clone --shared`. It saves a few megabytes and creates an alternates dependency on the parent repository, so a later `git gc` there can dangle objects these clones still reference. The whole repo is about 2.5 MB; full clones are the right trade.
-
-Then:
+Do **not** reintroduce `cwd` for repo agents. The `claude_local` ACP lane ignores it and runs in Paperclip's own workspace directory, which has no repository in it.
 
 ```bash
 node tools/paperclip-org/index.mjs                                  # dry run — READ THE PLAN
