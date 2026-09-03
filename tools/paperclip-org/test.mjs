@@ -46,7 +46,12 @@ test('Paperclip skills and Claude Code plugin skills are kept apart', () => {
     for (const s of a.claudeCodeSkills ?? []) assert.ok(!s.includes('/'), `${a.slug}: '${s}' looks like a Paperclip key`)
   }
   const design = bySlug(roster, 'product-designer')
-  assert.deepEqual(design.desiredSkills, [], 'nothing in Paperclip\'s registry is relevant to the designer')
+  // Paperclip's registry still holds no *craft* skill for the designer — the
+  // design skills are Claude Code plugin skills, and that separation is the
+  // point of this test. para-memory-files is the one exception, because memory
+  // is not role-specific: every agent keeps its own, under its own $AGENT_HOME.
+  assert.deepEqual(design.desiredSkills, ['paperclipai/paperclip/para-memory-files'],
+    'the designer takes memory from Paperclip and nothing else')
   assert.ok(design.claudeCodeSkills.includes('design'))
 })
 

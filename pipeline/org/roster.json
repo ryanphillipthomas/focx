@@ -151,7 +151,13 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "ceo.md",
-      "desiredSkills": []
+      "desiredSkills": [
+        "paperclipai/paperclip/paperclip",
+        "paperclipai/paperclip/paperclip-board",
+        "paperclipai/paperclip/paperclip-converting-plans-to-tasks",
+        "paperclipai/paperclip/paperclip-create-agent",
+        "paperclipai/paperclip/para-memory-files"
+      ]
     },
     {
       "slug": "chief-of-staff",
@@ -182,7 +188,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "chief-of-staff.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "head-of-product",
@@ -213,7 +219,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "head-of-product.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "cto",
@@ -244,7 +250,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "cto.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "head-of-growth",
@@ -275,7 +281,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "head-of-growth.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "business-operations",
@@ -306,7 +312,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "business-operations.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "legal-privacy",
@@ -337,7 +343,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "legal-privacy.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "product-research",
@@ -368,7 +374,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "product-research.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "product-designer",
@@ -399,7 +405,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "product-designer.md",
-      "desiredSkills": [],
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"],
       "claudeCodeSkills": [
         "design",
         "artifact-design",
@@ -437,7 +443,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "design-steward.md",
-      "desiredSkills": [],
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"],
       "claudeCodeSkills": [
         "design:design-critique",
         "design:accessibility-review",
@@ -474,7 +480,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "design-research.md",
-      "desiredSkills": [],
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"],
       "claudeCodeSkills": [
         "design:user-research",
         "design:research-synthesis"
@@ -509,7 +515,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "ai-experience.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "product-analytics",
@@ -540,7 +546,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "product-analytics.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "web-engineer",
@@ -571,7 +577,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "web-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "apple-engineer",
@@ -602,7 +608,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "apple-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "backend-ai-engineer",
@@ -633,7 +639,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "backend-ai-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "ai-evals-engineer",
@@ -664,7 +670,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "ai-evals-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "qa-engineer",
@@ -695,7 +701,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "qa-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "security-engineer",
@@ -726,7 +732,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "security-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "release-engineer",
@@ -757,7 +763,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "release-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "brand-content",
@@ -788,7 +794,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "brand-content.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "community-creators",
@@ -819,7 +825,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "community-creators.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "lifecycle-referral",
@@ -850,7 +856,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "lifecycle-referral.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "growth-engineer",
@@ -881,7 +887,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "growth-engineer.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "customer-success",
@@ -912,7 +918,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "customer-success.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     },
     {
       "slug": "finance",
@@ -943,7 +949,7 @@
       },
       "budgetMonthlyCents": 200,
       "instructions": "finance.md",
-      "desiredSkills": []
+      "desiredSkills": ["paperclipai/paperclip/para-memory-files"]
     }
   ],
   "routines": [
