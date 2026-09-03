@@ -54,13 +54,12 @@
     }
   },
   "workspaces": {
-    "repo-per-agent": {
-      "comment": "Per-agent clone under worktreeParentDir. cwd is never shared: two agents in one working tree interleave commits.",
-      "cwdTemplate": "/Users/ryanthomas/Documents/GitHub/focx-agents/{slug}"
-    },
-    "repo-qa-clone": {
-      "comment": "QA Engineer only. A distinct top-level clone so independence is visible in config.",
-      "cwd": "/Users/ryanthomas/Documents/GitHub/focx-qa"
+    "repo-worktree": {
+      "comment": "A git worktree per issue, cut from the Connect project's checkout. baseRef MUST be remote-tracking: Paperclip only fetches when the ref parses as <remote>/<branch>, so a bare 'develop' silently branches from whatever the local checkout happens to be. cwd is deliberately absent \u2014 the claude ACP lane ignores it, and the worktree is the workspace.",
+      "workspaceStrategy": {
+        "type": "git_worktree",
+        "baseRef": "origin/develop"
+      }
     },
     "none": {
       "comment": "No repository on the filesystem. That, not prose, is what stops a non-technical agent editing application code."
@@ -162,7 +161,7 @@
       "icon": "target",
       "reportsTo": "ceo",
       "tier": "manager",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Keeps the company coordinated. Opens and closes pipeline runs, routes between roles, owns the operating cadence, dependency management, task ownership, and escalation.",
       "adapter": {
@@ -193,7 +192,7 @@
       "icon": "lightbulb",
       "reportsTo": "ceo",
       "tier": "manager",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Makes Connect useful enough that people activate, return, and recommend it. Owns roadmap, prioritization, PRDs, acceptance criteria, and what gets built. Declares the design mode for every design-bearing run.",
       "adapter": {
@@ -224,7 +223,7 @@
       "icon": "cpu",
       "reportsTo": "ceo",
       "tier": "manager",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Owns technical architecture and keeps implementation coherent, secure, scalable, and aligned to Product. Assigns build work across Web, Apple, and Backend, and is accountable for the drift gate staying green.",
       "adapter": {
@@ -348,7 +347,7 @@
       "icon": "microscope",
       "reportsTo": "head-of-product",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Continuously discovers user problems, market shifts, competitive opportunities, and sources of friction. Produces evidence, never build orders.",
       "adapter": {
@@ -379,7 +378,7 @@
       "icon": "wand",
       "reportsTo": "head-of-product",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Owns the Connect experience. Specifies from the design system in production mode, explores in Claude Design in discovery mode, and promotes Steward-approved work into Figma before syncing the token mirror.",
       "adapter": {
@@ -417,7 +416,7 @@
       "icon": "gem",
       "reportsTo": "head-of-product",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "read",
       "capabilities": "Reviews every design candidate against the Focx design system, WCAG 2.1 AA accessibility, and UX consistency. Approves or requests changes; never writes the record it approves.",
       "adapter": {
@@ -454,7 +453,7 @@
       "icon": "search",
       "reportsTo": "head-of-product",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "read",
       "capabilities": "Frames discovery-mode design work with prior art and existing evidence, evaluates candidates by heuristic walkthrough before the Steward reviews them, and validates after ship whether friction actually fell. Produces evidence; never gates.",
       "adapter": {
@@ -520,7 +519,7 @@
       "icon": "radar",
       "reportsTo": "head-of-product",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Makes product performance measurable. Owns activation, funnels, cohorts, retention, experimentation, event quality, product-health monitoring, and acquisition-quality analysis.",
       "adapter": {
@@ -551,7 +550,7 @@
       "icon": "globe",
       "reportsTo": "cto",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Implements and maintains Connect web experiences against the design spec and the token mirror.",
       "adapter": {
@@ -582,7 +581,7 @@
       "icon": "terminal",
       "reportsTo": "cto",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Implements and maintains Connect native Apple experiences across iOS, iPadOS, and macOS targets.",
       "adapter": {
@@ -613,7 +612,7 @@
       "icon": "database",
       "reportsTo": "cto",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Builds the data, intelligence, and service layer: person/context systems, provenance, temporal intelligence, open loops, AI pipelines, model interfaces, retrieval, and service logic.",
       "adapter": {
@@ -644,7 +643,7 @@
       "icon": "telescope",
       "reportsTo": "cto",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Continuously tests Connect AI behavior: hallucinated facts, incorrect provenance, unsafe inference, context leakage, poor relationship recommendations, temporal mistakes, reply quality, tone, and model regressions.",
       "adapter": {
@@ -675,7 +674,7 @@
       "icon": "eye",
       "reportsTo": "cto",
       "tier": "ic",
-      "workspace": "repo-qa-clone",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Independently verifies built work against acceptance criteria and the drift gate, from a clone the builder never touched. Certifies nothing it authored.",
       "adapter": {
@@ -706,7 +705,7 @@
       "icon": "shield",
       "reportsTo": "cto",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Protects Connect relationship data and infrastructure. Owns security reviews, data handling, authorization, secret handling, deletion/export testing, prompt-injection risk, and cross-user isolation.",
       "adapter": {
@@ -737,7 +736,7 @@
       "icon": "rocket",
       "reportsTo": "cto",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Prepares and validates release candidates and assembles the promotion case. Cannot approve a production release.",
       "adapter": {
@@ -861,7 +860,7 @@
       "icon": "zap",
       "reportsTo": "head-of-growth",
       "tier": "ic",
-      "workspace": "repo-per-agent",
+      "workspace": "repo-worktree",
       "git": "write",
       "capabilities": "Implements technical growth experiments quickly: landing pages, referral mechanics, campaign infrastructure, SEO tooling, and acquisition instrumentation.",
       "adapter": {
@@ -1090,5 +1089,16 @@
       "filesystemSandboxCommand"
     ],
     "availableOnThisHost": false
+  },
+  "project": {
+    "comment": "Paperclip project holding the primary checkout every agent worktree derives from.",
+    "id": "60073b69-336b-4494-a549-e7dc6916eff5",
+    "name": "Connect"
+  },
+  "independence": {
+    "comment": "QA Engineer's independence used to be a separate clone at focx-qa, visible as a distinct cwd. Worktrees replace that with something git enforces: QA works its own child issue, so it gets a different branch AND a different directory from the build it verifies, per issue rather than per agent. The marker moved; the guarantee got stronger.",
+    "verifier": "qa-engineer",
+    "mechanism": "per-issue git worktree",
+    "branchTemplate": "{{issue.identifier}}-{{slug}} (Paperclip default \u2014 per-issue unique)"
   }
 }

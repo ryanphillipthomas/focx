@@ -179,13 +179,19 @@ The design chain's tooling — Claude Design and the design review skills — ar
 
 Confusing the two fails preflight for a reason nobody would guess, so `validateRoster` rejects a `plugin:skill` name in `desiredSkills` and a `vendor/pack/skill` key in `claudeCodeSkills`. Discovery-mode design depends on Claude Design being present in the local install; if it is absent, that is a local installation blocker, not a Paperclip configuration one.
 
-## Workspaces are real checkouts, and the tool will not proceed without them
+## Worktrees, not clones
 
-Sixteen agents have a `cwd`: fifteen repo-tier agents at `focx-agents/<slug>/`, and QA Engineer at `focx-qa/` — deliberately outside that directory so its independence is visible in the path.
+Repo-tier agents get a **git worktree per issue**, cut from the Connect project's checkout and nested under its `.paperclip/worktrees/`. The branch comes from Paperclip's default template, `{{issue.identifier}}-{{slug}}` — so issue `FOC-17` gets `FOC-17-workspace-probe-2-…`, unique per issue.
 
-Paperclip creates a missing `cwd`, but it creates an **empty directory, not a clone**. An agent then starts cleanly and has no repository at all: a failure that looks like success. Preflight therefore checks *every* agent workspace — that `.git` exists and `HEAD` points at the expected branch — and refuses to apply until they all do. It never runs `git` itself; it prints the commands and stops.
+`cwd` is deliberately **not** set. It is not a workable way to place a repo agent: the `codex_local` lane honours it, but the `claude_local` ACP lane ignores it entirely and runs in Paperclip's own workspace directory, which contains no repository. Sixteen hand-made clones were built on that assumption and then deleted — the worktree is the workspace for both lanes.
 
-Clones are independent, not `--shared`: an alternates dependency on the parent repo would let a later `git gc` there dangle objects these clones reference, and the repo is small enough that the saving is not worth the failure mode.
+**`baseRef` must be remote-tracking, and this is load-bearing.** `refreshRemoteTrackingBaseRef` fetches only when the ref parses as `<remote>/<branch>`; a bare `develop` returns early, and Paperclip branches from whatever the local checkout happens to be. That is a silent staleness bug — the project checkout was once four merges behind, so agents would have worked from a tree containing no `pipeline/org/` at all. With `origin/develop` Paperclip fetches before every worktree, authenticating with the company GitHub secret, and staleness stops being anyone's job. `validateRoster` rejects a bare ref.
+
+It also rejects a `branchTemplate` with no `{{…}}` placeholder. Single braces render **literally**: an early attempt produced the branch `agent/-agentSlug-/-issueId`, which would have put every agent and every issue in one shared working tree — the exact collision that per-agent directories were meant to prevent.
+
+### QA's independence moved, and got stronger
+
+It used to be a separate clone at `focx-qa`, visible as a distinct `cwd`. Now QA works its own **child issue**, so git gives it a different branch *and* a different directory from the build it verifies — per issue rather than per agent, enforced by the tool rather than asserted by a path convention. Success condition 11 checks the worktree strategy and the per-issue default instead of comparing paths.
 
 ## Confinement: there is none on this host
 
