@@ -165,6 +165,14 @@ node tools/paperclip-org/index.mjs --apply --confirm-terminate=N
 
 Applying needs a board token Ryan mints himself (`paperclipai auth login` → `paperclipai token board create`) and the two secrets present in Paperclip's store. The tool never fetches, prints, or persists a secret value — it reads names only.
 
+## Two different skill systems
+
+`desiredSkills` in the roster addresses **Paperclip's own skill registry** — keys shaped `vendor/pack/skill`, of which this company has five, all `paperclipai/paperclip/*`. None are relevant to these agents, so every agent's `desiredSkills` is empty.
+
+The design chain's tooling — Claude Design and the design review skills — are **Claude Code plugin skills**. They reach a `claude_local` agent through the local Claude Code installation and are never registered in Paperclip. They are recorded per agent as `claudeCodeSkills`, which is documentation for humans and is **never sent to the API**.
+
+Confusing the two fails preflight for a reason nobody would guess, so `validateRoster` rejects a `plugin:skill` name in `desiredSkills` and a `vendor/pack/skill` key in `claudeCodeSkills`. Discovery-mode design depends on Claude Design being present in the local install; if it is absent, that is a local installation blocker, not a Paperclip configuration one.
+
 ## Known gaps
 
 - **`pipeline/org/` and `tools/paperclip-org/` are deliberately absent from [`tools/pipeline-parity/manifest.json`](../tools/pipeline-parity/manifest.json).** The manifest is itself parity `identical`, so listing them would create a `studio-810` mirror obligation that cannot be satisfied from this machine. Unlisted files are simply not compared, so parity still passes — the precedent is `pipeline/prompts/paperclip-development-agent.md`, already unlisted. A completeness pass is a future paired PR.
