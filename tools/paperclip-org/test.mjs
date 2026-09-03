@@ -16,6 +16,7 @@ import {
   renderBundle, planActions, loadRoster, renderAll, buildAgentPayload,
   PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
+  PLATFORM_OWNED_KEYS,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -623,6 +624,62 @@ test('verify passes against a live org built from the roster, and catches drift'
   withToken.set(stewardId, c)
   const after2 = verify(roster, { ...live, configurations: withToken }, rendered)
   assert.ok(after2.find((r) => r.n === 11 && !r.pass), 'check 11 catches Design Steward gaining GH_TOKEN')
+})
+
+// Paperclip writes its own keys into adapterConfig — the managed instructions
+// bundle and skill sync — and they appear only in LIVE config, never in the
+// roster. An allowlist that predates them fails an org that is actually correct,
+// on every agent at once. Restoring a terminated CTO is how this was found.
+//
+// These names are written out rather than taken from PLATFORM_OWNED_KEYS on
+// purpose: a test that builds its fixture from the constant it is checking
+// passes no matter what that constant says.
+const PAPERCLIP_WRITES = [
+  'instructionsBundleMode', 'instructionsRootPath', 'instructionsEntryFile',
+  'bootstrapPromptTemplate', 'paperclipSkillSync',
+]
+
+test("Paperclip's own adapterConfig keys are not drift, but a typo still is", () => {
+  for (const type of ['claude_local', 'codex_local']) {
+    for (const key of PAPERCLIP_WRITES) {
+      assert.deepEqual(checkAdapterConfig(type, { [key]: 'set-by-paperclip' }), [],
+        `${type}: ${key} is Paperclip's own key, not drift`)
+    }
+  }
+  // The check exists to catch a typo before it becomes a silent runtime
+  // mystery, so accepting the platform's keys must not blunt that.
+  assert.equal(checkAdapterConfig('claude_local', { instructionsRootPathh: 'typo' }).length, 1,
+    'a near-miss of a real key is still reported')
+})
+
+test('verify does not read Paperclip-owned live keys as drift', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const agents = asLive(roster, rendered)
+  const cfgs = new Map(agents.map((a) => [a.id, {
+    adapterType: a.adapterType, adapterConfig: a.adapterConfig,
+    runtimeConfig: a.runtimeConfig, permissions: a.permissions,
+  }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
+  const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
+  const live = { agents, routines, triggers, configurations: cfgs, bundles, company: { budgetMonthlyCents: 6000 } }
+
+  const ctoId = agents[roster.agents.findIndex((a) => a.slug === 'cto')].id
+  const envRow = (configurations) => verify(roster, { ...live, configurations }, rendered)
+    .find((r) => r.condition === 'env and secrets composed correctly')
+  const withKeys = (extra) => {
+    const next = new Map(cfgs)
+    const entry = { ...next.get(ctoId) }
+    entry.adapterConfig = { ...entry.adapterConfig, ...extra }
+    next.set(ctoId, entry)
+    return next
+  }
+
+  assert.ok(envRow(cfgs).pass, 'the baseline org passes the env check')
+  const platform = Object.fromEntries(PAPERCLIP_WRITES.map((k) => [k, 'set-by-paperclip']))
+  assert.ok(envRow(withKeys(platform)).pass, 'a live CTO carrying Paperclip\'s keys is not drift')
+  assert.ok(!envRow(withKeys({ instructionsRootPathh: 'typo' })).pass, 'an undocumented key is still drift')
 })
 
 test('PaperclipClient never puts the key in an error message', async () => {

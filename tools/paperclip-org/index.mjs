@@ -57,17 +57,34 @@ export const REASONING = Object.freeze({
   codex_local: { key: 'modelReasoningEffort', values: ['minimal', 'low', 'medium', 'high', 'xhigh'] },
 })
 
+// Keys Paperclip itself owns and writes into adapterConfig, regardless of adapter.
+// They never appear in the roster — only in LIVE config — so verify (P9) reported
+// them as undocumented until they were listed here.
+//
+// The four instructions* keys are the server's managed instructions bundle system,
+// declared together in @paperclipai/server services/agent-instructions.js as
+// MODE/ROOT/ENTRY/BOOTSTRAP_PROMPT (the two that tool already knew, FILE_KEY
+// 'instructionsFilePath' and PROMPT_KEY 'promptTemplate', stay in the adapter lists
+// below). bootstrapPromptTemplate is marked @deprecated there but still rides along
+// on older agents. paperclipSkillSync comes from @paperclipai/shared
+// ADAPTER_AGNOSTIC_KEYS — "owned by Paperclip/company state rather than one
+// concrete adapter" — and must survive an adapter swap.
+export const PLATFORM_OWNED_KEYS = Object.freeze([
+  'instructionsBundleMode', 'instructionsRootPath', 'instructionsEntryFile',
+  'bootstrapPromptTemplate', 'paperclipSkillSync',
+])
+
 // The adapterConfig keys each adapter actually documents. adapterConfig is a
 // z.record of unknown server-side, so an unknown key is ACCEPTED at create time
 // and simply ignored — or worse, a known-but-unsupported one fails at first run.
 // Lifted from the adapters' own self-documentation.
 export const ADAPTER_KEYS = Object.freeze({
-  claude_local: Object.freeze(['engine', 'cwd', 'instructionsFilePath', 'model', 'effort', 'chrome',
+  claude_local: Object.freeze([...PLATFORM_OWNED_KEYS, 'engine', 'cwd', 'instructionsFilePath', 'model', 'effort', 'chrome',
     'promptTemplate', 'maxTurnsPerRun', 'dangerouslySkipPermissions', 'command', 'extraArgs', 'env',
     'workspaceStrategy', 'workspaceRuntime', 'filesystemScope', 'filesystemExtraPaths',
     'filesystemSandboxCommand', 'networkScope', 'networkAllowlist', 'agentCommand', 'mode', 'stateDir',
     'nonInteractivePermissions', 'warmHandleIdleMs', 'timeoutSec', 'graceSec']),
-  codex_local: Object.freeze(['engine', 'cwd', 'instructionsFilePath', 'model', 'modelReasoningEffort',
+  codex_local: Object.freeze([...PLATFORM_OWNED_KEYS, 'engine', 'cwd', 'instructionsFilePath', 'model', 'modelReasoningEffort',
     'promptTemplate', 'search', 'fastMode', 'dangerouslyBypassApprovalsAndSandbox', 'command', 'extraArgs',
     'env', 'workspaceStrategy', 'workspaceRuntime', 'filesystemScope', 'filesystemExtraPaths',
     'filesystemSandboxCommand', 'networkScope', 'networkAllowlist', 'timeoutSec', 'graceSec',
