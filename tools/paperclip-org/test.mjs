@@ -63,20 +63,20 @@ test('rejects discoveryOnlySkills naming a skill no agent lists', () => rejects(
 
 test('the committed roster matches the agreed shape', () => {
   const { roster } = load()
-  assert.equal(roster.agents.length, 25)
-  assert.equal(roster.expectedAgentCount, 25)
+  assert.equal(roster.agents.length, 26)
+  assert.equal(roster.expectedAgentCount, 26)
   assert.equal(roster.routines.length, 10)
   const count = (f) => roster.agents.filter(f).length
-  assert.equal(count((a) => a.adapter.type === 'claude_local'), 16)
+  assert.equal(count((a) => a.adapter.type === 'claude_local'), 17)
   assert.equal(count((a) => a.adapter.type === 'codex_local'), 9)
   assert.equal(count((a) => a.adapter.model === 'claude-opus-5'), 8)
-  assert.equal(count((a) => a.adapter.model === 'claude-sonnet-5'), 8)
+  assert.equal(count((a) => a.adapter.model === 'claude-sonnet-5'), 9)
   assert.equal(count((a) => a.adapter.model === 'gpt-5.6-sol'), 9)
   assert.equal(count((a) => a.tier === 'manager'), 6)
   assert.equal(count((a) => a.git === 'write'), 14)
-  assert.equal(count((a) => a.git === 'read'), 1)
+  assert.equal(count((a) => a.git === 'read'), 2)
   assert.equal(count((a) => a.git === 'none'), 10)
-  assert.equal(roster.agents.reduce((n, a) => n + a.budgetMonthlyCents, 0), 5000)
+  assert.equal(roster.agents.reduce((n, a) => n + a.budgetMonthlyCents, 0), 5200)
   assert.ok(5000 <= roster.company.budgetMonthlyCents)
 })
 
@@ -165,7 +165,7 @@ test('rejects a literal credential pasted into env', () => rejects((r) => {
 test('topoOrder puts the root first and every parent before its child', () => {
   const { roster } = load()
   const order = topoOrder(roster.agents)
-  assert.equal(order.length, 25)
+  assert.equal(order.length, 26)
   assert.equal(order[0], 'ceo')
   const at = new Map(order.map((s, i) => [s, i]))
   for (const a of roster.agents) {
@@ -290,10 +290,10 @@ test('repo discipline is selected by workspace, never by tier', () => {
   assert.equal(bySlug(roster, 'ai-experience').workspace, 'none')
 })
 
-test('the design-chain fragment goes to exactly the two design agents', () => {
+test('the design-chain fragment goes to exactly the three design-chain agents', () => {
   const { roster, fragments } = load()
   const withChain = roster.agents.filter((a) => renderBundle(roster, a, fragments).includes('## The design chain')).map((a) => a.slug)
-  assert.deepEqual(withChain.sort(), ['design-steward', 'product-designer'])
+  assert.deepEqual(withChain.sort(), ['design-research', 'design-steward', 'product-designer'])
 })
 
 test('every bundle carries the company goal and the budget in dollars', () => {
@@ -304,6 +304,42 @@ test('every bundle carries the company goal and the budget in dollars', () => {
     assert.ok(text.includes('$2.00'), `${a.slug} is missing its budget`)
     assert.ok(!text.includes('{{'), `${a.slug} has an unsubstituted placeholder`)
   }
+})
+
+test('the design chain is three distinct agents, and the researcher cannot implement', () => {
+  const { roster } = load()
+  const dc = roster.designChain
+  assert.equal(new Set([dc.proposer, dc.approver, dc.researcher]).size, 3)
+  const res = bySlug(roster, dc.researcher)
+  assert.equal(res.git, 'read', 'a researcher that can push is not independent of what it evaluates')
+  assert.ok(!('GH_TOKEN' in composeEnv(roster, res)))
+  assert.ok(!(dc.figmaWrite ?? []).includes(dc.researcher))
+})
+
+test('research informs and never gates', () => {
+  const { roster } = load()
+  assert.equal(roster.designChain.researchPolicy.gatesApproval, false)
+})
+
+test('rejects a researcher that is also the proposer or approver', () => {
+  rejects((r) => { r.designChain.researcher = r.designChain.approver }, 'three different agents')
+  rejects((r) => { r.designChain.researcher = r.designChain.proposer }, 'three different agents')
+})
+
+test('rejects a researcher with git write', () => rejects((r) => {
+  bySlug(r, r.designChain.researcher).git = 'write'
+}, 'not independent of what it evaluates'))
+
+test('rejects research that gates approval', () => rejects((r) => {
+  r.designChain.researchPolicy.gatesApproval = true
+}, 'research informs, it does not decide'))
+
+test('the researcher bundle refuses to claim user evidence it does not have', () => {
+  const { roster, fragments } = load()
+  const text = renderBundle(roster, bySlug(roster, 'design-research'), fragments)
+  assert.match(text, /Heuristic evaluation is not user evidence/)
+  assert.match(text, /kind=user-study/)
+  assert.match(text, /DESIGN_EVIDENCE/)
 })
 
 // ---------------------------------------------------------------------------
@@ -325,7 +361,7 @@ const asLive = (roster, rendered) => roster.agents.map((a, i) => ({
 test('an empty company plans 25 creates and no terminations', () => {
   const { roster } = load()
   const plan = planActions(roster, { agents: [], routines: [] })
-  assert.equal(plan.create.length, 25)
+  assert.equal(plan.create.length, 26)
   assert.equal(plan.terminate.length, 0)
   assert.equal(plan.routineCreate.length, 10)
   assert.equal(plan.create[0].slug, 'ceo', 'created in reporting order')
@@ -339,7 +375,7 @@ test('a matching company plans zero changes — the idempotency proof', () => {
   assert.equal(plan.create.length, 0)
   assert.equal(plan.terminate.length, 0)
   assert.equal(plan.routineCreate.length, 0)
-  assert.equal(plan.update.length, 25)
+  assert.equal(plan.update.length, 26)
 })
 
 test('an agent renamed in the UI is updated, not duplicated', () => {
@@ -359,7 +395,7 @@ test('a name-matched agent with no focx metadata is adopted once, not duplicated
   assert.equal(plan.adopt.length, 1)
   assert.equal(plan.adopt[0].slug, 'qa-engineer')
   assert.equal(plan.terminate.length, 0)
-  assert.equal(plan.create.length, 24)
+  assert.equal(plan.create.length, 25)
 })
 
 test('live agents absent from the roster are planned for termination', () => {
@@ -389,7 +425,7 @@ const cli = async (args, env = {}) => {
 test('--render-only works with no credential and no service', async () => {
   const r = await cli(['--render-only'], { PAPERCLIP_API_KEY: '', PAPERCLIP_API_URL: 'http://127.0.0.1:9' })
   assert.equal(r.code, 0)
-  assert.match(r.stdout, /rendered 25 bundles offline/)
+  assert.match(r.stdout, /rendered 26 bundles offline/)
 })
 
 test('a missing credential exits 3 and names the human-only step', async () => {
@@ -420,7 +456,7 @@ test('dry run against the fake API plans the full build and changes nothing', as
     const r = await cli([], { PAPERCLIP_API_KEY: 'board-token', PAPERCLIP_API_URL: url })
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /terminate 2/)
-    assert.match(r.stdout, /create {4}25/)
+    assert.match(r.stdout, /create {4}26/)
     assert.match(r.stdout, /Dry run — nothing was changed/)
     const writes = fake.state.calls.filter((c) => c.method !== 'GET')
     assert.deepEqual(writes, [], 'a dry run issues no writes at all')

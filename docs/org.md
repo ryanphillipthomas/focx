@@ -20,7 +20,7 @@ Instruction bundles are a **pure function of this repo**. Verification byte-diff
 
 ## The organization
 
-Ryan is Founder and Board and sits *above* the company; no agent represents him. 25 agents, every one with exactly one manager.
+Ryan is Founder and Board and sits *above* the company; no agent represents him. 26 agents, every one with exactly one manager.
 
 ```
 Ryan / Board
@@ -30,6 +30,7 @@ Ryan / Board
     │   ├── Product Research
     │   ├── Product Designer
     │   ├── Design Steward
+    │   ├── Design Research
     │   ├── AI Experience
     │   └── Product Analytics
     ├── CTO
@@ -77,7 +78,7 @@ Separation of duties is structural, not a slogan. In both chains, no agent occup
 
 | Chain | Proposes | Approves | Executes | Verifies |
 |---|---|---|---|---|
-| **Design** | Product Designer | Design Steward | Product Designer (Figma promotion + token sync) | Design Steward, then the drift gate |
+| **Design** | Product Designer | Design Steward | Product Designer (Figma promotion + token sync) | Design Research (evidence) + Design Steward, then the drift gate |
 | **Build** | Head of Product (what) | CTO (whether/when) | Web / Apple / Backend | QA Engineer, then the drift gate |
 
 Product Designer appears in both Proposes and Executes. That is permitted — the rule bans one agent holding **all four**, and promotion here is executing a decision someone else made. What is never permitted is the approver also executing, which is why Design Steward holds Figma read only.
@@ -89,10 +90,11 @@ Prose in a bundle is a request; a credential is a fact. [`pipeline/runs/run-2026
 So these are the parts that hold on their own:
 
 - **Design Steward has no `GH_TOKEN` and only Figma read.** It cannot write the record it approves.
+- **Design Research has no `GH_TOKEN` either.** A researcher that can implement is not independent of what it evaluates.
 - **QA Engineer works from its own clone** at `focx-qa`, which no other agent shares.
 - **`canCreateAgents: false`** on all 25 — the org cannot grow itself past its budget.
 - **`canAssignTasks`** only for the six managers.
-- **10 agents have no repository on the filesystem at all** — the strongest guarantee a non-technical agent cannot edit application code.
+- **10 agents have no repository on the filesystem at all**, and **two more are read-only** — the strongest guarantee a non-technical agent cannot edit application code.
 - **`CODEOWNERS` + branch protection** are the merge backstop.
 
 Everything else is prose, and should be judged as prose.
@@ -109,6 +111,10 @@ Head of Product declares the mode as a `DESIGN_MODE` token on the Paperclip issu
 | May add components/variables | **no** | yes, if approved |
 | Steward's checklist | conformance | system fit |
 
+**Design Research** enters the discovery route twice — before exploration to frame it, and after a candidate exists to evaluate it — and enters *every* route once more after ship, so production-mode mistakes are still caught empirically without slowing routine work. Its `DESIGN_EVIDENCE` findings **inform the Steward and never gate approval**: research that could block a design would be deciding, and the standing rule is that research produces evidence, not build orders.
+
+One thing about that evidence carries more weight than the rest. An agent cannot recruit, interview, or observe a real person. `kind=user-study` is reserved for evidence a *human* gathered from actual people; every other kind is expert inference, however careful. The bundle forbids claiming otherwise, because a Steward approving against user evidence that does not exist is worse off than one with no evidence at all — it looks safe.
+
 A candidate whose issue carries no `DESIGN_MODE` token is **not reviewable** — a gate that silently defaults is not a gate. The Designer may not upgrade its own mode; the Steward raises `escalate=mode-change` and Head of Product decides.
 
 Figma stays canonical and `design/tokens/` stays its mirror, exactly as [`sources-of-truth.md`](sources-of-truth.md) already says. Product Designer is the only agent that writes either.
@@ -118,14 +124,14 @@ Figma stays canonical and `design/tokens/` stays its mirror, exactly as [`source
 | Model | Count | Roles |
 |---|---|---|
 | `claude-opus-5` | 8 | CEO, Head of Product, Product Designer, Design Steward, AI Experience, CTO, Head of Growth, Legal & Privacy |
-| `claude-sonnet-5` | 8 | Chief of Staff, Product Research, Brand & Content, Community & Creators, Lifecycle & Referral, Business Operations, Customer Success, Finance |
+| `claude-sonnet-5` | 9 | Chief of Staff, Product Research, Design Research, Brand & Content, Community & Creators, Lifecycle & Referral, Business Operations, Customer Success, Finance |
 | `gpt-5.6-sol` | 9 | Product Analytics and the six engineers, plus QA and Release |
 
 `gpt-5.6-sol`, never bare `gpt-5.6` — the bare slug is silently aliased but leaves the Codex CLI with generic context limits.
 
-**Budget:** every agent 200 cents ($2.00); 25 × 200 = **$50.00** against a **$60.00** company ceiling. Agents cannot raise their own budgets, and the tool refuses to write one above the roster value. Agent policies **warn** at 80%; only the company policy hard-stops — `claude_local` and `codex_local` run against subscriptions rather than metered APIs, and all nine codex agents share one credential, so per-agent spend may be an estimate or unattributed. A hard stop on estimated cents would pause an agent that cost nothing real.
+**Budget:** every agent 200 cents ($2.00); 26 × 200 = **$52.00** against a **$60.00** company ceiling. Agents cannot raise their own budgets, and the tool refuses to write one above the roster value. Agent policies **warn** at 80%; only the company policy hard-stops — `claude_local` and `codex_local` run against subscriptions rather than metered APIs, and all nine codex agents share one credential, so per-agent spend may be an estimate or unattributed. A hard stop on estimated cents would pause an agent that cost nothing real.
 
-**Run policy:** heartbeat disabled everywhere, `wakeOnDemand: true`. Agents wake from assigned work, mentions, routines, and manual wake — never idle polling. Concurrency is 2 for the six managers and 1 for everyone else, so the ceiling is 31 concurrent CLI processes. Nothing caps that company-wide; the staggered routine schedule is the practical throttle.
+**Run policy:** heartbeat disabled everywhere, `wakeOnDemand: true`. Agents wake from assigned work, mentions, routines, and manual wake — never idle polling. Concurrency is 2 for the six managers and 1 for the other twenty, so the ceiling is 32 concurrent CLI processes. Nothing caps that company-wide; the staggered routine schedule is the practical throttle.
 
 ## Routines
 

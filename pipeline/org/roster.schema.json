@@ -293,6 +293,35 @@
         },
         "skillNote": {
           "type": "string"
+        },
+        "researcher": {
+          "type": "string",
+          "description": "Agent slug. Must differ from both proposer and approver, and must not have git or Figma write."
+        },
+        "evidenceToken": {
+          "type": "string"
+        },
+        "researchPolicy": {
+          "type": "object",
+          "properties": {
+            "comment": {
+              "type": "string"
+            },
+            "gatesApproval": {
+              "const": false,
+              "description": "Always false. Research informs the Steward; it never blocks a design."
+            },
+            "entersOn": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "postShipCoversProductionRuns": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

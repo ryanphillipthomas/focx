@@ -233,6 +233,19 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
       if (a.figmaAccess === 'read' && !r.has(a.slug)) push(`${a.slug}: figmaAccess 'read' but not listed in designChain.figmaRead`)
       if (!a.figmaAccess && (w.has(a.slug) || r.has(a.slug))) push(`${a.slug}: listed in the design chain but has no figmaAccess`)
     }
+    // Three distinct agents touch a discovery candidate. Collapsing any two
+    // loses an independent lens, so assert it structurally rather than in prose.
+    if (dc.researcher) {
+      const trio = [dc.proposer, dc.approver, dc.researcher]
+      if (new Set(trio).size !== 3) push(`designChain: proposer, approver and researcher must be three different agents (got ${trio.join(', ')})`)
+      if (!bySlug.has(dc.researcher)) push(`designChain.researcher '${dc.researcher}' is not a known slug`)
+      const res = bySlug.get(dc.researcher)
+      if (res && res.git === 'write') push(`designChain.researcher '${dc.researcher}' has git: write — a researcher that can implement is not independent of what it evaluates`)
+      if (res && res.figmaAccess === 'write') push(`designChain.researcher '${dc.researcher}' has Figma write`)
+      if (dc.researchPolicy && dc.researchPolicy.gatesApproval !== false) {
+        push('designChain.researchPolicy.gatesApproval must be false — research informs, it does not decide')
+      }
+    }
     const modes = Object.entries(dc.modes ?? {})
     const defaults = modes.filter(([, m]) => m.default)
     if (defaults.length !== 1) push(`designChain: exactly one mode must be default, found ${defaults.length}`)
@@ -385,6 +398,13 @@ export function composeAdapterConfig(roster, agent) {
 // prose tree cannot diverge from the actual tree.
 // ---------------------------------------------------------------------------
 
+// Everyone who plays a named part in the design chain gets the chain fragment.
+// Derived rather than listed, so adding a role does not silently leave its agent
+// without the protocol it is expected to follow.
+export function designChainMembers(dc) {
+  return new Set([dc?.proposer, dc?.approver, dc?.researcher].filter(Boolean))
+}
+
 export function renderBundle(roster, agent, fragments) {
   const bySlug = new Map(roster.agents.map((a) => [a.slug, a]))
   const manager = agent.reportsTo != null ? bySlug.get(agent.reportsTo) : null
@@ -421,7 +441,7 @@ export function renderBundle(roster, agent, fragments) {
 
   if (agent.workspace !== 'none') parts.push('', fragments['_repo-discipline.md'].trim())
   const dc = roster.designChain
-  if (dc && (agent.slug === dc.proposer || agent.slug === dc.approver)) {
+  if (dc && designChainMembers(dc).has(agent.slug)) {
     parts.push('', fragments['_design-chain.md'].trim())
   } else if (agent.workspace === 'none') {
     parts.push('', [
@@ -639,9 +659,13 @@ export function verify(roster, live, renderedBySlug) {
     const wantMgr = w.reportsTo ? bySlug.get(w.reportsTo)?.id ?? null : null
     if ((a.reportsTo ?? null) !== wantMgr) treeBad.push(`${slug} reports to the wrong agent`)
   }
-  const hop = roster.agents.filter((a) => a.reportsTo === 'head-of-product').length
-  check(4, 'Reporting lines match the roster (Head of Product has 5)',
-    treeBad.length === 0 && active.length === roster.expectedAgentCount && hop === 5,
+  // Derived from the roster, never hardcoded: adding an agent must not require
+  // editing the check that is supposed to notice agents being added.
+  const managers = [...new Set(roster.agents.map((a) => a.reportsTo).filter(Boolean))]
+  const teamSize = (m) => roster.agents.filter((a) => a.reportsTo === m).length
+  const teams = managers.map((m) => `${m}:${teamSize(m)}`).sort().join(' ')
+  check(4, `Reporting lines match the roster (${teams})`,
+    treeBad.length === 0 && active.length === roster.expectedAgentCount,
     treeBad.slice(0, 3).join('; '))
 
   const modelBad = []
@@ -694,8 +718,12 @@ export function verify(roster, live, renderedBySlug) {
     const liveText = live.bundles?.get(a.id)
     if (wantText && liveText !== undefined && liveText !== wantText) bundleBad.push(slug)
   }
-  const depts = { 'head-of-product': 5, cto: 7, 'head-of-growth': 4, 'business-operations': 2 }
-  const deptOk = Object.entries(depts).every(([m, n]) => roster.agents.filter((a) => a.reportsTo === m).length === n)
+  // Every non-root agent sits under exactly one department head, and every
+  // department head is itself a direct report of the root.
+  const rootSlug = roster.agents.find((a) => a.reportsTo == null)?.slug
+  const deptHeads = roster.agents.filter((a) => a.reportsTo === rootSlug).map((a) => a.slug)
+  const deptOk = roster.agents.every((a) =>
+    a.slug === rootSlug || a.reportsTo === rootSlug || deptHeads.includes(a.reportsTo))
   check(10, 'Departments separated; live bundles match a fresh local render',
     bundleBad.length === 0 && deptOk, bundleBad.length ? `drifted: ${bundleBad.slice(0, 3).join(', ')}` : '')
 

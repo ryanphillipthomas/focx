@@ -1,7 +1,7 @@
 {
   "comment": "The Focx.ai operating company. Source of truth for who exists, who they report to, what model they run, what they cost, what they may write, and what they are scheduled to do. Applied by tools/paperclip-org/index.mjs. This file is desired state; Paperclip holds live state. desiredSkills means Paperclip-registered skills; claudeCodeSkills is documentation of the local Claude Code plugin skills an agent relies on, and is never sent to the API. Secrets are referenced by name only - never inline a credential here, this file is committed to git.",
   "version": 1,
-  "expectedAgentCount": 25,
+  "expectedAgentCount": 26,
   "goal": "Reach 2,000 registered Focx Connect users within 180 days of public launch, with evidence of strong activation, retention, trust, and sustainable unit economics.",
   "company": {
     "id": "5f772ef2-25ce-466f-9392-027be5055470",
@@ -86,7 +86,9 @@
     "comment": "Design is a routed two-agent chain. production is the default; discovery is opt-in and is the only route that uses Claude Design.",
     "proposer": "product-designer",
     "approver": "design-steward",
+    "researcher": "design-research",
     "verdictToken": "DESIGN_APPROVAL",
+    "evidenceToken": "DESIGN_EVIDENCE",
     "modeToken": "DESIGN_MODE",
     "figmaWrite": [
       "product-designer"
@@ -124,7 +126,17 @@
       "raisedBy": "design-steward",
       "decidedBy": "head-of-product"
     },
-    "skillNote": "desiredSkills addresses Paperclip's own skill registry. The design chain's tooling is Claude Code plugin skills, which reach a claude_local agent through the local CLI and are never registered in Paperclip \u2014 they are recorded per agent as claudeCodeSkills, for humans, and are never sent to the API."
+    "skillNote": "desiredSkills addresses Paperclip's own skill registry. The design chain's tooling is Claude Code plugin skills, which reach a claude_local agent through the local CLI and are never registered in Paperclip \u2014 they are recorded per agent as claudeCodeSkills, for humans, and are never sent to the API.",
+    "researchPolicy": {
+      "comment": "Research informs; it never gates. The Steward approves with or without it, and records what it had.",
+      "gatesApproval": false,
+      "entersOn": [
+        "discovery-framing",
+        "discovery-evaluation",
+        "post-ship-validation"
+      ],
+      "postShipCoversProductionRuns": true
+    }
   },
   "agents": [
     {
@@ -449,6 +461,41 @@
         "design:design-system"
       ],
       "figmaAccess": "read"
+    },
+    {
+      "slug": "design-research",
+      "name": "Design Research",
+      "title": "Design Researcher",
+      "role": "researcher",
+      "icon": "search",
+      "reportsTo": "head-of-product",
+      "tier": "ic",
+      "workspace": "repo-per-agent",
+      "git": "read",
+      "capabilities": "Frames discovery-mode design work with prior art and existing evidence, evaluates candidates by heuristic walkthrough before the Steward reviews them, and validates after ship whether friction actually fell. Produces evidence; never gates.",
+      "adapter": {
+        "type": "claude_local",
+        "model": "claude-sonnet-5",
+        "reasoning": "high"
+      },
+      "run": {
+        "heartbeat": false,
+        "wakeOnDemand": true,
+        "maxConcurrentRuns": 1
+      },
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false,
+        "trustPreset": "standard"
+      },
+      "budgetMonthlyCents": 200,
+      "instructions": "design-research.md",
+      "desiredSkills": [],
+      "claudeCodeSkills": [
+        "design:user-research",
+        "design:research-synthesis"
+      ]
     },
     {
       "slug": "ai-experience",
