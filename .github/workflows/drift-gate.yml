@@ -21,9 +21,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      # drift-check is dependency-free vanilla Node; the runner's preinstalled
-      # Node is sufficient — no setup-node, no install, minimal billed time.
       - name: drift-check
-        run: node tools/drift-check/index.mjs
+        uses: ryanphillipthomas/drift-check@v1
       - name: contract validation
         run: node tools/contracts/validate.mjs

@@ -1,0 +1,6 @@
+{
+  "parentNamespace": "focx",
+  "tokenPathPattern": "design/tokens/{namespace}/tokens.json",
+  "scanDirs": ["apps", "packages"],
+  "scanExtensions": [".js", ".jsx", ".ts", ".tsx", ".css", ".scss", ".svelte", ".vue", ".html"]
+}

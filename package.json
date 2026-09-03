@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "drift-check": "node tools/drift-check/index.mjs"
+    "drift-check": "node tools/drift-check/index.mjs",
+    "test:drift-check": "node --test tools/drift-check/test.mjs"
   }
 }
