@@ -189,6 +189,19 @@ Repo-tier agents get a **git worktree per issue**, cut from the Connect project'
 
 It also rejects a `branchTemplate` with no `{{…}}` placeholder. Single braces render **literally**: an early attempt produced the branch `agent/-agentSlug-/-issueId`, which would have put every agent and every issue in one shared working tree — the exact collision that per-agent directories were meant to prevent.
 
+### Worktrees come from the project, so every issue needs one
+
+A worktree is cut from the **Connect project's** checkout. An issue with no `projectId` has no source repository, and the agent that picks it up dies at the start of its run with `fatal: not a git repository` — before it can report anything useful, so it reads as a broken agent rather than an unbound issue.
+
+Two places that binding has to happen:
+
+- **Routines** carry `projectId`, so routine-created issues inherit it. All ten were created without one, which would have failed every repo-tier routine — including the Morning Brief.
+- **Agents creating child issues** must carry the project across. `_repo-discipline.md` says so, and it is the one part of this that prose has to hold, since the handoff happens at runtime.
+
+`validateRoster` refuses a roster whose repo-tier routines have no project, and preflight reports any live routine that is still unbound.
+
+This was found the hard way: every workspace probe written during the migration set `projectId` by hand, so the tests only ever exercised the path that construction made work. Real issues do not come with one.
+
 ### QA's independence moved, and got stronger
 
 It used to be a separate clone at `focx-qa`, visible as a distinct `cwd`. Now QA works its own **child issue**, so git gives it a different branch *and* a different directory from the build it verifies — per issue rather than per agent, enforced by the tool rather than asserted by a path convention. Success condition 11 checks the worktree strategy and the per-issue default instead of comparing paths.

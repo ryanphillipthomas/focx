@@ -15,7 +15,7 @@ import {
   REPO_ROOT, validateRoster, topoOrder, composeEnv, composeAdapterConfig,
   renderBundle, planActions, loadRoster, renderAll, buildAgentPayload,
   PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
-  resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS,
+  resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -630,6 +630,32 @@ test('liveSlug reads the focx metadata key and tolerates its absence', () => {
   assert.equal(liveSlug({ metadata: {} }), null)
   assert.equal(liveSlug({}), null)
   assert.equal(liveSlug(null), null)
+})
+
+test('every routine payload carries the project', () => {
+  const { roster } = load()
+  for (const r of roster.routines) {
+    const p = buildRoutinePayload(roster, r, 'agent-id')
+    assert.equal(p.projectId, roster.project.id, `${r.key} has no project — its issues would get no worktree`)
+  }
+})
+
+test('rejects repo-tier routines with no project configured', () => {
+  const { roster, instructionFiles } = load()
+  const r = clone(roster)
+  delete r.project
+  const errs = validateRoster(r, { instructionFiles })
+  assert.ok(errs.some((e) => e.includes('not a git repository')), errs.join('\n'))
+})
+
+test('repo-tier agents are told to carry the project into child issues', () => {
+  const { roster, fragments } = load()
+  const cto = renderBundle(roster, bySlug(roster, 'cto'), fragments)
+  assert.match(cto, /carry the project across/i)
+  assert.match(cto, /not a git repository/)
+  // Non-repo agents have no worktree, so the rule would be noise for them.
+  const ceo = renderBundle(roster, bySlug(roster, 'ceo'), fragments)
+  assert.doesNotMatch(ceo, /carry the project across/i)
 })
 
 // ---------------------------------------------------------------------------
