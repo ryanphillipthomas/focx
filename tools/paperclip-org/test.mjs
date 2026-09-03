@@ -141,7 +141,32 @@ test('rejects canCreateAgents true', () => rejects((r) => { r.agents[0].permissi
 test('rejects an IC that can assign tasks', () => rejects((r) => {
   bySlug(r, 'web-engineer').permissions.canAssignTasks = true
 }, 'canAssignTasks must be true for managers'))
-test('rejects an enabled heartbeat', () => rejects((r) => { r.agents[0].run.heartbeat = true }, 'heartbeat must be false'))
+test('run.heartbeat must be a boolean, and true is now allowed', () => {
+  const { roster, instructionFiles } = load()
+  // It was rejected outright until para-memory-files arrived: PARA's Layer 1
+  // rollup runs on a heartbeat, so the agents holding cross-issue context need
+  // one. What must not vary is wakeOnDemand.
+  const on = structuredClone(roster)
+  on.agents[0].run.heartbeat = true
+  assert.deepEqual(validateRoster(on, { instructionFiles }), [], 'an enabled heartbeat is a valid choice')
+  const bad = structuredClone(roster)
+  bad.agents[0].run.heartbeat = 'yes'
+  assert.ok(validateRoster(bad, { instructionFiles }).some((e) => /run.heartbeat must be a boolean/.test(e)))
+})
+
+test('the roster heartbeat reaches the payload, and wakeOnDemand survives it', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  for (const slug of ['ceo', 'cto', 'finance', 'web-engineer', 'design-steward']) {
+    const a = bySlug(roster, slug)
+    const hb = buildAgentPayload(roster, a, rendered.get(slug), null).runtimeConfig.heartbeat
+    assert.equal(hb.enabled, a.run.heartbeat, `${slug} heartbeat follows the roster`)
+    assert.equal(hb.wakeOnDemand, true, `${slug} still wakes on demand`)
+  }
+  const on = roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug).sort()
+  assert.deepEqual(on, ['ceo', 'chief-of-staff', 'cto', 'finance', 'head-of-product'],
+    'heartbeats stay scoped to the agents carrying cross-issue context')
+})
 
 // --- design chain ---
 test('rejects proposer === approver', () => rejects((r) => { r.designChain.approver = r.designChain.proposer }, 'must be different agents'))
@@ -457,7 +482,7 @@ const asLive = (roster, rendered) => roster.agents.map((a, i) => ({
   reportsTo: a.reportsTo ? `id-${roster.agents.findIndex((x) => x.slug === a.reportsTo)}` : null,
   adapterType: a.adapter.type,
   adapterConfig: composeAdapterConfig(roster, a, FAKE_SECRET_IDS),
-  runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true, maxConcurrentRuns: a.run.maxConcurrentRuns } },
+  runtimeConfig: { heartbeat: { enabled: a.run.heartbeat, wakeOnDemand: true, maxConcurrentRuns: a.run.maxConcurrentRuns } },
   budgetMonthlyCents: a.budgetMonthlyCents,
   permissions: { canCreateAgents: false, canAssignTasks: a.permissions.canAssignTasks },
   instructionsBundle: { files: { 'AGENTS.md': rendered.get(a.slug) } },
@@ -757,6 +782,34 @@ test('verify refuses to vouch for issues it could not read', () => {
   const row = rows.find((r) => r.condition === 'Open worktree-agent issues all carry a project')
   assert.equal(row.pass, false)
   assert.match(row.detail, /could not read issues/)
+})
+
+test('check 9 catches a heartbeat that drifts from the roster, either way', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const agents = asLive(roster, rendered)
+  const cfgs = new Map(agents.map((a) => [a.id, {
+    adapterType: a.adapterType, adapterConfig: a.adapterConfig,
+    runtimeConfig: a.runtimeConfig, permissions: a.permissions,
+  }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const live = { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
+  const row9 = (configurations) => verify(roster, { ...live, configurations }, rendered).find((r) => r.n === 9)
+
+  assert.ok(row9(cfgs).pass, 'the roster as built passes')
+
+  const flip = (slug) => {
+    const idx = roster.agents.findIndex((a) => a.slug === slug)
+    const next = new Map(cfgs)
+    const e = { ...next.get(agents[idx].id) }
+    e.runtimeConfig = { ...e.runtimeConfig, heartbeat: { ...e.runtimeConfig.heartbeat, enabled: !roster.agents[idx].run.heartbeat } }
+    next.set(agents[idx].id, e)
+    return next
+  }
+  // An agent quietly gaining a heartbeat in the UI is drift...
+  assert.ok(!row9(flip('web-engineer')).pass, 'a heartbeat switched on off-roster is drift')
+  // ...and so is one losing the heartbeat its memory rollup depends on.
+  assert.ok(!row9(flip('cto')).pass, 'a heartbeat switched off is drift too')
 })
 
 test('PaperclipClient never puts the key in an error message', async () => {

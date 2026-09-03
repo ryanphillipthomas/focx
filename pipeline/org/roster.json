@@ -139,7 +139,7 @@
         "reasoning": "high"
       },
       "run": {
-        "heartbeat": false,
+        "heartbeat": true,
         "wakeOnDemand": true,
         "maxConcurrentRuns": 2
       },
@@ -176,7 +176,7 @@
         "reasoning": "medium"
       },
       "run": {
-        "heartbeat": false,
+        "heartbeat": true,
         "wakeOnDemand": true,
         "maxConcurrentRuns": 2
       },
@@ -207,7 +207,7 @@
         "reasoning": "high"
       },
       "run": {
-        "heartbeat": false,
+        "heartbeat": true,
         "wakeOnDemand": true,
         "maxConcurrentRuns": 2
       },
@@ -238,7 +238,7 @@
         "reasoning": "high"
       },
       "run": {
-        "heartbeat": false,
+        "heartbeat": true,
         "wakeOnDemand": true,
         "maxConcurrentRuns": 2
       },
@@ -937,7 +937,7 @@
         "reasoning": "high"
       },
       "run": {
-        "heartbeat": false,
+        "heartbeat": true,
         "wakeOnDemand": true,
         "maxConcurrentRuns": 1
       },

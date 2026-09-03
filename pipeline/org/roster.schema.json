@@ -537,7 +537,7 @@
           "properties": {
             "heartbeat": {
               "type": "boolean",
-              "description": "False everywhere: agents wake from assigned work, mentions, and routines, not idle polling."
+              "description": "Per agent. False by default: agents wake from assigned work, mentions, and routines, not idle polling. True only for the agents that carry cross-issue context, whose PARA memory rollup into $AGENT_HOME/life/ runs on a heartbeat. wakeOnDemand stays true either way — a heartbeat supplements event-driven waking, never replaces it."
             },
             "wakeOnDemand": {
               "type": "boolean"

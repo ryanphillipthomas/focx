@@ -180,7 +180,7 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
     if (a.run?.maxConcurrentRuns !== expectedConcurrency) {
       push(`${at} maxConcurrentRuns must be ${expectedConcurrency} for tier '${a.tier}'`)
     }
-    if (a.run?.heartbeat !== false) push(`${at} heartbeat must be false — agents wake from work and routines, not polling`)
+    if (typeof a.run?.heartbeat !== 'boolean') push(`${at} run.heartbeat must be a boolean`)
     if (a.run?.wakeOnDemand !== true) push(`${at} wakeOnDemand must be true`)
 
     if (!roster.workspaces?.[a.workspace]) push(`${at} workspace '${a.workspace}' is not defined in roster.workspaces`)
@@ -603,7 +603,12 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId, secret
     instructionsBundle: { entryFile: 'AGENTS.md', files: { 'AGENTS.md': bundleText } },
     runtimeConfig: {
       heartbeat: {
-        enabled: false,
+        // Read from the roster, not hardcoded. It was false everywhere until
+        // agents were given para-memory-files: PARA's Layer 1 rollup into
+        // $AGENT_HOME/life/ happens on a heartbeat, so the agents that carry
+        // cross-issue context need one. wakeOnDemand stays true regardless —
+        // a heartbeat supplements event-driven waking, it never replaces it.
+        enabled: agent.run.heartbeat,
         wakeOnDemand: true,
         maxConcurrentRuns: agent.run.maxConcurrentRuns,
         cooldownSec: 300,
@@ -836,11 +841,16 @@ export function verify(roster, live, renderedBySlug) {
   for (const [slug, a] of bySlug) {
     const w = want.get(slug); if (!w) continue
     const hb = (cfg.get(a.id)?.runtimeConfig ?? {}).heartbeat ?? {}
-    if (hb.enabled !== false) wakeBad.push(`${slug} heartbeat on`)
+    // Heartbeats are declared per agent now. What must hold is that live matches
+    // the roster — an agent quietly gaining a heartbeat in the UI is drift, and
+    // so is one losing the heartbeat its memory rollup depends on.
+    if (hb.enabled !== w.run.heartbeat) wakeBad.push(`${slug} heartbeat ${hb.enabled ? 'on' : 'off'}, roster says ${w.run.heartbeat ? 'on' : 'off'}`)
     if (hb.wakeOnDemand !== true) wakeBad.push(`${slug} wakeOnDemand off`)
     if (hb.maxConcurrentRuns !== w.run.maxConcurrentRuns) wakeBad.push(`${slug} concurrency ${hb.maxConcurrentRuns}`)
   }
-  check(9, 'Agents wake from work and routines, not polling', wakeBad.length === 0, wakeBad.slice(0, 3).join('; '))
+  const hbOn = roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug)
+  check(9, `Waking matches the roster: wakeOnDemand everywhere, heartbeat on ${hbOn.length} (${hbOn.join(', ') || 'none'})`,
+    wakeBad.length === 0, wakeBad.slice(0, 3).join('; '))
 
   const bundleBad = []
   for (const [slug, a] of bySlug) {
