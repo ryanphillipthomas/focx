@@ -1,8 +1,13 @@
 {
-  "comment": "The retention clock for the local agent data store. The standard behind these numbers is docs/data-retention.md; the mechanism that enforces them is tools/agent-retention/. Changing a retentionDays value here changes what is deleted on the next sweep — it is a Legal & Privacy decision, not a config tidy-up.",
+  "comment": "The retention clock for the local agent data store. The standard behind these numbers is docs/data-retention.md; the mechanism that enforces them is tools/agent-retention/. Changing a retentionDays value here changes what is deleted on the next sweep — it is a Legal & Privacy decision, not a config tidy-up. Adding or removing a `dirs` entry changes what is scrubbed and swept at all, which is the same kind of decision.",
   "transcripts": {
-    "roots": ["~/.paperclip/instances/default/workspaces"],
-    "extensions": [".jsonl", ".json"],
+    "dirs": [
+      "~/.paperclip/instances/default/workspaces/*/.claude/projects",
+      "~/.paperclip/instances/default/companies/*/acp-engine/agents/*/sessions",
+      "~/.paperclip/instances/default/companies/*/codex-home/sessions",
+      "~/.paperclip/instances/default/data/run-logs"
+    ],
+    "extensions": [".jsonl", ".json", ".ndjson"],
     "retentionDays": 30,
     "activeGraceMinutes": 120,
     "scrubQuietMinutes": 15

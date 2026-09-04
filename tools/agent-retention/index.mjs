@@ -1,20 +1,27 @@
 #!/usr/bin/env node
 // agent-retention — the retention clock and secret scrubber for the local agent
-// data store: Claude transcripts under
-// `<workspaces>/<agentId>/.claude/projects/**` and the git worktrees under
-// `.paperclip/worktrees/`.
+// data store: every directory of agent session records named in
+// `retention.config.json`, plus the git worktrees under `.paperclip/worktrees/`.
+//
+// Record directories are glob patterns with whole-segment `*`, so one entry
+// covers every agent. As of FOC-73 the covered stores are the Claude
+// transcripts under `workspaces/*/.claude/projects`, the ACP session records
+// under `acp-engine/agents/*/sessions`, `codex-home/sessions`, and the
+// `data/run-logs` tree — the last three are where resolved credentials were
+// actually found at rest.
 //
 // Dependency-free. The standard it enforces is docs/data-retention.md; the
 // numbers it enforces come from retention.config.json at the repository root.
 //
 //   status                 what exists, how old it is, what the next sweep takes
-//   scrub   [--apply]      redact secret patterns out of transcripts in place
-//   sweep   [--apply]      delete expired transcripts and reclaimable worktrees
+//   scrub   [--apply]      redact secret patterns out of records in place
+//   sweep   [--apply]      delete expired records and reclaimable worktrees
 //   install-schedule       make expiry actually run (launchd, per-user)
 //   uninstall-schedule
 //
 // Both scrub and sweep are dry-run by default. Nothing is deleted or rewritten
-// without --apply.
+// without --apply. `scrub --apply` is the retroactive purge: it rewrites what is
+// already on disk, so it is both the ongoing control and the remediation.
 
 import { execFileSync } from 'node:child_process';
 import {
@@ -46,14 +53,23 @@ const DAY_MS = 86_400_000;
 
 export const DEFAULT_CONFIG = {
   transcripts: {
-    // Every `<root>/<agentId>/.claude/projects/**` tree is in scope. Nothing
-    // else under `.claude/` is — agent memory lives there and is not a
-    // transcript.
-    roots: ['~/.paperclip/instances/default/workspaces'],
-    extensions: ['.jsonl', '.json'],
+    // Directories of agent session records. Whole-segment `*` is a wildcard;
+    // everything below a matched directory is in scope. Entries may be a string
+    // or `{ path, retentionDays }` to give one store its own clock.
+    //
+    // `workspaces/*/.claude/projects` is deliberately narrower than
+    // `workspaces/*/.claude`: agent memory is a sibling of it and is not a
+    // session record.
+    dirs: [
+      '~/.paperclip/instances/default/workspaces/*/.claude/projects',
+      '~/.paperclip/instances/default/companies/*/acp-engine/agents/*/sessions',
+      '~/.paperclip/instances/default/companies/*/codex-home/sessions',
+      '~/.paperclip/instances/default/data/run-logs',
+    ],
+    extensions: ['.jsonl', '.json', '.ndjson'],
     retentionDays: 30,
     activeGraceMinutes: 120,
-    // A transcript is only rewritten once its session has been quiet this long.
+    // A record is only rewritten once its session has been quiet this long.
     scrubQuietMinutes: 15,
   },
   worktrees: {
@@ -201,26 +217,79 @@ function walkFiles(dir, extensions, out = []) {
   return out;
 }
 
-// `<root>/<agentId>/.claude/projects/**` only. Agent memory under
-// `.claude/memory/` is deliberately out of scope.
-export function listTranscripts(config) {
-  const files = [];
-  for (const root of config.transcripts.roots) {
-    const base = expandPath(root, config.repoRoot);
-    let agents;
-    try {
-      agents = readdirSync(base, { withFileTypes: true });
-    } catch {
-      continue;
+function isDir(path) {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+// Whole-segment `*` only — `a/*/b`, not `a/pre*fix`. Matching is against what is
+// on disk, so a pattern that names an agent layout no longer present expands to
+// nothing rather than erroring.
+export function expandGlobDirs(pattern, repoRoot = REPO_ROOT) {
+  const full = expandPath(pattern, repoRoot);
+  const [head, ...rest] = full.split('/');
+  let current = [head === '' ? '/' : head];
+  for (const segment of rest) {
+    if (!segment || segment === '.') continue;
+    const next = [];
+    for (const base of current) {
+      if (segment === '*') {
+        let entries;
+        try {
+          entries = readdirSync(base, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+        for (const entry of entries) if (entry.isDirectory()) next.push(join(base, entry.name));
+      } else {
+        const candidate = join(base, segment);
+        if (isDir(candidate)) next.push(candidate);
+      }
     }
-    for (const agent of agents) {
-      if (!agent.isDirectory()) continue;
-      const projects = join(base, agent.name, '.claude', 'projects');
-      if (!existsSync(projects)) continue;
-      walkFiles(projects, config.transcripts.extensions, files);
+    current = next;
+  }
+  return current.filter(isDir).sort();
+}
+
+// The record directories actually present on disk, each paired with the
+// retention that governs it. `roots` is the pre-FOC-73 spelling and still
+// resolves to the Claude transcript layout it used to mean.
+export function recordDirs(config) {
+  const spec = config.transcripts;
+  const declared = [
+    ...(spec.roots ?? []).map((root) => ({ path: `${root}/*/.claude/projects` })),
+    ...(spec.dirs ?? []).map((dir) => (typeof dir === 'string' ? { path: dir } : dir)),
+  ];
+  const seen = new Set();
+  const resolved = [];
+  for (const entry of declared) {
+    for (const path of expandGlobDirs(entry.path, config.repoRoot)) {
+      if (seen.has(path)) continue;
+      seen.add(path);
+      resolved.push({ path, retentionDays: entry.retentionDays ?? spec.retentionDays });
     }
   }
-  return files.sort();
+  return resolved;
+}
+
+// Every record file in scope, each carrying the retention of the store it came
+// from. Symlinks are skipped: `walkFiles` only accepts real files, so a link
+// pointing out of the store can never be rewritten or deleted through it.
+export function listRecords(config) {
+  const records = [];
+  for (const dir of recordDirs(config)) {
+    for (const path of walkFiles(dir.path, config.transcripts.extensions)) {
+      records.push({ path, retentionDays: dir.retentionDays, store: dir.path });
+    }
+  }
+  return records.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+export function listTranscripts(config) {
+  return listRecords(config).map((record) => record.path);
 }
 
 function latestMtimeMs(dir, skip = new Set(['node_modules', '.git'])) {
@@ -288,14 +357,21 @@ export function primaryCheckout(repoRoot) {
   }
 }
 
+// The checkout every git command in this tool runs against. A staged install
+// lives outside any checkout and records the path explicitly; otherwise it is
+// discovered from wherever we are running.
+export function checkoutRoot(config) {
+  return config.worktrees.checkout ? realpath(config.worktrees.checkout) : primaryCheckout(config.repoRoot);
+}
+
 export function listWorktrees(config) {
-  const base = primaryCheckout(config.repoRoot);
+  const base = checkoutRoot(config);
   // git reports resolved paths; `/var` is a symlink to `/private/var` on macOS,
   // so compare realpaths or the prefix match silently finds nothing.
   const dirs = config.worktrees.roots.map((root) => realpath(expandPath(root, base)));
   let porcelain;
   try {
-    porcelain = git(config.repoRoot, ['worktree', 'list', '--porcelain']);
+    porcelain = git(checkoutRoot(config), ['worktree', 'list', '--porcelain']);
   } catch {
     return [];
   }
@@ -318,10 +394,16 @@ export function listWorktrees(config) {
 // ---------------------------------------------------------------------------
 
 export function planTranscripts(config, now = Date.now()) {
-  const { retentionDays, activeGraceMinutes } = config.transcripts;
-  const graceMs = activeGraceMinutes * 60_000;
-  return listTranscripts(config).map((path) => {
-    const stat = statSync(path);
+  const graceMs = config.transcripts.activeGraceMinutes * 60_000;
+  const plan = [];
+  for (const record of listRecords(config)) {
+    const { retentionDays } = record;
+    let stat;
+    try {
+      stat = statSync(record.path);
+    } catch {
+      continue; // raced with a delete
+    }
     const ageMs = now - stat.mtimeMs;
     const ageDays = ageMs / DAY_MS;
     let verdict = 'retain';
@@ -332,8 +414,9 @@ export function planTranscripts(config, now = Date.now()) {
       verdict = 'expire';
       reason = `older than ${retentionDays}d retention`;
     }
-    return { kind: 'transcript', path, bytes: stat.size, ageDays: round(ageDays), verdict, reason };
-  });
+    plan.push({ kind: 'transcript', path: record.path, store: record.store, bytes: stat.size, ageDays: round(ageDays), verdict, reason });
+  }
+  return plan;
 }
 
 // A worktree is reclaimable only when losing it cannot lose work: old enough,
@@ -344,7 +427,7 @@ export function classifyWorktree(config, worktree, { now = Date.now(), cwd = pro
   const here = realpath(cwd);
   const tree = realpath(worktree.path);
 
-  if (tree === realpath(config.repoRoot) || tree === primaryCheckout(config.repoRoot)) return hold('primary checkout');
+  if (tree === realpath(config.repoRoot) || tree === checkoutRoot(config)) return hold('primary checkout');
   if (here === tree || here.startsWith(`${tree}/`)) return hold('in use by this process');
   // Never delete the tree the running copy of this tool lives in: a sweep that
   // removes its own scheduled script silently disables the retention clock.
@@ -374,8 +457,8 @@ export function classifyWorktree(config, worktree, { now = Date.now(), cwd = pro
   if (!head) return { ...hold('HEAD unreadable'), ageDays: round(ageDays) };
 
   const mergedRef = mergedInto.find(
-    (ref) => gitOk(config.repoRoot, ['rev-parse', '--verify', `${ref}^{commit}`]) &&
-      gitOk(config.repoRoot, ['merge-base', '--is-ancestor', head, ref]),
+    (ref) => gitOk(checkoutRoot(config), ['rev-parse', '--verify', `${ref}^{commit}`]) &&
+      gitOk(checkoutRoot(config), ['merge-base', '--is-ancestor', head, ref]),
   );
   if (!mergedRef) return { ...hold('work not merged into a durable branch'), ageDays: round(ageDays) };
 
@@ -492,10 +575,10 @@ export function sweep(config, { apply = false, now = Date.now(), cwd = process.c
     for (const entry of expiring) {
       try {
         if (entry.kind === 'worktree') {
-          git(primaryCheckout(config.repoRoot), ['worktree', 'remove', '--force', entry.path]);
+          git(checkoutRoot(config), ['worktree', 'remove', '--force', entry.path]);
         } else {
           rmSync(entry.path);
-          pruneEmptyParents(entry.path);
+          pruneEmptyParents(entry.path, entry.store);
         }
         deleted.push(entry);
       } catch (err) {
@@ -504,7 +587,7 @@ export function sweep(config, { apply = false, now = Date.now(), cwd = process.c
     }
     if (deleted.some((entry) => entry.kind === 'worktree')) {
       try {
-        git(primaryCheckout(config.repoRoot), ['worktree', 'prune']);
+        git(checkoutRoot(config), ['worktree', 'prune']);
       } catch {
         /* best effort */
       }
@@ -515,13 +598,14 @@ export function sweep(config, { apply = false, now = Date.now(), cwd = process.c
   return { plan, expiring, deleted, failed, applied: apply };
 }
 
-// Remove directories that the deletion just emptied, never climbing above the
-// `.claude/projects` tree the file belonged to.
-function pruneEmptyParents(filePath) {
-  const PROJECTS = join('.claude', 'projects');
+// Remove directories that the deletion just emptied — the date and run-id
+// nesting the stores use — never climbing to or above the store root itself.
+// Without a store root we prune nothing: guessing a stop point above an
+// arbitrary path is how a sweep walks out of its own scope.
+function pruneEmptyParents(filePath, storeRoot) {
+  if (!storeRoot) return;
   let dir = dirname(filePath);
-  while (dir.includes(PROJECTS)) {
-    if (dir.endsWith(PROJECTS)) break;
+  while (dir !== storeRoot && dir.startsWith(`${storeRoot}/`)) {
     try {
       if (readdirSync(dir).length > 0) break;
       rmdirSync(dir);
@@ -541,8 +625,18 @@ export function scrub(config, { apply = false, env = process.env, now = Date.now
   const quietMs = (config.transcripts.scrubQuietMinutes ?? 15) * 60_000;
   const results = [];
   const skipped = [];
-  for (const path of listTranscripts(config)) {
-    const result = scrubFile(path, { apply: apply && now - statSync(path).mtimeMs >= quietMs, patterns });
+  const failed = [];
+  // One unreadable record must not abandon the rest of the purge, so each file
+  // is isolated: the sweep runs unattended and a partial pass that reports what
+  // it could not reach beats a pass that stops at the first bad byte.
+  for (const record of listRecords(config)) {
+    let result;
+    try {
+      result = scrubFile(record.path, { apply: apply && now - statSync(record.path).mtimeMs >= quietMs, patterns });
+    } catch (err) {
+      failed.push({ path: record.path, error: err.message.split('\n')[0] });
+      continue;
+    }
     if (!result.changed) continue;
     if (apply && !result.applied) skipped.push(result.path);
     results.push(result);
@@ -551,7 +645,7 @@ export function scrub(config, { apply = false, env = process.env, now = Date.now
   for (const result of results) {
     for (const [kind, n] of Object.entries(result.counts)) counts[kind] = (counts[kind] ?? 0) + n;
   }
-  return { files: results, counts, skipped, applied: apply };
+  return { files: results, counts, skipped, failed, applied: apply };
 }
 
 // ---------------------------------------------------------------------------
@@ -596,22 +690,49 @@ function launchAgentsDir() {
   return join(homedir(), 'Library', 'LaunchAgents');
 }
 
-// The scheduled job must point at a copy of this script that outlives any one
-// run — the primary checkout, not the throwaway worktree we are probably
-// running from.
+// Where a staged install puts the copy of the tool that the schedule runs.
+// Deliberately outside every checkout: this tool is usually run from a
+// throwaway worktree, and a checkout is exactly the kind of thing the sweep
+// deletes. Pointing launchd at one is how the retention clock silently stops.
+export function stageDir(config) {
+  return join(expandPath(config.log.dir, config.repoRoot), 'bin');
+}
+
+// Mirrors the repository layout so the staged script resolves its own config:
+// `<stage>/tools/agent-retention/index.mjs` puts REPO_ROOT at `<stage>`, where
+// `stage()` has just written `retention.config.json`.
 export function scheduledScript(config) {
-  const durable = join(primaryCheckout(config.repoRoot), 'tools', 'agent-retention', 'index.mjs');
-  if (existsSync(durable)) return { path: durable, durable: true };
-  return { path: join(HERE, 'index.mjs'), durable: false };
+  return { path: join(stageDir(config), 'tools', 'agent-retention', 'index.mjs'), durable: true };
+}
+
+// The staged config is the live one with every repo-relative path pinned to an
+// absolute one — nothing under the stage directory is a checkout, so
+// `.paperclip/worktrees` would otherwise resolve to nowhere, and the sweep would
+// quietly stop reclaiming worktrees while still reporting success.
+export function stagedConfig(config, checkout = checkoutRoot(config)) {
+  return {
+    comment: `Staged by agent-retention install-schedule from ${config.configPath ?? 'built-in defaults'}. Edit the repository copy and re-run install-schedule; edits here are overwritten.`,
+    transcripts: config.transcripts,
+    worktrees: {
+      ...config.worktrees,
+      checkout,
+      roots: config.worktrees.roots.map((root) => expandPath(root, checkout)),
+    },
+    log: { ...config.log, dir: expandPath(config.log.dir, config.repoRoot) },
+  };
+}
+
+export function stage(config) {
+  const dir = stageDir(config);
+  const script = scheduledScript(config);
+  mkdirSync(dirname(script.path), { recursive: true });
+  writeFileSync(script.path, readFileSync(join(HERE, 'index.mjs'), 'utf8'));
+  writeFileSync(join(dir, 'retention.config.json'), `${JSON.stringify(stagedConfig(config), null, 2)}\n`);
+  return script.path;
 }
 
 function installSchedule(config) {
-  const script = scheduledScript(config);
-  if (!script.durable) {
-    console.warn(
-      `warning: ${script.path} is not in the primary checkout. The schedule will break when this worktree goes away — re-run install-schedule once this branch has merged.`,
-    );
-  }
+  const script = { path: stage(config) };
   const logDir = expandPath(config.log.dir, config.repoRoot);
   mkdirSync(logDir, { recursive: true });
   mkdirSync(launchAgentsDir(), { recursive: true });
@@ -671,6 +792,17 @@ function short(path, config) {
   return fromHome.startsWith('..') ? path : `~/${fromHome}`;
 }
 
+// A staged install is a snapshot, so it can silently fall behind the repository
+// copy. `status` says so rather than letting a stale scrubber look healthy.
+export function scheduleState(config) {
+  const script = scheduledScript(config);
+  if (!existsSync(script.path)) return 'not installed — run `install-schedule`';
+  const source = join(HERE, 'index.mjs');
+  if (realpath(source) === realpath(script.path)) return `staged at ${short(script.path, config)}`;
+  const stale = readFileSync(script.path, 'utf8') !== readFileSync(source, 'utf8');
+  return `staged at ${short(script.path, config)}${stale ? ' — STALE, re-run `install-schedule`' : ''}`;
+}
+
 function main(argv) {
   const command = argv[0] ?? 'status';
   const flags = new Set(argv.slice(1).filter((arg) => arg.startsWith('--')));
@@ -685,10 +817,15 @@ function main(argv) {
     const worktrees = plan.filter((entry) => entry.kind === 'worktree');
     const sum = (entries) => entries.reduce((total, entry) => total + entry.bytes, 0);
     console.log(`agent-retention — config: ${config.configPath ?? 'defaults'}`);
+    console.log(`  schedule     ${scheduleState(config)}`);
     console.log(
-      `  transcripts  ${transcripts.length} files, ${human(sum(transcripts))}, retention ${config.transcripts.retentionDays}d` +
+      `  records      ${transcripts.length} files, ${human(sum(transcripts))}, retention ${config.transcripts.retentionDays}d` +
         ` — ${transcripts.filter((e) => e.verdict === 'expire').length} expiring`,
     );
+    for (const dir of recordDirs(config)) {
+      const inDir = transcripts.filter((entry) => entry.store === dir.path);
+      console.log(`    ${short(dir.path, config)}  ${inDir.length} files, ${human(sum(inDir))}, ${dir.retentionDays}d`);
+    }
     console.log(
       `  worktrees    ${worktrees.length} trees, ${human(sum(worktrees))}, retention ${config.worktrees.retentionDays}d` +
         ` — ${worktrees.filter((e) => e.verdict === 'expire').length} reclaimable`,
@@ -710,6 +847,8 @@ function main(argv) {
     }
     for (const file of result.files) console.log(`    ${short(file.path, config)}`);
     for (const path of result.skipped) console.log(`    deferred (session still live)  ${short(path, config)}`);
+    for (const entry of result.failed) console.error(`    error  ${short(entry.path, config)}: ${entry.error}`);
+    if (result.failed.length) process.exitCode = 1;
     return;
   }
 

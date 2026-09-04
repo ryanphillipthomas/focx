@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -15,13 +15,18 @@ import {
   appendDeletionLog,
   classifyWorktree,
   envSecretPatterns,
+  expandGlobDirs,
+  listRecords,
   listTranscripts,
   loadConfig,
   logPath,
   planTranscripts,
   planWorktrees,
   plist,
+  scheduleState,
   scheduledScript,
+  stage,
+  stageDir,
   pruneDeletionLog,
   scrub,
   scrubFile,
@@ -97,12 +102,20 @@ function addWorktree(root, name, { unmerged = false, dirty = false, ageDays = 0 
   return path;
 }
 
-function configFor({ transcriptRoot, repoRoot, logDir, ...rest } = {}) {
+// `dirs` and `roots` are always overridden, never inherited: the shipped
+// defaults name this machine's real agent store, and a test that silently
+// widened to it would be operating on live data.
+function configFor({ transcriptRoot, transcriptDirs, repoRoot, logDir, ...rest } = {}) {
   const root = repoRoot ?? mkdtempSync(join(tmpdir(), 'retention-root-'));
   return {
     repoRoot: root,
     configPath: null,
-    transcripts: { ...DEFAULT_CONFIG.transcripts, roots: transcriptRoot ? [transcriptRoot] : [], ...(rest.transcripts ?? {}) },
+    transcripts: {
+      ...DEFAULT_CONFIG.transcripts,
+      dirs: transcriptDirs ?? [],
+      roots: transcriptRoot ? [transcriptRoot] : [],
+      ...(rest.transcripts ?? {}),
+    },
     worktrees: { ...DEFAULT_CONFIG.worktrees, mergedInto: ['develop'], ...(rest.worktrees ?? {}) },
     log: { ...DEFAULT_CONFIG.log, dir: logDir ?? mkdtempSync(join(tmpdir(), 'retention-log-')), ...(rest.log ?? {}) },
   };
@@ -250,6 +263,161 @@ test('scrub covers .claude/projects only, never agent memory', () => {
   assert.deepEqual(found.map((p) => p.replace(root, '')), ['/agent-1/.claude/projects/proj/a.jsonl']);
 });
 
+// --- store coverage (FOC-73 re-scope) --------------------------------------
+//
+// The original coverage named only `workspaces/*/.claude/projects`. The
+// credentials were actually at rest in `acp-engine/agents/*/sessions`,
+// `codex-home/sessions` and `data/run-logs`. These tests pin the wider
+// coverage, because a scrubber that runs cleanly over the wrong directories
+// reports the same "0 findings" as one with nothing left to find.
+
+// A store laid out the way the real ones are, including the date nesting
+// codex-home uses and the company/agent/run nesting under run-logs.
+function multiStore() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'retention-stores-')));
+  const files = {
+    'workspaces/agent-1/.claude/projects/proj/a.jsonl': '{"t":"claude"}\n',
+    'workspaces/agent-1/.claude/memory/MEMORY.md': 'not a session record\n',
+    'companies/co-1/acp-engine/agents/agent-1/sessions/s1.json': '{"t":"acp"}\n',
+    'companies/co-1/acp-engine/agents/agent-2/sessions/s2.json': '{"t":"acp"}\n',
+    'companies/co-1/codex-home/sessions/2026/09/04/rollout-1.jsonl': '{"t":"codex"}\n',
+    'data/run-logs/co-1/agent-1/run-1.ndjson': '{"t":"runlog"}\n',
+  };
+  for (const [rel, content] of Object.entries(files)) write(join(root, rel), content);
+  return root;
+}
+
+function storeDirs(root) {
+  return [
+    `${root}/workspaces/*/.claude/projects`,
+    `${root}/companies/*/acp-engine/agents/*/sessions`,
+    `${root}/companies/*/codex-home/sessions`,
+    `${root}/data/run-logs`,
+  ];
+}
+
+test('every store the credentials were found in is in scope, and agent memory still is not', () => {
+  const root = multiStore();
+  const found = listTranscripts(configFor({ transcriptDirs: storeDirs(root) })).map((p) => p.replace(`${root}/`, ''));
+  assert.deepEqual(found.sort(), [
+    'companies/co-1/acp-engine/agents/agent-1/sessions/s1.json',
+    'companies/co-1/acp-engine/agents/agent-2/sessions/s2.json',
+    'companies/co-1/codex-home/sessions/2026/09/04/rollout-1.jsonl',
+    'data/run-logs/co-1/agent-1/run-1.ndjson',
+    'workspaces/agent-1/.claude/projects/proj/a.jsonl',
+  ]);
+});
+
+test('the shipped config names all four stores, not just the transcripts', () => {
+  const dirs = loadConfig().transcripts.dirs.join('\n');
+  for (const store of ['.claude/projects', 'acp-engine/agents/*/sessions', 'codex-home/sessions', 'data/run-logs']) {
+    assert.match(dirs, new RegExp(store.replace(/[.*]/g, '\\$&')), `${store} must be covered`);
+  }
+  assert.ok(loadConfig().transcripts.extensions.includes('.ndjson'), 'run-logs are .ndjson — without it they are skipped');
+});
+
+test('a glob matches whole segments only', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'retention-glob-')));
+  write(join(root, 'agents/a/sessions/x.json'), '{}\n');
+  write(join(root, 'agents/b/sessions/y.json'), '{}\n');
+  write(join(root, 'agents/b/other/z.json'), '{}\n');
+  assert.deepEqual(expandGlobDirs(`${root}/agents/*/sessions`), [
+    join(root, 'agents/a/sessions'),
+    join(root, 'agents/b/sessions'),
+  ]);
+  // A pattern naming a layout that is not present expands to nothing rather
+  // than throwing — an absent store must not stop the sweep over the others.
+  assert.deepEqual(expandGlobDirs(`${root}/nope/*/sessions`), []);
+});
+
+test('a store can carry its own retention clock', () => {
+  const root = multiStore();
+  const config = configFor({
+    transcriptDirs: [
+      { path: `${root}/data/run-logs`, retentionDays: 1 },
+      `${root}/companies/*/codex-home/sessions`,
+    ],
+  });
+  for (const record of listRecords(config)) age(record.path, 5);
+  const verdict = Object.fromEntries(planTranscripts(config).map((e) => [e.path.split('/').pop(), e.verdict]));
+  assert.deepEqual(verdict, { 'run-1.ndjson': 'expire', 'rollout-1.jsonl': 'retain' });
+});
+
+test('`roots` still means what it meant before the stores were widened', () => {
+  const root = transcriptStore({
+    'agent-1/.claude/projects/proj/a.jsonl': { content: '{}\n' },
+    'agent-1/.claude/memory/MEMORY.md': { content: 'remembered\n' },
+  });
+  const found = listTranscripts(configFor({ transcriptRoot: root }));
+  assert.deepEqual(found.map((p) => p.replace(root, '')), ['/agent-1/.claude/projects/proj/a.jsonl']);
+});
+
+test('the three credential classes found at rest are purged from every store', () => {
+  const root = multiStore();
+  // Assembled from parts so a well-formed token never sits in the source.
+  const oauth = `sk-ant-${'oat01'}-${'A'.repeat(40)}`;
+  const gh = `gh${'o'}_${'B'.repeat(36)}`;
+  const jwt = `eyJ${'C'.repeat(20)}.eyJ${'D'.repeat(20)}.${'E'.repeat(43)}`;
+  const bearing = {
+    'workspaces/agent-1/.claude/projects/proj/a.jsonl': `{"env":{"CLAUDE_CODE_OAUTH_TOKEN":"${oauth}"}}\n`,
+    'companies/co-1/acp-engine/agents/agent-1/sessions/s1.json': `{"env":{"GH_TOKEN":"${gh}"}}\n`,
+    'companies/co-1/codex-home/sessions/2026/09/04/rollout-1.jsonl': `{"env":{"PAPERCLIP_API_KEY":"${jwt}"}}\n`,
+    'data/run-logs/co-1/agent-1/run-1.ndjson': `{"cmd":"curl -H 'Authorization: Bearer ${jwt}'"}\n`,
+  };
+  for (const [rel, content] of Object.entries(bearing)) {
+    write(join(root, rel), content);
+    age(join(root, rel), 1); // past the scrub quiet window
+  }
+
+  const config = configFor({ transcriptDirs: storeDirs(root) });
+  const result = scrub(config, { apply: true, env: {} });
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  assert.equal(result.files.length, 4, 'every store must be reached, not just the first');
+
+  for (const rel of Object.keys(bearing)) {
+    const after = readFileSync(join(root, rel), 'utf8');
+    for (const secret of [oauth, gh, jwt]) {
+      assert.equal(after.includes(secret), false, `${secret.slice(0, 8)}… survived in ${rel}`);
+    }
+    assert.match(after, /\[redacted:/);
+  }
+  // And the purge is complete: a second pass over the same store finds nothing.
+  assert.deepEqual(scrub(config, { apply: true, env: {} }).files, []);
+});
+
+test('one unreadable record does not abandon the rest of the purge', () => {
+  const root = multiStore();
+  const secret = `sk-ant-${'oat01'}-${'F'.repeat(40)}`;
+  const reachable = join(root, 'data/run-logs/co-1/agent-1/run-1.ndjson');
+  const blocked = join(root, 'data/run-logs/co-1/agent-1/locked.ndjson');
+  write(reachable, `{"t":"${secret}"}\n`);
+  write(blocked, `{"t":"${secret}"}\n`);
+  age(reachable, 1);
+  age(blocked, 1);
+  chmodSync(blocked, 0o000);
+
+  try {
+    const result = scrub(configFor({ transcriptDirs: [`${root}/data/run-logs`] }), { apply: true, env: {} });
+    assert.equal(result.failed.length, 1, 'the unreadable file is reported, not swallowed');
+    assert.equal(result.failed[0].path, blocked);
+    assert.equal(readFileSync(reachable, 'utf8').includes(secret), false, 'the reachable file was still purged');
+  } finally {
+    chmodSync(blocked, 0o600);
+  }
+});
+
+test('sweep unwinds the date nesting it empties but never the store root', () => {
+  const root = multiStore();
+  const store = join(root, 'companies/co-1/codex-home/sessions');
+  const config = configFor({ transcriptDirs: [store], repoRoot: gitRepo() });
+  age(join(store, '2026/09/04/rollout-1.jsonl'), 45);
+
+  const result = sweep(config, { apply: true });
+  assert.equal(result.deleted.length, 1);
+  assert.equal(existsSync(join(store, '2026')), false, 'the emptied date nesting goes');
+  assert.equal(existsSync(store), true, 'the store root stays');
+});
+
 // --- transcript expiry -----------------------------------------------------
 
 test('transcripts expire past the retention window and not before', () => {
@@ -365,12 +533,44 @@ test('the self-protection rule holds even for an old, clean, merged tree', () =>
   assert.equal(guarded.verdict, 'retain');
 });
 
-test('the scheduled script points somewhere durable, or says so', () => {
+test('the scheduled script is staged outside every checkout', () => {
   const config = loadConfig();
   const script = scheduledScript(config);
   assert.match(script.path, /tools\/agent-retention\/index\.mjs$/);
-  assert.equal(typeof script.durable, 'boolean');
-  if (script.durable) assert.equal(script.path.includes('.paperclip/worktrees'), false);
+  // The whole point of staging: a job pointing into `.paperclip/worktrees` runs
+  // from a directory this tool is itself allowed to delete.
+  assert.equal(script.path.includes('.paperclip/worktrees'), false);
+  assert.equal(script.path.startsWith(stageDir(config)), true);
+});
+
+test('staging produces a runnable copy whose config still finds the real checkout', () => {
+  const repo = gitRepo();
+  const logDir = mkdtempSync(join(tmpdir(), 'retention-stage-'));
+  const config = configFor({ repoRoot: repo, logDir, worktrees: { roots: ['.paperclip/worktrees'] } });
+
+  const staged = stage(config);
+  assert.equal(existsSync(staged), true);
+  assert.equal(readFileSync(staged, 'utf8'), readFileSync(new URL('index.mjs', import.meta.url), 'utf8'));
+
+  // A staged config must not carry repo-relative paths: nothing above the stage
+  // directory is a checkout, so `.paperclip/worktrees` would resolve to nowhere
+  // and the sweep would report success while reclaiming nothing.
+  const written = JSON.parse(readFileSync(join(stageDir(config), 'retention.config.json'), 'utf8'));
+  assert.deepEqual(written.worktrees.roots, [join(realpathSync(repo), '.paperclip/worktrees')]);
+  assert.equal(written.worktrees.checkout, realpathSync(repo));
+  for (const dir of written.transcripts.dirs) assert.equal(dir.startsWith('/') || dir.startsWith('~'), true);
+});
+
+test('a staged copy that has fallen behind the repository is reported as stale', () => {
+  const logDir = mkdtempSync(join(tmpdir(), 'retention-stale-'));
+  const config = configFor({ repoRoot: gitRepo(), logDir });
+  assert.match(scheduleState(config), /not installed/);
+
+  stage(config);
+  assert.equal(/STALE/.test(scheduleState(config)), false);
+
+  writeFileSync(scheduledScript(config).path, '// an older build\n');
+  assert.match(scheduleState(config), /STALE/);
 });
 
 test('a worktree touched inside the grace window survives even at zero retention', () => {
@@ -424,7 +624,7 @@ test('retention.config.json overrides the built-in defaults', () => {
   writeFileSync(join(root, 'retention.config.json'), JSON.stringify({ transcripts: { retentionDays: 7 } }));
   const config = loadConfig({ repoRoot: root });
   assert.equal(config.transcripts.retentionDays, 7);
-  assert.deepEqual(config.transcripts.roots, DEFAULT_CONFIG.transcripts.roots, 'unset keys keep their default');
+  assert.deepEqual(config.transcripts.dirs, DEFAULT_CONFIG.transcripts.dirs, 'unset keys keep their default');
   assert.equal(config.worktrees.retentionDays, DEFAULT_CONFIG.worktrees.retentionDays);
 });
 
