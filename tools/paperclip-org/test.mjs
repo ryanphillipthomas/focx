@@ -18,6 +18,7 @@ import {
   PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
   PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
+  agentClaudeConfigDir,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -481,24 +482,28 @@ const FAKE_SECRET_IDS = new Map([
 // verify's local-skill row reads the filesystem. Point it at a temp tree with
 // every expected link present, so these fixtures assert on the roster and not
 // on whatever happens to be installed on the machine running the tests.
-const satisfiedLocalSkills = (roster, agents) => {
+const linkRoot = () => {
   const root = mkdtempSync(join(tmpdir(), 'paperclip-org-links-'))
-  const skillsRoot = join(root, 'skills')
-  const workspacesRoot = join(root, 'workspaces')
+  return { root, opts: { skillsRoot: join(root, 'skills'), workspacesRoot: join(root, 'workspaces') } }
+}
+
+const satisfiedLocalSkills = (roster, agents, given = null) => {
+  const { root, opts } = given ?? linkRoot()
   const ids = new Map(roster.agents.map((a, i) => [a.slug, agents[i].id]))
-  for (const l of planLocalSkillLinks(roster, ids, { skillsRoot, workspacesRoot })) {
+  for (const l of planLocalSkillLinks(roster, ids, opts)) {
     mkdirSync(l.source, { recursive: true })
     mkdirSync(dirname(l.target), { recursive: true })
     if (!existsSync(l.target)) symlinkSync(l.source, l.target)
   }
-  return { root, opts: { skillsRoot, workspacesRoot } }
+  return { root, opts }
 }
 
-const asLive = (roster, rendered) => roster.agents.map((a, i) => ({
+const asLive = (roster, rendered, opts = null) => roster.agents.map((a, i) => ({
   id: `id-${i}`, name: a.name, status: 'idle',
   reportsTo: a.reportsTo ? `id-${roster.agents.findIndex((x) => x.slug === a.reportsTo)}` : null,
   adapterType: a.adapter.type,
-  adapterConfig: composeAdapterConfig(roster, a, FAKE_SECRET_IDS),
+  adapterConfig: composeAdapterConfig(roster, a, FAKE_SECRET_IDS,
+    opts ? { claudeConfigDir: agentClaudeConfigDir(`id-${i}`, opts) } : {}),
   runtimeConfig: { heartbeat: { enabled: a.run.heartbeat, wakeOnDemand: true, maxConcurrentRuns: a.run.maxConcurrentRuns } },
   budgetMonthlyCents: a.budgetMonthlyCents,
   permissions: { canCreateAgents: false, canAssignTasks: a.permissions.canAssignTasks },
@@ -669,7 +674,8 @@ test('the create payload never sends canAssignTasks — the API rejects it there
 test('verify passes against a live org built from the roster, and catches drift', () => {
   const { roster, fragments } = load()
   const rendered = renderAll(roster, fragments)
-  const agents = asLive(roster, rendered)
+  const pre = linkRoot()
+  const agents = asLive(roster, rendered, pre.opts)
   const cfgs = new Map(agents.map((a) => [a.id, {
     adapterType: a.adapterType, adapterConfig: a.adapterConfig,
     runtimeConfig: a.runtimeConfig, permissions: a.permissions,
@@ -679,7 +685,7 @@ test('verify passes against a live org built from the roster, and catches drift'
   const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
-  const links = satisfiedLocalSkills(roster, agents)
+  const links = satisfiedLocalSkills(roster, agents, pre)
   const rows = verify(roster, live, rendered, { localSkills: links.opts })
   const failed = rows.filter((r) => !r.pass)
   assert.deepEqual(failed.map((f) => `${f.n}: ${f.detail}`), [], 'a correctly built org passes every check')
@@ -910,6 +916,66 @@ test('verify reports a workspace-none agent whose skill was never attached', () 
   const after = row(links.opts)
   assert.equal(after.pass, false)
   assert.match(after.detail, /finance\/para-memory-files/)
+  rmSync(links.root, { recursive: true, force: true })
+})
+
+// Claude Code keeps projects/, sessions/, memory/ and skills/ under one config
+// root. At the default ~/.claude every agent on the host shares it, and because
+// Claude resolves a project by the git COMMON dir, all sixteen worktree agents
+// landed in one memory store — QA reading the builder's account of its own work.
+test('claude agents get their own config dir; codex agents are left alone', () => {
+  const { roster } = load()
+  const dir = (slug) => {
+    const a = bySlug(roster, slug)
+    const env = composeEnv(roster, a, { claudeConfigDir: `/w/id-${slug}/.claude` })
+    return env.CLAUDE_CONFIG_DIR
+  }
+  assert.equal(dir('cto'), '/w/id-cto/.claude', 'claude_local, worktree')
+  assert.equal(dir('finance'), '/w/id-finance/.claude', 'claude_local, workspace none')
+  assert.equal(dir('web-engineer'), undefined, 'codex_local uses codex-home, not a Claude config dir')
+
+  // Without a live id there is nothing to point at, and inventing one would be
+  // worse than omitting it — a wrong path silently isolates an agent from its
+  // own memory rather than from other agents.
+  assert.equal(composeEnv(roster, bySlug(roster, 'cto')).CLAUDE_CONFIG_DIR, undefined)
+})
+
+test('agentClaudeConfigDir is the agent home, not a shared root', () => {
+  const a = agentClaudeConfigDir('agent-a', { workspacesRoot: '/w' })
+  const b = agentClaudeConfigDir('agent-b', { workspacesRoot: '/w' })
+  assert.equal(a, '/w/agent-a/.claude')
+  assert.notEqual(a, b, 'two agents never share a config root')
+})
+
+test('verify catches a claude agent whose config dir is unset or wrong', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const pre = linkRoot()
+  const agents = asLive(roster, rendered, pre.opts)
+  const cfgs = new Map(agents.map((a) => [a.id, { adapterType: a.adapterType, adapterConfig: a.adapterConfig, runtimeConfig: a.runtimeConfig, permissions: a.permissions }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const live = { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
+  const links = satisfiedLocalSkills(roster, agents, pre)
+  const row = (configurations) => verify(roster, { ...live, configurations }, rendered, { localSkills: links.opts })
+    .find((r) => /own config dir/.test(r.condition))
+
+  assert.ok(row(cfgs).pass, 'a correctly built org passes')
+
+  const idx = roster.agents.findIndex((a) => a.slug === 'cto')
+  const mutate = (env) => {
+    const next = new Map(cfgs)
+    const e = { ...next.get(agents[idx].id) }
+    e.adapterConfig = { ...e.adapterConfig, env }
+    next.set(agents[idx].id, e)
+    return next
+  }
+  const base = { ...cfgs.get(agents[idx].id).adapterConfig.env }
+  delete base.CLAUDE_CONFIG_DIR
+  assert.ok(!row(mutate(base)).pass, 'unset is drift — that is the shared-store default')
+
+  // The shared root is the specific wrong value this exists to catch.
+  const shared = { ...cfgs.get(agents[idx].id).adapterConfig.env, CLAUDE_CONFIG_DIR: { type: 'plain', value: '/Users/someone/.claude' } }
+  assert.ok(!row(mutate(shared)).pass, 'pointing at a shared root is drift')
   rmSync(links.root, { recursive: true, force: true })
 })
 
