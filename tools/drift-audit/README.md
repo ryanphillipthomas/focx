@@ -3,6 +3,28 @@
 Recomputes a third-party repo's design-drift violation count against its **current HEAD**,
 so an outreach message never carries a stale or indefensible number.
 
+> ## SUSPENDED for credentialed agent runs — 2026-09-04
+>
+> **Do not run the clone-and-scan flow below from an agent run that holds credentials**
+> (`PAPERCLIP_API_KEY`, `GH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`).
+> That is every `claude_local` and `codex_local` agent on the current roster.
+>
+> Cloning a stranger's repository and reading its source puts attacker-authored text
+> into a credentialed agent's context. On this host there is no enforceable egress
+> confinement (`pipeline/org/roster.json` → `confinement`: Bubblewrap, Linux-only,
+> `availableOnThisHost: false`), so prompt injection reaching those credentials is not
+> contained by anything but the agent's own judgment.
+>
+> Suspending this flow removes the **trigger** for the credential-exfiltration path that
+> Security confirmed at severity High (FOC-68). It does not reduce the blast radius —
+> the credentials are still in-process. Both halves are being fixed; this is the half
+> that needed no new infrastructure.
+>
+> Humans running this locally without agent credentials in the environment are unaffected.
+>
+> **To resume:** re-verification must run from a credentialless worker, or after the
+> credential broker plus deny-by-default egress land. CTO decision and schedule: FOC-71.
+
 ```
 git clone --depth 1 https://github.com/<owner>/<repo>.git /tmp/<repo>
 node tools/drift-audit/reverify.mjs /tmp/<repo>          # human-readable
