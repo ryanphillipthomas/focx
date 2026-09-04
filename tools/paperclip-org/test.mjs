@@ -165,9 +165,18 @@ test('the roster heartbeat reaches the payload, and wakeOnDemand survives it', (
     assert.equal(hb.enabled, a.run.heartbeat, `${slug} heartbeat follows the roster`)
     assert.equal(hb.wakeOnDemand, true, `${slug} still wakes on demand`)
   }
-  const on = roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug).sort()
-  assert.deepEqual(on, ['ceo', 'chief-of-staff', 'cto', 'finance', 'head-of-product'],
-    'heartbeats stay scoped to the agents carrying cross-issue context')
+  // No agent runs one today — enabled for five on 2026-09-03 and reverted the
+  // same night. skipTimerWhenNoActionableWork means an idle agent skips the
+  // wake, so in four hours not one timer-triggered run fired; a heartbeat only
+  // arrives when work already would have woken the agent. The mechanism is kept
+  // tested because the roster can still turn one on.
+  assert.deepEqual(roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug), [],
+    'heartbeat is off everywhere — agents wake from work, not polling')
+  const on = structuredClone(roster)
+  on.agents[0].run.heartbeat = true
+  const hb = buildAgentPayload(on, on.agents[0], rendered.get(on.agents[0].slug), null).runtimeConfig.heartbeat
+  assert.equal(hb.enabled, true, 'a roster that asks for one still gets one')
+  assert.equal(hb.wakeOnDemand, true, 'and wakeOnDemand survives it')
 })
 
 // --- design chain ---
