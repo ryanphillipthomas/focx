@@ -276,7 +276,7 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
       brokerOrigin.pathname !== '/' || brokerOrigin.username || brokerOrigin.password || brokerOrigin.search || brokerOrigin.hash) {
     push('credentialBroker.paperclipOrigin must be exactly https://host:port with no path, userinfo, query, or fragment')
   }
-  if (broker.version !== 1) push('credentialBroker.version must be 1')
+  if (broker.version !== 2) push('credentialBroker.version must be 2')
   if (!String(broker.binaryPath ?? '').startsWith('/Library/')) push('credentialBroker.binaryPath must live under /Library, outside agent-writable paths')
   if (broker.paperclipClientPath !== '/usr/local/bin/paperclip') push('credentialBroker.paperclipClientPath must be /usr/local/bin/paperclip')
   if (broker.gitCredentialHelperPath !== '/usr/local/bin/git-credential-focx') push('credentialBroker.gitCredentialHelperPath must be /usr/local/bin/git-credential-focx')
@@ -291,6 +291,13 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
       gitWrite.GIT_CONFIG_KEY_1 !== 'credential.useHttpPath' || gitWrite.GIT_CONFIG_VALUE_1 !== 'true') {
     push('env.gitWrite must select the absolute broker helper and enable credential.useHttpPath')
   }
+  const containment = roster.durableContainment ?? {}
+  if (containment.version !== 1 || containment.requiredBrokerVersion !== broker.version)
+    push('durableContainment must require the configured broker version')
+  if (!String(containment.attestationPath ?? '').startsWith('/Library/'))
+    push('durableContainment.attestationPath must live under /Library, outside agent-writable paths')
+  if (containment.brokerSocketPath !== broker.socketPath)
+    push('durableContainment broker socket must match credentialBroker.socketPath')
   // Every agent's rendered adapterConfig, against the adapter's documented keys.
   for (const a of agents) {
     if (!a.adapter?.type || !REASONING[a.adapter.type]) continue
@@ -524,6 +531,8 @@ export function inspectCredentialBrokerInstall(broker, deps = {}) {
     if (String(doctor.version) !== String(broker.version)) problems.push(`broker doctor reported version ${doctor.version ?? 'missing'}`)
     if (normalizedOrigin(doctor.origin) !== normalizedOrigin(broker.paperclipOrigin)) problems.push('broker doctor origin does not match the roster')
     if (doctor.githubCredentialAvailable !== true) problems.push('broker doctor reports no GitHub credential in the system Keychain')
+    if (doctor.privilegedRunRegistration !== true) problems.push('broker doctor reports no privileged run registration')
+    if (doctor.agentEnvironmentCredentialDiscovery !== false) problems.push('broker still discovers credentials from the agent environment')
   } catch (err) {
     problems.push(`broker doctor failed: ${err.message}`)
   }
@@ -542,6 +551,85 @@ export function resolveEnv(env, secretIds) {
     }
   }
   return out
+}
+
+const TOOL_CHILD_SECRET_NAMES = Object.freeze([
+  'PAPERCLIP_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'GH_TOKEN',
+  'GITHUB_TOKEN', 'OPENAI_API_KEY', 'RENDER_API_KEY',
+])
+
+export function secretNamesInToolChildEnvironment(env, additionalNames = []) {
+  const exact = new Set([...TOOL_CHILD_SECRET_NAMES, ...additionalNames])
+  return Object.keys(env ?? {}).filter((name) => exact.has(name) ||
+    /(?:^|_)(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE_KEY|API_KEY)$/.test(name)).sort()
+}
+
+export function validateGeneratedToolSettings(settings) {
+  const problems = []
+  const allow = settings?.permissions?.allow
+  if (!Array.isArray(allow)) return ['generated settings permissions.allow must be an array']
+  for (const grant of allow) {
+    const value = String(grant)
+    if (/^Bash\((?:env|printenv)(?::|\))/.test(value))
+      problems.push(`raw environment grant is forbidden: ${value}`)
+    if (/^Bash\((?:curl|wget|nc|ncat|ssh|scp|sftp)(?::|\))/.test(value) || /^WebFetch\(\*\)/.test(value))
+      problems.push(`generic network grant is forbidden: ${value}`)
+  }
+  return problems
+}
+
+export function validateContainmentAttestation(policy, attestation) {
+  const problems = []
+  if (!attestation || typeof attestation !== 'object') return ['containment attestation is not an object']
+  if (attestation.version !== 1) problems.push('containment attestation version must be 1')
+  if (attestation.brokerVersion !== policy.requiredBrokerVersion) problems.push('containment attestation broker version mismatch')
+  if (!['macos-sandbox-exec', 'linux-bubblewrap'].includes(attestation.platform))
+    problems.push('containment platform is not an approved spawn boundary')
+  if (attestation.egress?.enforcedAtSpawn !== true || attestation.egress?.defaultPolicy !== 'deny')
+    problems.push('deny-by-default egress is not enforced at spawn')
+  const sockets = attestation.egress?.allowUnixSockets
+  if (!Array.isArray(sockets) || sockets.length !== 1 || sockets[0] !== policy.brokerSocketPath)
+    problems.push('egress allowlist must contain only the credential broker Unix socket')
+  if (attestation.credentials?.paperclip !== 'privileged-broker-registration' ||
+      attestation.credentials?.github !== 'broker-keychain')
+    problems.push('credentials are not broker-only')
+  if (attestation.toolChildEnvironment?.secretVariables !== 'scrubbed')
+    problems.push('tool-child secret variables are not scrubbed')
+  if (attestation.generatedSettings?.rawEnvironmentGrants !== false ||
+      attestation.generatedSettings?.genericNetworkGrants !== false)
+    problems.push('generated settings do not forbid raw environment and generic network grants')
+  return problems
+}
+
+export function inspectDurableContainmentAttestation(policy, deps = {}) {
+  const stat = deps.stat ?? statSync
+  const read = deps.readFile ?? readFileSync
+  const problems = []
+  let info
+  try { info = stat(policy.attestationPath) } catch { return { ready: false, problems: [`${policy.attestationPath} is missing`] } }
+  if (info.uid !== 0) problems.push(`${policy.attestationPath} is not root-owned`)
+  if (info.mode & 0o022) problems.push(`${policy.attestationPath} is group/other-writable`)
+  if (!info.isFile()) problems.push(`${policy.attestationPath} is not a file`)
+  let current = dirname(policy.attestationPath)
+  while (current !== '/') {
+    try {
+      const parent = stat(current)
+      if (parent.uid !== 0 || (parent.mode & 0o022)) problems.push(`${current} is not a root-owned, non-writable path component`)
+    } catch { problems.push(`${current} is missing`); break }
+    current = dirname(current)
+  }
+  let attestation
+  try { attestation = JSON.parse(String(read(policy.attestationPath, 'utf8'))) }
+  catch (err) { problems.push(`containment attestation is unreadable: ${err.message}`) }
+  if (attestation) problems.push(...validateContainmentAttestation(policy, attestation))
+  return { ready: problems.length === 0, problems, attestation }
+}
+
+export function validateSecretBearingAdapterEgress(adapterConfig, attestationReady) {
+  const secretBearing = Object.values(adapterConfig?.env ?? {}).some((value) => value?.type === 'secret_ref')
+  return secretBearing && !attestationReady
+    ? ['secret-bearing adapter has no attested deny-by-default egress boundary']
+    : []
 }
 
 export function composeAdapterConfig(roster, agent, secretIds = null, opts = {}) {
@@ -1382,6 +1470,13 @@ async function main(argv) {
       return 3
     }
     console.log(ok('P0B root-owned credential broker and Keychain credential are ready'))
+    const containment = inspectDurableContainmentAttestation(roster.durableContainment)
+    if (!containment.ready) {
+      console.error(bad('P0C durable containment is not attested; refusing to configure secret-bearing agents'))
+      for (const problem of containment.problems) console.error(`    ${problem}`)
+      return 3
+    }
+    console.log(ok('P0C deny-by-default egress and tool-child secret scrubbing are attested'))
   }
 
   const api = new PaperclipClient({ baseUrl, apiKey })

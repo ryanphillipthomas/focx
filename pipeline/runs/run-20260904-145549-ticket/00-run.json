@@ -1,0 +1,13 @@
+{
+  "runId": "run-20260904-145549-ticket",
+  "trigger": {
+    "source": "ticket",
+    "issueNumber": 79,
+    "actor": "paperclip",
+    "paperclipTaskId": "0b40fa5a-338a-4f3f-a027-bf26a7cf3643"
+  },
+  "prompt": "Durable containment: out-of-process credential brokering for Paperclip and GitHub, paired with enforced deny-by-default egress, tool-child secret scrubbing, and reconciler/runtime regression tests. The CTO owns the infrastructure decision; QA verifies independently.",
+  "mode": "build",
+  "createdAt": "2026-09-04T14:55:49Z",
+  "branch": "FOC-79-durable-containment-out-of-process-credential-brokering-plus-deny-by-default-egress"
+}

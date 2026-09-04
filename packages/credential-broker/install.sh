@@ -69,7 +69,7 @@ FOCX_BROKER_BUILD_DIR="$BUILD_DIR" CLANG_MODULE_CACHE_PATH="$BUILD_DIR/clang-cac
 
 umask 077
 CONFIG_TMP="$BUILD_DIR/config.json"
-/bin/echo "{\"version\":1,\"paperclipOrigin\":\"$ORIGIN\",\"socketPath\":\"/var/run/focx-credential-broker.sock\",\"agentUid\":$AGENT_UID,\"githubRepository\":\"ryanphillipthomas/focx\",\"gitRemoteHelperPath\":\"$GIT_REMOTE_PATH\"}" > "$CONFIG_TMP"
+/bin/echo "{\"version\":2,\"paperclipOrigin\":\"$ORIGIN\",\"socketPath\":\"/var/run/focx-credential-broker.sock\",\"agentUid\":$AGENT_UID,\"githubRepository\":\"ryanphillipthomas/focx\",\"gitRemoteHelperPath\":\"$GIT_REMOTE_PATH\"}" > "$CONFIG_TMP"
 /usr/bin/install -o root -g wheel -m 0444 "$CONFIG_TMP" "$CONFIG_PATH"
 
 PLIST_TMP="$BUILD_DIR/$LABEL.plist"

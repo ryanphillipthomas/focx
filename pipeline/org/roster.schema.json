@@ -13,6 +13,7 @@
     "secrets",
     "env",
     "credentialBroker",
+    "durableContainment",
     "workspaces",
     "networkAllowlist",
     "designChain",
@@ -142,7 +143,7 @@
         "responseBodyLimitBytes"
       ],
       "properties": {
-        "version": { "const": 1 },
+        "version": { "const": 2 },
         "paperclipOrigin": { "type": "string", "pattern": "^https://[^/:]+:[0-9]+$" },
         "binaryPath": { "type": "string", "pattern": "^/Library/" },
         "paperclipClientPath": { "const": "/usr/local/bin/paperclip" },
@@ -151,6 +152,19 @@
         "githubRepository": { "const": "ryanphillipthomas/focx" },
         "requestBodyLimitBytes": { "const": 65536 },
         "responseBodyLimitBytes": { "const": 2097152 }
+      },
+      "additionalProperties": false
+    },
+    "durableContainment": {
+      "type": "object",
+      "description": "Fail-closed contract with the host process spawner. The attestation is root-owned and outside every agent-writable path.",
+      "required": ["version", "attestationPath", "requiredBrokerVersion", "brokerSocketPath"],
+      "properties": {
+        "version": { "const": 1 },
+        "attestationPath": { "type": "string", "pattern": "^/Library/" },
+        "requiredBrokerVersion": { "const": 2 },
+        "brokerSocketPath": { "const": "/var/run/focx-credential-broker.sock" },
+        "comment": { "type": "string" }
       },
       "additionalProperties": false
     },

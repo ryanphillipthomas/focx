@@ -1,0 +1,30 @@
+{
+  "runId": "run-20260904-145549-ticket",
+  "storiesImplemented": [
+    "FOC-79-1: broker v2 receives short-lived task/run authorization only from a privileged spawner, binds it to the run process identity, keeps it out of the agent environment, and revokes or expires it",
+    "FOC-79-2: durable containment activation fails closed on a root-owned host attestation for deny-by-default egress with only the broker Unix socket allowed",
+    "FOC-79-3: regression checks reject unrestricted secret-bearing adapters, generated raw-environment or generic-network grants, and secret variable names in tool-child environments"
+  ],
+  "filesChanged": [
+    "docs/org.md",
+    "docs/sources-of-truth.md",
+    "packages/credential-broker/README.md",
+    "packages/credential-broker/install.sh",
+    "packages/credential-broker/src/focx-credential-broker.m",
+    "packages/credential-broker/test.mjs",
+    "pipeline/org/roster.json",
+    "pipeline/org/roster.schema.json",
+    "pipeline/runs/run-20260904-145549-ticket/00-run.json",
+    "pipeline/runs/run-20260904-145549-ticket/50-build-report.json",
+    "tools/paperclip-org/index.mjs",
+    "tools/paperclip-org/runtime-containment-probe.mjs",
+    "tools/paperclip-org/test.mjs"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean — no design drift detected (23 published values from 2 token files)."
+  }
+}

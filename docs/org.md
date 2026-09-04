@@ -209,18 +209,18 @@ This was found the hard way: every workspace probe written during the migration 
 
 It used to be a separate clone at `focx-qa`, visible as a distinct `cwd`. Now QA works its own **child issue**, so git gives it a different branch *and* a different directory from the build it verifies — per issue rather than per agent, enforced by the tool rather than asserted by a path convention. Success condition 11 checks the worktree strategy and the per-issue default instead of comparing paths.
 
-## Confinement: there is none on this host
+## Confinement: activation is fail-closed, but the host integration is pending
 
 The adapters offer spawn-level confinement through `filesystemScope` and `networkScope`, and **both require Bubblewrap**, which the adapter documentation marks *Linux only*. This instance runs on macOS, so both are omitted — setting them makes every run die with `bwrap was not found in PATH`, which is exactly how the first live agent run failed.
 
-So there is **no OS-level sandbox around any agent**. What remains, and what the org actually leans on:
+So there is **currently no OS-level sandbox around any agent**. What remains, and what the org actually leans on:
 
 - the `git` tier — who receives the root-owned, repository-scoped credential helper
 - each agent's `cwd`, and the 10 agents with no repository on the filesystem
 - the CLI's own permission system (`dangerouslySkipPermissions: false`, `dangerouslyBypassApprovalsAndSandbox: false`)
 - `CODEOWNERS` and branch protection
 
-That is a weaker posture than the original plan assumed, and it is worth stating rather than leaving implied. Running Paperclip on Linux — or in a Linux container — would restore both controls; `roster.confinement` records the decision and the exact keys involved.
+That is a weaker posture than the original plan assumed, and it is worth stating rather than leaving implied. The durable desired state is now explicit in `roster.durableContainment`: a root-owned process-spawner attestation must prove deny-by-default egress, broker-only outbound access, privileged Paperclip run registration, secret scrubbing in tool children, and safe generated settings. The reconciler refuses production apply or verification until that attestation exists. The broker installer cannot create it, because installing a daemon says nothing about how the agent process was spawned. The CTO still owns the Linux-versus-macOS enforcement decision.
 
 ## Secrets are referenced by name, resolved to ids
 
@@ -232,11 +232,15 @@ The roster names the Claude adapter secret (`{ "secret": "claude_subscription_to
 
 This matters more than it looks. Paperclip's env union also accepts a **bare string**, and coerces it to `{ "type": "plain" }`. An earlier roster used a `"[secret: name]"` string, so every agent was created with that literal 34-character string where its token belonged — accepted by the API, invisible until first run. `validateRoster` now rejects the string form outright, `resolveEnv` throws rather than falling back to a plain value, and `verify` checks the **stored type** rather than mere presence.
 
-The macOS credential broker contract lives in
+The credential broker contract lives in
 `packages/credential-broker/`. Its reviewed source is compiled and installed as
 a root-owned LaunchDaemon outside all agent-writable paths. The reconciler
 refuses to remove live GitHub env bindings unless the installed broker reports
-the expected version/origin and a Keychain credential is present.
+the expected version/origin and a Keychain credential is present. Version 2 no
+longer reads Paperclip credentials from an agent ancestor's environment. A
+privileged spawner registers an at-most-70-minute run credential and task scope
+directly into daemon memory, bound to the run PID and its kernel start time;
+teardown revokes it and expiry removes it automatically.
 
 ## Known gaps
 

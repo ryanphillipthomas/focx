@@ -20,11 +20,15 @@ import {
   PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
   checkClaudeCodeSkills, claudeCodeSkillSources,
   agentClaudeConfigDir, inspectCredentialBrokerInstall,
+  inspectDurableContainmentAttestation, secretNamesInToolChildEnvironment,
+  validateContainmentAttestation, validateGeneratedToolSettings,
+  validateSecretBearingAdapterEgress,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
 const run = promisify(execFile)
 const CLI = join(REPO_ROOT, 'tools/paperclip-org/index.mjs')
+const RUNTIME_PROBE = join(REPO_ROOT, 'tools/paperclip-org/runtime-containment-probe.mjs')
 const ROSTER = join(REPO_ROOT, 'pipeline/org/roster.json')
 
 const load = () => loadRoster(ROSTER)
@@ -373,18 +377,92 @@ test('credential broker readiness checks ownership, paths, doctor version, origi
     lstat: () => ({ uid: 0, mode: 0o120777, isFile: () => false }),
     realpath: () => roster.credentialBroker.binaryPath,
     execFile: () => JSON.stringify({
-      ok: true, version: '1', origin: roster.credentialBroker.paperclipOrigin,
+      ok: true, version: '2', origin: roster.credentialBroker.paperclipOrigin,
       githubCredentialAvailable: true,
+      privilegedRunRegistration: true,
+      agentEnvironmentCredentialDiscovery: false,
     }),
   }
   assert.deepEqual(inspectCredentialBrokerInstall(roster.credentialBroker, deps), { ready: true, problems: [] })
   const missingKeychain = inspectCredentialBrokerInstall(roster.credentialBroker, {
     ...deps,
-    execFile: () => JSON.stringify({ ok: true, version: '1', origin: roster.credentialBroker.paperclipOrigin,
-      githubCredentialAvailable: false }),
+    execFile: () => JSON.stringify({ ok: true, version: '2', origin: roster.credentialBroker.paperclipOrigin,
+      githubCredentialAvailable: false, privilegedRunRegistration: true,
+      agentEnvironmentCredentialDiscovery: false }),
   })
   assert.equal(missingKeychain.ready, false)
   assert.match(missingKeychain.problems.join('\n'), /no GitHub credential/)
+})
+
+test('durable containment attestation is exact and fail-closed', () => {
+  const { roster } = load()
+  const policy = roster.durableContainment
+  const attestation = {
+    version: 1,
+    brokerVersion: 2,
+    platform: 'macos-sandbox-exec',
+    egress: { enforcedAtSpawn: true, defaultPolicy: 'deny', allowUnixSockets: [policy.brokerSocketPath] },
+    credentials: { paperclip: 'privileged-broker-registration', github: 'broker-keychain' },
+    toolChildEnvironment: { secretVariables: 'scrubbed' },
+    generatedSettings: { rawEnvironmentGrants: false, genericNetworkGrants: false },
+  }
+  assert.deepEqual(validateContainmentAttestation(policy, attestation), [])
+  const openEgress = structuredClone(attestation)
+  openEgress.egress.defaultPolicy = 'allow'
+  assert.match(validateContainmentAttestation(policy, openEgress).join('\n'), /deny-by-default/)
+  const genericSocket = structuredClone(attestation)
+  genericSocket.egress.allowUnixSockets.push('/var/run/docker.sock')
+  assert.match(validateContainmentAttestation(policy, genericSocket).join('\n'), /only the credential broker/)
+  const file = { uid: 0, mode: 0o100444, isFile: () => true }
+  const directory = { uid: 0, mode: 0o040755, isFile: () => false }
+  assert.deepEqual(inspectDurableContainmentAttestation(policy, {
+    stat: (path) => path === policy.attestationPath ? file : directory,
+    readFile: () => JSON.stringify(attestation),
+  }).problems, [])
+})
+
+test('secret-bearing adapters require attested deny-by-default egress', () => {
+  const secretBearing = { env: { AUTH: { type: 'secret_ref', secretId: 'secret-1' } } }
+  assert.match(validateSecretBearingAdapterEgress(secretBearing, false).join('\n'), /deny-by-default egress/)
+  assert.deepEqual(validateSecretBearingAdapterEgress(secretBearing, true), [])
+  assert.deepEqual(validateSecretBearingAdapterEgress({ env: { PATH: { type: 'plain', value: '/bin' } } }, false), [])
+})
+
+test('generated settings reject raw environment and generic network grants', () => {
+  const clean = { permissions: { allow: ['Bash(git status:*)', 'Read(*)'] } }
+  assert.deepEqual(validateGeneratedToolSettings(clean), [])
+  const unsafe = { permissions: { allow: ['Bash(env:*)', 'Bash(curl:*)', 'WebFetch(*)'] } }
+  const problems = validateGeneratedToolSettings(unsafe).join('\n')
+  assert.match(problems, /raw environment grant/)
+  assert.match(problems, /generic network grant/)
+})
+
+test('tool-child environment check reports names, never values', () => {
+  const env = { PATH: '/bin', PAPERCLIP_API_KEY: 'do-not-print', SOME_PASSWORD: 'also-secret' }
+  assert.deepEqual(secretNamesInToolChildEnvironment(env), ['PAPERCLIP_API_KEY', 'SOME_PASSWORD'])
+  assert.doesNotMatch(secretNamesInToolChildEnvironment(env).join(','), /do-not-print|also-secret/)
+})
+
+test('runtime probe fails a tool child with a secret name or unsafe generated settings', async () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'focx-containment-probe-'))
+  const settings = join(scratch, 'settings.json')
+  try {
+    writeFileSync(settings, JSON.stringify({ permissions: { allow: ['Bash(env:*)', 'Bash(curl:*)'] } }))
+    await assert.rejects(run(process.execPath, [RUNTIME_PROBE, `--settings=${settings}`], {
+      env: { PATH: process.env.PATH, GH_TOKEN: 'fake-never-printed' },
+    }), (err) => {
+      assert.match(err.stderr, /GH_TOKEN/)
+      assert.match(err.stderr, /raw environment grant/)
+      assert.match(err.stderr, /generic network grant/)
+      assert.doesNotMatch(err.stderr, /fake-never-printed/)
+      return true
+    })
+    writeFileSync(settings, JSON.stringify({ permissions: { allow: ['Bash(git status:*)'] } }))
+    const clean = await run(process.execPath, [RUNTIME_PROBE, `--settings=${settings}`], {
+      env: { PATH: process.env.PATH },
+    })
+    assert.match(clean.stdout, /probe passed/)
+  } finally { rmSync(scratch, { recursive: true, force: true }) }
 })
 
 test('no agent config carries a Bubblewrap-only key on a non-Linux host', () => {

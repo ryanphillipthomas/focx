@@ -1,6 +1,6 @@
 {
   "comment": "The Focx.ai operating company. Source of truth for who exists, who they report to, what model they run, what they cost, what they may write, and what they are scheduled to do. Applied by tools/paperclip-org/index.mjs. This file is desired state; Paperclip holds live state. desiredSkills means Paperclip-registered skills; claudeCodeSkills is documentation of the local Claude Code plugin skills an agent relies on, and is never sent to the API. Secrets are referenced by name only - never inline a credential here, this file is committed to git.",
-  "version": 2,
+  "version": 3,
   "expectedAgentCount": 26,
   "goal": "Reach 2,000 registered Focx Connect users within 180 days of public launch, with evidence of strong activation, retention, trust, and sustainable unit economics.",
   "company": {
@@ -56,7 +56,7 @@
     }
   },
   "credentialBroker": {
-    "version": 1,
+    "version": 2,
     "paperclipOrigin": "https://ops.focx.ai:443",
     "binaryPath": "/Library/Application Support/Focx/CredentialBroker/focx-credential-broker",
     "paperclipClientPath": "/usr/local/bin/paperclip",
@@ -65,6 +65,13 @@
     "githubRepository": "ryanphillipthomas/focx",
     "requestBodyLimitBytes": 65536,
     "responseBodyLimitBytes": 2097152
+  },
+  "durableContainment": {
+    "version": 1,
+    "attestationPath": "/Library/Application Support/Focx/Containment/attestation.json",
+    "requiredBrokerVersion": 2,
+    "brokerSocketPath": "/var/run/focx-credential-broker.sock",
+    "comment": "The reconciler refuses production apply/verify until a root-owned platform attestation proves the CTO-selected spawn boundary enforces deny-by-default egress, permits only the broker Unix socket, registers Paperclip run credentials outside the agent process, scrubs tool-child secret variables, and omits raw environment/generic network grants from generated settings. The broker installer cannot mint this attestation: only the process spawner can truthfully assert those properties."
   },
   "workspaces": {
     "repo-worktree": {
@@ -1099,7 +1106,7 @@
     }
   ],
   "confinement": {
-    "comment": "filesystemScope and networkScope are spawn-level confinement and BOTH require Bubblewrap, which is Linux only (adapter docs: 'filesystemSandboxCommand ... Linux only'). This host is macOS, so they are omitted: setting them makes every run fail with \"bwrap was not found in PATH\". Without them there is no OS-level sandbox. Git write authentication is now mediated by the root-owned credential broker rather than GH_TOKEN in agent environments; remaining controls are each agent's cwd, the CLI's permission system, and CODEOWNERS plus branch protection.",
+    "comment": "The legacy adapter confinement keys require Bubblewrap and remain unavailable on this macOS host. Durable activation now requires the separate root-owned attestation in durableContainment; until the CTO-selected spawner integration produces it, the reconciler fails closed before apply/verify. Git write authentication is mediated by the root-owned credential broker rather than GH_TOKEN in agent environments.",
     "requiresBubblewrap": [
       "filesystemScope",
       "networkScope",

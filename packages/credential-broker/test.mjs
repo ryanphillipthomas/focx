@@ -14,14 +14,13 @@ test('compiled broker policy rejects cross-scope and transport bypasses', async 
   try {
     const env = {
       ...process.env,
-      PAPERCLIP_BROKER_TEST_CANARY: 'process-environment-parser-ok',
       FOCX_BROKER_BUILD_DIR: buildDir,
       CLANG_MODULE_CACHE_PATH: join(buildDir, 'clang-cache'),
     }
     const { stdout: buildOutput } = await exec('/bin/sh', [join(root, 'build.sh')], { env })
     const binary = buildOutput.trim()
     const { stdout } = await exec(binary, ['--self-test'], { env })
-    assert.match(stdout, /16 passed, 0 failed/)
+    assert.match(stdout, /18 passed, 0 failed/)
   } finally {
     await rm(buildDir, { recursive: true, force: true })
   }

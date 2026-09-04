@@ -9,7 +9,7 @@
 #import <sys/un.h>
 #import <unistd.h>
 
-static NSString *const BrokerVersion = @"1";
+static NSString *const BrokerVersion = @"2";
 static NSString *const BrokerSocketPath = @"/var/run/focx-credential-broker.sock";
 static NSString *const KeychainPath = @"/Library/Keychains/System.keychain";
 static NSString *const KeychainService = @"ai.focx.credential-broker";
@@ -17,6 +17,7 @@ static NSString *const GitHubAccount = @"github_focx_write_token";
 static const NSUInteger MaxRequestBytes = 65536;
 static const NSUInteger MaxResponseBytes = 2 * 1024 * 1024;
 static volatile sig_atomic_t StopRequested = 0;
+static NSMutableArray<NSMutableDictionary *> *RunGrants;
 
 static void HandleSignal(int signalNumber) {
   (void)signalNumber;
@@ -153,40 +154,6 @@ static NSString *ValidatePaperclipRequest(NSString *method, NSString *path,
   return nil;
 }
 
-static NSDictionary<NSString *, NSString *> *EnvironmentForPID(pid_t pid) {
-  int mib[3] = { CTL_KERN, KERN_PROCARGS2, pid };
-  size_t size = 0;
-  if (sysctl(mib, 3, NULL, &size, NULL, 0) != 0 || size < sizeof(int)) return nil;
-  char *buffer = calloc(1, size);
-  if (!buffer) return nil;
-  if (sysctl(mib, 3, buffer, &size, NULL, 0) != 0) { free(buffer); return nil; }
-  int argc = 0;
-  memcpy(&argc, buffer, sizeof(argc));
-  char *cursor = buffer + sizeof(argc), *end = buffer + size;
-  while (cursor < end && *cursor) cursor++;
-  while (cursor < end && !*cursor) cursor++;
-  for (int i = 0; i < argc && cursor < end; i++) {
-    while (cursor < end && *cursor) cursor++;
-    while (cursor < end && !*cursor) cursor++;
-  }
-  NSMutableDictionary *environment = [NSMutableDictionary dictionary];
-  while (cursor < end && *cursor) {
-    size_t remaining = (size_t)(end - cursor);
-    size_t length = strnlen(cursor, remaining);
-    if (length == remaining) break;
-    NSString *entry = [[NSString alloc] initWithBytes:cursor length:length encoding:NSUTF8StringEncoding];
-    NSRange equals = [entry rangeOfString:@"="];
-    if (equals.location != NSNotFound) {
-      NSString *key = [entry substringToIndex:equals.location];
-      if ([key hasPrefix:@"PAPERCLIP_"])
-        environment[key] = [entry substringFromIndex:equals.location + 1];
-    }
-    cursor += length + 1;
-  }
-  free(buffer);
-  return environment;
-}
-
 static pid_t ParentPID(pid_t pid) {
   struct proc_bsdinfo info = {0};
   int got = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info));
@@ -199,36 +166,81 @@ static NSString *ProcessPath(pid_t pid) {
   return length > 0 ? [NSString stringWithUTF8String:path] : nil;
 }
 
-static NSDictionary *TrustedRunContext(pid_t peerPID, NSString **error) {
-  NSArray *keys = @[@"PAPERCLIP_API_KEY", @"PAPERCLIP_API_URL", @"PAPERCLIP_TASK_ID",
-                    @"PAPERCLIP_RUN_ID", @"PAPERCLIP_COMPANY_ID", @"PAPERCLIP_AGENT_ID"];
-  NSDictionary *trusted = nil;
+static NSDictionary *ProcessInfo(pid_t pid) {
+  struct proc_bsdinfo info = {0};
+  int got = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info));
+  if (got != sizeof(info)) return nil;
+  return @{ @"pid": @(pid), @"uid": @(info.pbi_uid),
+            @"startSeconds": @((unsigned long long)info.pbi_start_tvsec),
+            @"startMicroseconds": @((unsigned long long)info.pbi_start_tvusec) };
+}
+
+static NSData *Base64URLDecode(NSString *value) {
+  NSString *encoded = [[value stringByReplacingOccurrencesOfString:@"-" withString:@"+"]
+    stringByReplacingOccurrencesOfString:@"_" withString:@"/"];
+  NSUInteger padding = (4 - (encoded.length % 4)) % 4;
+  encoded = [encoded stringByPaddingToLength:encoded.length + padding withString:@"=" startingAtIndex:0];
+  return [[NSData alloc] initWithBase64EncodedString:encoded options:0];
+}
+
+static NSDictionary *JWTPayload(NSString *token) {
+  NSArray<NSString *> *parts = [token componentsSeparatedByString:@"."];
+  if (parts.count != 3) return nil;
+  NSData *data = Base64URLDecode(parts[1]);
+  id payload = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+  return [payload isKindOfClass:[NSDictionary class]] ? payload : nil;
+}
+
+static NSString *ValidateRunGrant(NSDictionary *message, uid_t allowedUid) {
+  NSSet *expected = [NSSet setWithArray:@[@"kind", @"pid", @"context", @"githubWrite"]];
+  if (![expected isEqualToSet:[NSSet setWithArray:message.allKeys]]) return @"run registration contains unsupported fields";
+  NSNumber *pidNumber = message[@"pid"], *githubWrite = message[@"githubWrite"];
+  NSDictionary *context = message[@"context"];
+  if (![pidNumber isKindOfClass:[NSNumber class]] || pidNumber.intValue <= 1 ||
+      ![githubWrite isKindOfClass:[NSNumber class]] || ![context isKindOfClass:[NSDictionary class]])
+    return @"run registration has invalid field types";
+  NSSet *contextKeys = [NSSet setWithArray:@[@"PAPERCLIP_API_KEY", @"PAPERCLIP_TASK_ID",
+    @"PAPERCLIP_RUN_ID", @"PAPERCLIP_COMPANY_ID", @"PAPERCLIP_AGENT_ID"]];
+  if (![contextKeys isEqualToSet:[NSSet setWithArray:context.allKeys]]) return @"run context must contain only the five broker fields";
+  for (NSString *key in contextKeys) if (![context[key] isKindOfClass:[NSString class]] || ![context[key] length])
+    return @"run context has a missing value";
+  if (!IsUUID(context[@"PAPERCLIP_TASK_ID"]) || !IsUUID(context[@"PAPERCLIP_RUN_ID"]) ||
+      !IsUUID(context[@"PAPERCLIP_COMPANY_ID"]) || !IsUUID(context[@"PAPERCLIP_AGENT_ID"]))
+    return @"run context identifiers must be UUIDs";
+  NSDictionary *process = ProcessInfo(pidNumber.intValue);
+  if (!process || [process[@"uid"] unsignedIntValue] != allowedUid) return @"registered process is absent or belongs to another uid";
+  NSDictionary *claims = JWTPayload(context[@"PAPERCLIP_API_KEY"]);
+  NSNumber *issuedAt = claims[@"iat"], *expiresAt = claims[@"exp"];
+  NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+  if (![issuedAt isKindOfClass:[NSNumber class]] || ![expiresAt isKindOfClass:[NSNumber class]] ||
+      ![claims[@"run_id"] isEqualToString:context[@"PAPERCLIP_RUN_ID"]] ||
+      ![claims[@"company_id"] isEqualToString:context[@"PAPERCLIP_COMPANY_ID"]] ||
+      ![claims[@"aud"] isEqualToString:@"paperclip-api"] ||
+      expiresAt.doubleValue <= now || expiresAt.doubleValue - now > 4200 ||
+      expiresAt.doubleValue - issuedAt.doubleValue > 4200 ||
+      issuedAt.doubleValue > now + 60 || expiresAt.doubleValue <= issuedAt.doubleValue)
+    return @"Paperclip JWT must match the run and expire within 70 minutes";
+  return nil;
+}
+
+static NSDictionary *GrantForPeer(pid_t peerPID, NSString **error) {
+  NSTimeInterval now = NSDate.date.timeIntervalSince1970;
   pid_t pid = peerPID;
   for (NSUInteger depth = 0; pid > 1 && depth < 48; depth++) {
-    NSDictionary *environment = EnvironmentForPID(pid);
-    BOOL complete = YES;
-    for (NSString *key in keys) if (![environment[key] length]) { complete = NO; break; }
-    if (complete) {
-      if (trusted) {
-        for (NSString *key in keys) {
-          if (![trusted[key] isEqualToString:environment[key]]) {
-            if (error) *error = @"run context differs inside the caller process tree";
-            return nil;
-          }
-        }
-      }
-      trusted = environment;
+    NSDictionary *process = ProcessInfo(pid);
+    for (NSInteger i = (NSInteger)RunGrants.count - 1; i >= 0; i--) {
+      NSDictionary *grant = RunGrants[(NSUInteger)i];
+      if ([grant[@"expiresAt"] doubleValue] <= now) { [RunGrants removeObjectAtIndex:(NSUInteger)i]; continue; }
+      if ([grant[@"pid"] intValue] == pid &&
+          [grant[@"startSeconds"] isEqual:process[@"startSeconds"]] &&
+          [grant[@"startMicroseconds"] isEqual:process[@"startMicroseconds"]]) return grant;
     }
     pid_t parent = ParentPID(pid);
     if (parent <= 1 || parent == pid) break;
     pid = parent;
   }
-  if (!trusted || !IsUUID(trusted[@"PAPERCLIP_TASK_ID"]) ||
-      !IsUUID(trusted[@"PAPERCLIP_RUN_ID"]) || !IsUUID(trusted[@"PAPERCLIP_COMPANY_ID"])) {
-    if (error) *error = @"no complete, valid Paperclip run context in caller ancestry";
-    return nil;
-  }
-  return trusted;
+  if (error) *error = @"caller is not descended from a registered run";
+  return nil;
 }
 
 static BOOL HasTrustedGitRemoteAncestor(pid_t peerPID, NSString *expectedPath) {
@@ -402,28 +414,55 @@ static int PeerInfo(int fd, uid_t *uid, pid_t *pid) {
   return getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, pid, &size);
 }
 
-static NSDictionary *HandleBrokerMessage(NSDictionary *message, pid_t peerPID,
-                                          NSDictionary *config) {
+static NSDictionary *HandleBrokerMessage(NSDictionary *message, uid_t peerUid, pid_t peerPID,
+                                          uid_t allowedUid, NSDictionary *config) {
   NSString *kind = message[@"kind"];
   if ([kind isEqualToString:@"doctor"]) {
     BOOL credentialReady = ReadKeychainSecret(NULL).length > 0;
     return @{ @"ok": @YES, @"version": BrokerVersion, @"origin": config[@"paperclipOrigin"],
-              @"githubCredentialAvailable": @(credentialReady) };
+              @"githubCredentialAvailable": @(credentialReady),
+              @"privilegedRunRegistration": @YES,
+              @"agentEnvironmentCredentialDiscovery": @NO };
+  }
+  if ([kind isEqualToString:@"register-run"]) {
+    if (peerUid != 0) return @{ @"ok": @NO, @"error": @"run registration requires a root caller" };
+    NSString *grantError = ValidateRunGrant(message, allowedUid);
+    if (grantError) return @{ @"ok": @NO, @"error": grantError };
+    NSDictionary *process = ProcessInfo([message[@"pid"] intValue]);
+    NSDictionary *context = message[@"context"];
+    NSDictionary *claims = JWTPayload(context[@"PAPERCLIP_API_KEY"]);
+    for (NSInteger i = (NSInteger)RunGrants.count - 1; i >= 0; i--)
+      if ([RunGrants[(NSUInteger)i][@"pid"] isEqual:message[@"pid"]]) [RunGrants removeObjectAtIndex:(NSUInteger)i];
+    [RunGrants addObject:[@{ @"pid": message[@"pid"],
+      @"startSeconds": process[@"startSeconds"], @"startMicroseconds": process[@"startMicroseconds"],
+      @"context": context, @"githubWrite": message[@"githubWrite"], @"expiresAt": claims[@"exp"] } mutableCopy]];
+    return @{ @"ok": @YES, @"runId": context[@"PAPERCLIP_RUN_ID"] };
+  }
+  if ([kind isEqualToString:@"revoke-run"]) {
+    if (peerUid != 0) return @{ @"ok": @NO, @"error": @"run revocation requires a root caller" };
+    NSString *runId = message[@"runId"];
+    if (!IsUUID(runId)) return @{ @"ok": @NO, @"error": @"run id is invalid" };
+    NSUInteger before = RunGrants.count;
+    for (NSInteger i = (NSInteger)RunGrants.count - 1; i >= 0; i--)
+      if ([RunGrants[(NSUInteger)i][@"context"][@"PAPERCLIP_RUN_ID"] isEqualToString:runId])
+        [RunGrants removeObjectAtIndex:(NSUInteger)i];
+    return @{ @"ok": @YES, @"revoked": @(before - RunGrants.count) };
   }
   if ([kind isEqualToString:@"paperclip"]) {
     if (![[NSSet setWithArray:@[@"kind", @"method", @"path", @"body"]] isEqualToSet:
           [NSSet setWithArray:message.allKeys]])
       return @{ @"ok": @NO, @"error": @"client request contains unsupported fields" };
     NSString *contextError = nil;
-    NSDictionary *context = TrustedRunContext(peerPID, &contextError);
-    if (!context) return @{ @"ok": @NO, @"error": contextError };
-    NSString *contextOriginError = nil;
-    NSString *contextOrigin = EffectiveOrigin(context[@"PAPERCLIP_API_URL"], &contextOriginError);
-    if (!contextOrigin || ![contextOrigin isEqualToString:config[@"paperclipOrigin"]])
-      return @{ @"ok": @NO, @"error": @"run origin does not match the installed broker origin" };
+    NSDictionary *grant = GrantForPeer(peerPID, &contextError);
+    if (!grant) return @{ @"ok": @NO, @"error": contextError };
+    NSDictionary *context = grant[@"context"];
     return PerformPaperclipRequest(message, context, config[@"paperclipOrigin"]);
   }
   if ([kind isEqualToString:@"git-credential"]) {
+    NSString *grantError = nil;
+    NSDictionary *grant = GrantForPeer(peerPID, &grantError);
+    if (!grant || ![grant[@"githubWrite"] boolValue])
+      return @{ @"ok": @NO, @"error": grant ? @"run has no GitHub write grant" : grantError };
     if (!HasTrustedGitRemoteAncestor(peerPID, config[@"gitRemoteHelperPath"]))
       return @{ @"ok": @NO, @"error": @"Git credential request did not originate from the trusted HTTPS transport" };
     NSDictionary *input = message[@"input"];
@@ -549,21 +588,42 @@ static int RunServer(NSString *configPath) {
   chown(BrokerSocketPath.fileSystemRepresentation, 0, pw->pw_gid);
   chmod(BrokerSocketPath.fileSystemRepresentation, 0660);
   signal(SIGTERM, HandleSignal); signal(SIGINT, HandleSignal);
+  RunGrants = [NSMutableArray array];
   while (!StopRequested) {
     int client = accept(listener, NULL, NULL);
     if (client < 0) { if (errno == EINTR) continue; break; }
     uid_t peerUid = 0; pid_t peerPID = 0;
     NSDictionary *response;
-    if (PeerInfo(client, &peerUid, &peerPID) != 0 || peerUid != allowedUid)
+    if (PeerInfo(client, &peerUid, &peerPID) != 0 || (peerUid != allowedUid && peerUid != 0))
       response = @{ @"ok": @NO, @"error": @"caller uid is not authorized" };
     else {
       NSDictionary *message = ReadJSONFD(client, MaxRequestBytes + 8192);
-      response = message ? HandleBrokerMessage(message, peerPID, effective)
+      response = message ? HandleBrokerMessage(message, peerUid, peerPID, allowedUid, effective)
                          : @{ @"ok": @NO, @"error": @"invalid or oversized broker request" };
     }
     WriteJSONFD(client, response); close(client);
   }
   close(listener); unlink(BrokerSocketPath.fileSystemRepresentation); return 0;
+}
+
+static int RunRegisterCommand(pid_t pid) {
+  if (geteuid() != 0 || pid <= 1) { fputs("register-run requires root and --pid PID\n", stderr); return 2; }
+  NSData *input = ReadBoundedFD(STDIN_FILENO, MaxRequestBytes);
+  NSDictionary *body = input ? JSONObject(input) : nil;
+  if (!body) { fputs("register-run requires a JSON object on stdin\n", stderr); return 2; }
+  NSDictionary *response = CallBroker(@{ @"kind": @"register-run", @"pid": @(pid),
+    @"context": body[@"context"] ?: [NSNull null], @"githubWrite": body[@"githubWrite"] ?: [NSNull null] });
+  if (![response[@"ok"] boolValue]) { fprintf(stderr, "%s\n", [response[@"error"] UTF8String]); return 1; }
+  printf("registered run %s\n", [response[@"runId"] UTF8String]);
+  return 0;
+}
+
+static int RunRevokeCommand(NSString *runId) {
+  if (geteuid() != 0) { fputs("revoke-run requires root\n", stderr); return 2; }
+  NSDictionary *response = CallBroker(@{ @"kind": @"revoke-run", @"runId": runId });
+  if (![response[@"ok"] boolValue]) { fprintf(stderr, "%s\n", [response[@"error"] UTF8String]); return 1; }
+  printf("revoked %ld grant(s)\n", (long)[response[@"revoked"] integerValue]);
+  return 0;
 }
 
 static int StoreGitHubToken(void) {
@@ -604,7 +664,29 @@ static int SelfTest(void) {
   check(ValidatePaperclipRequest(@"POST", [NSString stringWithFormat:@"/api/companies/%@/issues", company], [@"{}" dataUsingEncoding:NSUTF8StringEncoding], task, company) != nil, @"unscoped child creation rejected");
   NSMutableData *large = [NSMutableData dataWithLength:MaxRequestBytes + 1];
   check(ValidatePaperclipRequest(@"POST", [NSString stringWithFormat:@"/api/issues/%@/comments", task], large, task, company) != nil, @"oversized body rejected");
-  check([EnvironmentForPID(getpid())[@"PAPERCLIP_BROKER_TEST_CANARY"] isEqualToString:@"process-environment-parser-ok"], @"process environment is read from the peer pid");
+  NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+  NSDictionary *claims = @{ @"run_id": task, @"company_id": company, @"aud": @"paperclip-api",
+    @"iat": @((long long)now), @"exp": @((long long)now + 3600) };
+  NSData *claimsData = [NSJSONSerialization dataWithJSONObject:claims options:0 error:nil];
+  NSString *payload = [[claimsData base64EncodedStringWithOptions:0] stringByReplacingOccurrencesOfString:@"=" withString:@""];
+  payload = [[payload stringByReplacingOccurrencesOfString:@"+" withString:@"-"] stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+  NSDictionary *grantMessage = @{ @"kind": @"register-run", @"pid": @(getpid()), @"githubWrite": @YES,
+    @"context": @{ @"PAPERCLIP_API_KEY": [NSString stringWithFormat:@"e30.%@.sig", payload],
+      @"PAPERCLIP_TASK_ID": company, @"PAPERCLIP_RUN_ID": task, @"PAPERCLIP_COMPANY_ID": company,
+      @"PAPERCLIP_AGENT_ID": company } };
+  check(ValidateRunGrant(grantMessage, getuid()) == nil, @"short-lived run-matching registration accepted");
+  NSDictionary *unprivileged = HandleBrokerMessage(grantMessage, getuid(), getpid(), getuid(), @{});
+  check(![unprivileged[@"ok"] boolValue], @"agent uid cannot register its own run grant");
+  NSMutableDictionary *longLived = [grantMessage mutableCopy];
+  NSDictionary *longClaims = @{ @"run_id": task, @"company_id": company, @"aud": @"paperclip-api",
+    @"iat": @((long long)now), @"exp": @((long long)now + 7200) };
+  NSData *longData = [NSJSONSerialization dataWithJSONObject:longClaims options:0 error:nil];
+  NSString *longPayload = [[longData base64EncodedStringWithOptions:0] stringByReplacingOccurrencesOfString:@"=" withString:@""];
+  longPayload = [[longPayload stringByReplacingOccurrencesOfString:@"+" withString:@"-"] stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+  NSMutableDictionary *longContext = [grantMessage[@"context"] mutableCopy];
+  longContext[@"PAPERCLIP_API_KEY"] = [NSString stringWithFormat:@"e30.%@.sig", longPayload];
+  longLived[@"context"] = longContext;
+  check(ValidateRunGrant(longLived, getuid()) != nil, @"long-lived run credential rejected");
   int pair[2] = {-1, -1}; uid_t peerUid = (uid_t)-1; pid_t peerPID = 0;
   BOOL peerReady = socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0 && PeerInfo(pair[0], &peerUid, &peerPID) == 0;
   check(peerReady && peerUid == getuid() && peerPID == getpid(), @"Unix peer uid and pid are kernel-derived");
@@ -620,9 +702,13 @@ int main(int argc, const char *argv[]) {
     if ([program isEqualToString:@"git-credential-focx"]) return RunGitCredentialClient(argc, argv);
     if (argc == 2 && strcmp(argv[1], "--self-test") == 0) return SelfTest();
     if (argc == 2 && strcmp(argv[1], "store-github-token") == 0) return StoreGitHubToken();
+    if (argc == 4 && strcmp(argv[1], "register-run") == 0 && strcmp(argv[2], "--pid") == 0)
+      return RunRegisterCommand((pid_t)strtol(argv[3], NULL, 10));
+    if (argc == 3 && strcmp(argv[1], "revoke-run") == 0)
+      return RunRevokeCommand([NSString stringWithUTF8String:argv[2]]);
     if (argc == 4 && strcmp(argv[1], "server") == 0 && strcmp(argv[2], "--config") == 0)
       return RunServer([NSString stringWithUTF8String:argv[3]]);
-    fputs("usage: focx-credential-broker server --config FILE | store-github-token | --self-test\n", stderr);
+    fputs("usage: focx-credential-broker server --config FILE | store-github-token | register-run --pid PID | revoke-run RUN_ID | --self-test\n", stderr);
     return 2;
   }
 }
