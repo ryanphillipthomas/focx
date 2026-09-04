@@ -1,0 +1,13 @@
+{
+  "name": "@focx/agent-retention",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Retention clock and secret scrubber for agent transcripts and worktrees. Dependency-free. See docs/data-retention.md.",
+  "bin": {
+    "agent-retention": "./index.mjs"
+  },
+  "scripts": {
+    "test": "node --test test.mjs"
+  }
+}
