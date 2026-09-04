@@ -668,52 +668,8 @@ test('dry run against the fake API plans the full build and changes nothing', as
   } finally { await fake.close() }
 })
 
-test('--apply refuses when --confirm-terminate does not match, before writing anything', async () => {
-  const { roster } = load()
-  const fake = createFakeApi({ companyId: roster.company.id, seedAgents: [{ id: 'old-1', name: 'Development Agent', status: 'idle' }] })
-  const url = await fake.listen()
-  try {
-    const r = await cli(['--apply', '--confirm-terminate=5'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url })
-    assert.equal(r.code, 2)
-    assert.match(r.stderr, /does not match the 1 termination/)
-    assert.deepEqual(fake.state.calls.filter((c) => c.method !== 'GET'), [])
-  } finally { await fake.close() }
-})
 
-// The skills step used to POST { desiredSkills } with no mode. The API requires
-// one and 422s without it, so every agent's skills were silently skipped while
-// the run still exited 0 with a green board — verify never reads skills.
-test('--apply syncs skills with mode replace, and exits 0', async () => {
-  const { roster } = load()
-  const fake = createFakeApi({ companyId: roster.company.id })
-  const url = await fake.listen()
-  try {
-    const claudeHome = fakeClaudeHome(roster)
-    const pcHome = fakePaperclipHome(roster)
-    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
-    rmSync(claudeHome, { recursive: true, force: true })
-    rmSync(pcHome, { recursive: true, force: true })
-    assert.equal(r.code, 0, r.stderr)
-    const syncs = fake.state.calls.filter((c) => /\/skills\/sync$/.test(c.path))
-    const wanted = roster.agents.filter((a) => (a.desiredSkills ?? []).length).length
-    assert.equal(syncs.length, wanted, 'every agent with desiredSkills is synced')
-    for (const c of syncs) {
-      assert.equal(c.body.mode, 'replace', 'the roster is the complete desired set, so replace')
-      assert.ok(Array.isArray(c.body.desiredSkills) && c.body.desiredSkills.length)
-    }
-  } finally { await fake.close() }
-})
 
-test('a failed skills sync is a partial apply, not a green run', async () => {
-  const { roster } = load()
-  const fake = createFakeApi({ companyId: roster.company.id, failSkillSync: true })
-  const url = await fake.listen()
-  try {
-    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url })
-    assert.equal(r.code, 4, 'exit 4 — mixed state, rerun must be deliberate')
-    assert.match(r.stderr, /PARTIAL APPLY/)
-  } finally { await fake.close() }
-})
 
 test('the create payload never sends canAssignTasks — the API rejects it there', () => {
   const { roster, fragments } = load()
@@ -1329,73 +1285,8 @@ const containedFake = (roster, { enabled = false, status = 'paused' } = {}) => r
   triggers: [{ id: `live-t-${i}`, kind: 'schedule', enabled, cronExpression: r.cron, timezone: r.timezone, label: r.key }],
 }))
 
-test('--apply does not re-arm an org that was contained out of band', async () => {
-  const fx = activeRosterFile()
-  const fake = createFakeApi({ companyId: fx.roster.company.id, seedRoutines: containedFake(fx.roster) })
-  const url = await fake.listen()
-  try {
-    const claudeHome = fakeClaudeHome(fx.roster)
-    const pcHome = fakePaperclipHome(fx.roster)
-    const r = await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
-    rmSync(claudeHome, { recursive: true, force: true })
-    rmSync(pcHome, { recursive: true, force: true })
-    // Exit 1, not 0, and that is the honest answer: the brake was held, so live
-    // really does diverge from a roster that wants these routines on. An apply
-    // that held something back must not report a clean org.
-    assert.equal(r.code, 1, r.stderr)
-    assert.match(r.stdout, /trigger disabled, roster says 'active'/)
 
-    // Not one schedule trigger may have been switched back on.
-    for (const [, list] of fake.state.triggers) {
-      for (const trig of list.filter((x) => x.kind === 'schedule')) {
-        assert.equal(trig.enabled, false, `apply re-enabled ${trig.label} — the brake was released`)
-      }
-    }
-    // Nor may a paused routine have been re-activated.
-    for (const live of fake.state.routines) {
-      assert.notEqual(live.status, 'active', `apply re-activated ${live.title}`)
-    }
-    assert.match(r.stdout, /left contained/)
-    assert.match(r.stdout, /--enable-routines/)
-  } finally { await fake.close(); fx.cleanup() }
-})
 
-test('--apply --enable-routines is the deliberate way back on', async () => {
-  const fx = activeRosterFile()
-  const fake = createFakeApi({ companyId: fx.roster.company.id, seedRoutines: containedFake(fx.roster) })
-  const url = await fake.listen()
-  try {
-    const claudeHome = fakeClaudeHome(fx.roster)
-    const pcHome = fakePaperclipHome(fx.roster)
-    const r = await cli(['--apply', '--confirm-terminate=0', '--enable-routines', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
-    rmSync(claudeHome, { recursive: true, force: true })
-    rmSync(pcHome, { recursive: true, force: true })
-    assert.equal(r.code, 0, r.stderr)
-    const scheds = [...fake.state.triggers.values()].flat().filter((x) => x.kind === 'schedule')
-    assert.equal(scheds.length, fx.roster.routines.length, 'no duplicate triggers were stacked')
-    assert.ok(scheds.every((x) => x.enabled === true), 'the operator asked for it, so it happens')
-    assert.ok(fake.state.routines.every((x) => x.status === 'active'))
-  } finally { await fake.close(); fx.cleanup() }
-})
-
-test('a contained live org still converges cron drift without re-arming', async () => {
-  const fx = activeRosterFile()
-  const seeded = containedFake(fx.roster)
-  seeded[0].triggers[0].cronExpression = '*/5 * * * *'   // drifted, and disabled
-  const fake = createFakeApi({ companyId: fx.roster.company.id, seedRoutines: seeded })
-  const url = await fake.listen()
-  try {
-    const claudeHome = fakeClaudeHome(fx.roster)
-    const pcHome = fakePaperclipHome(fx.roster)
-    const r = await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
-    rmSync(claudeHome, { recursive: true, force: true })
-    rmSync(pcHome, { recursive: true, force: true })
-    assert.equal(r.code, 1, r.stderr)   // held, therefore not clean — see above
-    const t0 = fake.state.triggers.get('live-r-0')[0]
-    assert.equal(t0.cronExpression, fx.roster.routines[0].cron, 'cron still converges')
-    assert.equal(t0.enabled, false, 'but the brake stays on')
-  } finally { await fake.close(); fx.cleanup() }
-})
 
 test('a dry run warns that routines are contained, and still writes nothing', async () => {
   const fx = activeRosterFile()
@@ -1414,4 +1305,13 @@ test('the committed roster records the containment rather than lying about it', 
   const { roster } = load()
   const active = roster.routines.filter((r) => r.status === 'active').map((r) => r.key)
   assert.deepEqual(active, [], 'routines are paused after the 2026-09-04 comment loop; re-arm deliberately')
+})
+
+// Legacy mutation paths are retired, including every former override flag.
+test('legacy apply refuses all overrides before contacting a service', async () => {
+  for (const args of [ ['--apply'], ['--apply','--confirm-terminate=26','--enable-routines'], ['--apply','--allow-builtin-termination','--terminate-running'] ]) {
+    const result = await cli(args, {PAPERCLIP_API_KEY:'unused', PAPERCLIP_API_URL:'http://127.0.0.1:9'})
+    assert.equal(result.code,2)
+    assert.match(result.stderr,/Legacy organization apply is retired/)
+  }
 })

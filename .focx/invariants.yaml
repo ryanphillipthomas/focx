@@ -1,0 +1,27 @@
+{
+  "version": "0.1.0",
+  "company": "Focx",
+  "brand": "Focx",
+  "platform": "Focx",
+  "activeProducts": [
+    "Connect"
+  ],
+  "finalRepository": "ryanphillipthomas/focx",
+  "legacyRepositories": "reference-only",
+  "controlPlane": "Paperclip",
+  "humanApprover": "Ryan Thomas",
+  "separationOfDuties": {
+    "humanApprovalRequired": true,
+    "independentVerificationRequired": true,
+    "selfApprovalAllowed": false,
+    "selfVerificationAllowed": false
+  },
+  "pilot": {
+    "activation": "paused",
+    "automaticWork": false,
+    "maxActiveImplementationTasks": 1,
+    "maxActiveImplementationPRs": 1,
+    "legacyApplyAllowed": false,
+    "agentDeletionAllowed": false
+  }
+}

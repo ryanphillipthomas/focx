@@ -31,3 +31,7 @@ jobs:
       # 2026-09-04 comment loop — protected nothing on a pull request.
       - name: org reconciler
         run: node tools/paperclip-org/test.mjs
+      - name: pilot source and synchronization safeguards
+        run: |
+          node tools/pilot-org/index.mjs --check
+          node --test tools/pilot-org/test.mjs

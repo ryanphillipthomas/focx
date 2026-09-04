@@ -1,32 +1,20 @@
 # Sources of truth
 
-One canonical home per concern. Everything else is a mirror, a consumer, or drift.
+The `.focx` control layer establishes the current pilot. Historical records are evidence, not standing instructions.
 
-| Concern | Canonical home | Mirrored where | Handoff mechanism |
-|---|---|---|---|
-| **Design** | Figma (files listed in [`design/figma.manifest.json`](../design/figma.manifest.json)) | `design/tokens/` in this repo | **Product Designer** is the only agent with Figma write, and promotes only after a `DESIGN_APPROVAL verdict=approved` from **Design Steward** ([`org.md`](org.md)); it then syncs published Figma variables/components → tokens via the Figma MCP. The drift gate verifies code against the mirror |
-| **Tickets** | GitHub Issues in this repository | Run brief artifact (`10-brief.json`) | The `pipeline:build` label fires the pipeline; the Chief derives the brief from the issue body and links the run back on the issue |
-| **Development** | This repository, `develop` branch | Run branches (`run/<run-id>`) | Pull requests; human review is the only path to `develop` — bot PRs get inline QA, hand-written PRs get the `pr-review` check |
-| **Orchestration / execution substrate** | The Paperclip company `Focx.ai` (`5f772ef2-…`). Desired state is [`pipeline/org/roster.json`](../pipeline/org/roster.json); the org is documented in [`org.md`](org.md) | Paperclip holds live state | [`tools/paperclip-org/`](../tools/paperclip-org/index.mjs) reconciles live state to the roster; `--verify-only` makes divergence a failing check. GitHub Actions is retained for the drift gate and deploy verification |
-| **Who runs which pipeline stage** | [`org.md`](org.md) | Instruction bundles under [`pipeline/org/instructions/`](../pipeline/org/instructions/), rendered into Paperclip | Bundles are a pure function of this repo; a hand-edit in the Paperclip UI is drift, not a change |
-| **Agent credentials** | Paperclip's secret store | — | The roster references secrets **by name** only. A credential value never enters this repository |
-| **Run state / audit** | `pipeline/runs/<run-id>/` on the run branch, plus the PR itself | GitHub Actions run logs; once Paperclip-native execution lands per the 2026-09-01 decision, Paperclip's task, budget, and audit trail will be an additional mirror | Each role commits its artifact before handing off |
-| **Deployment** | Render, configured by [`render.yaml`](../render.yaml) | PR deploy previews | Render generates a preview per PR; the preview URL is recorded in the build report artifact |
-| **Distribution** (future: App Store, TestFlight) | To be decided when Apple targets land — will be a single home, documented here first | — | — |
+| Concern | Canonical authority | Consumers and limits |
+|---|---|---|
+| Locked identity and role separation | [invariants](../.focx/invariants.yaml) | Focx company/platform/brand; Connect only active product; Ryan approves; QA independently verifies |
+| Active state and legacy adoption | [baseline](../.focx/baseline.yaml) | Distinguishes active, superseded, retired and unknown claims at source revisions |
+| Agent desired state | [agent manifest](../.focx/agents.json) | All 26 identities retained, three paused pilot roles, 23 disabled candidates |
+| Agent behavior and methods | [roles](../.focx/roles/) and [versioned skills](../.focx/skills/) | Visible Paperclip instruction files; old prompts are not inherited |
+| Agent execution and task coordination | Paperclip company Focx.ai | Ryan deliberately initiates work; no autonomous follow-up tasks |
+| Development | This repository, develop | GitHub issues/PRs link to the assigned Paperclip task; human merge approval |
+| Design | Figma files in [manifest](../design/figma.manifest.json) | Published values mirrored into design/tokens; drift checks remain required; pilot has no autonomous design-promotion authority |
+| Run evidence | pipeline/runs and pipeline/releases | Existing contracts and current-task evidence remain required; retrieve history only for a specific question |
+| Credentials | Paperclip secret store and existing host authentication | No credential values in source; synchronization preserves existing adapter credentials, never grants new access |
+| Deployment | [render.yaml](../render.yaml) | Existing preview and verification flow; no pilot agent may release production |
 
-## Rules
+[The pilot guide](pilot-operation.md) explains synchronization and the activation gate. [The old organization](org.md), `pipeline/org/roster.json`, its rendered prompts and departmental model/skill assignments are superseded reference material. The legacy reconciler's live apply is disabled.
 
-1. **Writes go to the canonical home only.** A bot that wants to change a design value changes it in Figma (or escalates to a human who can); it never edits `design/tokens/` directly except through the Design role's sync process.
-2. **Mirrors are read-only for consumers.** Code reads tokens from `design/tokens/`; it never defines its own.
-3. **A missing fact is a finding, not an invitation.** If the canonical home lacks something a role needs, the role records it in its artifact and escalates — it does not create a shadow copy elsewhere.
-4. **Changing a canonical home is a human decision.** Moving tickets off GitHub Issues, deployment off Render, etc. requires updating this document first, by a human-merged PR.
-
-## Design parent/child relationship
-
-The focx design system is the **parent**; Connect's is a **child** that extends it — the way Grok's extends xAI's.
-
-- `design/tokens/focx/` — the parent tokens, extracted from the focx Figma foundation.
-- `design/tokens/connect/` — **deltas only**: new `connect.*` tokens, plus explicit overrides marked `"override": true`. Never a copy of the parent.
-- `packages/design-connect` declares a dependency on `packages/design-focx` and re-exports what it does not override.
-
-This makes extension mechanically checkable: the drift gate fails any Connect token that silently redefines a parent path.
+Design mirrors remain read-only for consumers. Connect extends Focx tokens through explicit deltas and marked overrides. Missing authoritative facts are findings for Ryan. Moving an authority or adopting legacy behavior requires a human-reviewed change to the relevant control/source files.
