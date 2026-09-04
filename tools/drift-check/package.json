@@ -6,5 +6,8 @@
   "description": "The design-drift gate CLI. Dependency-free. See docs/drift-gate.md.",
   "bin": {
     "drift-check": "./index.mjs"
+  },
+  "scripts": {
+    "test": "node --test test.mjs"
   }
 }
