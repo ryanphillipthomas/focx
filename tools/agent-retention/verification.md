@@ -63,21 +63,38 @@ node tools/agent-retention/index.mjs sweep --json | jq '.plan | group_by(.reason
 
 ## 3b. Prove the purge, without using the tool that did it
 
-The tool asserting it found nothing is not evidence. Grep the store independently, and split residual hits into files inside the 15-minute write grace window (deferred by design) and quiet files (**must be zero**):
+The tool asserting it found nothing is not evidence. Grep the store independently.
+
+Split residual hits into **three** buckets, not two. A file becomes eligible for scrubbing once it has been quiet for `scrubQuietMinutes` (15), but it is not actually rewritten until the *next* scheduled pass, and that pass runs every 15 minutes. So a file can legitimately be quiet-and-unscrubbed for up to 30 minutes:
+
+| Bucket | mtime age | Residuals expected |
+|---|---|---|
+| live | < 15 min | yes — rewriting an open transcript would truncate it |
+| pending | 15–30 min | yes — eligible, waiting on the next scheduled pass |
+| **settled** | **> 30 min** | **must be zero** |
+
+Only the settled bucket is an acceptance criterion. An earlier version of this section used a binary live/quiet split and called any quiet hit a failure; on a busy host that reports a false miss for anyone who samples between scheduled fires, because files cross the 15-minute line continuously.
 
 ```sh
 cd ~/.paperclip/instances/default && node -e '
 const {readFileSync,statSync}=require("fs");const {execSync}=require("child_process");
 const files=execSync("find workspaces/*/.claude/projects companies/*/acp-engine/agents/*/sessions companies/*/codex-home/sessions data/run-logs -type f",{encoding:"utf8",maxBuffer:1e8}).trim().split("\n");
 const classes={OAUTH:/\bsk-ant-oat[0-9A-Za-z_-]{16,}/,GH:/\bgh[pousr]_[A-Za-z0-9]{16,}/,JWT:/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,API:/\bsk-ant-api[0-9A-Za-z_-]{16,}/};
-const now=Date.now(),out={};for(const k in classes)out[k]={live:0,quiet:0};
+const now=Date.now(),out={};for(const k in classes)out[k]={live:0,pending:0,settled:0};
 for(const f of files){let t;try{t=readFileSync(f,"utf8")}catch{continue}
- const live=now-statSync(f).mtimeMs<9e5;
- for(const[k,re]of Object.entries(classes))if(re.test(t))live?out[k].live++:out[k].quiet++;}
-console.log(files.length,"files:",JSON.stringify(out));'
+ const m=(now-statSync(f).mtimeMs)/60000, b=m<15?"live":m<30?"pending":"settled";
+ for(const[k,re]of Object.entries(classes))if(re.test(t))out[k][b]++;}
+console.log(files.length,"files:",JSON.stringify(out,null,1));'
 ```
 
-Anchor the leading `\b` but **not** a trailing one. A trailing boundary was tried during verification and produced a false positive — `gho_` occurring mid-blob inside a long base64 value — which is worth knowing before someone reports it as a miss.
+To collapse the pending bucket instead of waiting it out, run `scrub --apply` and re-sample. Do not "fix" a pending hit by shortening `scrubQuietMinutes` — that window is what stops the scrubber truncating a transcript a live session still holds open.
+
+Anchor the leading `\b` but **not** a trailing one. Both boundaries have bitten:
+
+- A *trailing* `\b` produced a false positive — `gho_` mid-blob inside a long base64 value.
+- *Dropping* the leading `\b` does the same thing for the same reason. Verified on 2026-09-04: an audit regex written without it matched `ghp_`/`gho_` substrings inside a Fernet `payload.encrypted_content` ciphertext. Real tokens are delimited; ciphertext is not.
+
+If an audit reports a handful of GitHub-token hits that no scrub ever clears, check the leading anchor before reporting a miss.
 
 ## 4. Prove deletions leave evidence
 
@@ -143,3 +160,29 @@ Legal & Privacy re-scoped this issue from prevention to remediation: 135 files w
 **Schedule.** Re-installed as a staged copy at `~/.paperclip/retention/bin/`. Both jobs kickstarted and produced real logs; the staged copy independently resolved all 30 record directories *and* the real worktrees, which is what proves the absolute-path pinning works. This replaces the first run's open caveat — the schedule no longer points into the FOC-73 worktree, so it does not need re-installing when this branch merges.
 
 **Still open for Security.** Independent verification of the purge, per the re-scope. §3b is written to be run by someone who does not trust this tool or this file.
+
+## Third run — 2026-09-04, after Security's PASS on FOC-83
+
+Security passed the retention clock at commit `6a72c08`. That is the **narrow** version: one store, 8 directories, 25 files, 5.6 MB, 26 tests. HEAD is `ed245ec` — four stores, 30 directories, 537 files, 161 MB, 36 tests, +519/−86 lines. The verified version is not the version that would merge, and the delta *is* the control. Re-verification asked as FOC-88; this run is the CTO baseline for it, not a substitute.
+
+**Mechanism at HEAD.** 36/36 pass. `status` resolved 30 directories, 537 files, 161 MB, 0 expiring; 41 worktrees, 28 MB, 0 reclaimable.
+
+**Why the §3b criterion changed.** Sampling the store mid-cycle showed 17 unique secret-shaped values in files that the old binary split called "quiet — must be zero". None was a coverage miss:
+
+- 15 cleared on a manual `scrub --apply`. They had crossed the 15-minute quiet line *after* the 14:56 UTC scheduled pass, with the next fire due 15:11 UTC — the eventual-consistency gap, working as designed.
+- 2 were false positives: `ghp_`/`gho_` substrings inside a Fernet `payload.encrypted_content` ciphertext, matched only because the audit regex omitted the leading `\b`.
+
+Re-sampled with the three-bucket split over 594 files: **settled (>30 min) = 0 for all four classes**, with 411 files in that bucket. All remaining hits were live (<15 min) or pending (15–30 min).
+
+| Class | live | pending | **settled — must be 0** |
+|---|---|---|---|
+| `CLAUDE_CODE_OAUTH_TOKEN` | 5 | 0 | **0** |
+| `GH_TOKEN` | 9 | 2 | **0** |
+| `PAPERCLIP_API_KEY` (JWT) | 32 | 6 | **0** |
+| `sk-ant-api…` | 3 | 2 | **0** |
+
+The binary criterion would have reported a failure here. It was wrong, not the store — hence the §3b rewrite above. A check that cries wolf between scheduled passes trains its auditor to ignore it, which is worse than having no check.
+
+**Schedule, re-confirmed against Security's handoff note.** The note asked for `install-schedule` to be re-run after merge because the jobs "still point into the FOC-73 worktree". They do not. Both plists invoke `~/.paperclip/retention/bin/tools/agent-retention/index.mjs`; the staged script is byte-identical to HEAD and its staged config carries all four stores as absolute paths. `runs = 1` with a 900 s interval was consistent with the 14:55 UTC install, not a stalled job — checked, because a silently stopped clock was the more serious reading. Re-staging is needed to pick up *future* edits, and `status` flags a stale stage.
+
+**Unchanged limit.** 53 files were deferred as still-live at sample time. Periodic scrubbing is eventual consistency, not containment; the plaintext write at source belongs to FOC-81 and FOC-85.
