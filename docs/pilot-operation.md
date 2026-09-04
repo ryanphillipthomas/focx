@@ -26,3 +26,9 @@ Before any model run: confirm the legacy PR queue has only one selected implemen
 During development, the three pilot roles have no daily run cap, as explicitly approved by Ryan. A 15-minute timeout remains configured for each pilot. Steward also has a 20-turn limit. These limits are not a measured token budget or proof of runtime enforcement. The first bounded task must verify the installed runtime honors them. One active implementation task/PR is a human admission rule in v0.1, not a global Paperclip scheduler lock.
 
 New findings go into the existing task report for Ryan. They do not automatically create tasks, PRs, comments that trigger more work, or retry chains. A blocked role reports once and stops. Runtime tests, product behavior recovery, production deployment and repository-wide physical archival are outside this migration PR.
+
+## Execution permission policy
+
+Paperclip 2026.831.1 defaults both Claude and Codex ACP engines to `approve-all`. The CLI bypass flags do not select ACP permission policy. Each pilot therefore explicitly declares `permissionMode: approve-reads` and `nonInteractivePermissions: deny`; CLI bypass flags remain false. Synchronization preserves stricter existing `deny-all` or `fail` policies.
+
+This is an agent permission policy, not a filesystem or network sandbox. Whether a tool request is classified as read-only depends on the adapter. An operation needing approval must stop when no interactive approver is present. Before implementation work, deliberately establish an appropriate scoped write workflow; do not resolve permission failures by silently restoring `approve-all`. The earlier smoke test proved task context and stopping behavior, not this corrected permission behavior.

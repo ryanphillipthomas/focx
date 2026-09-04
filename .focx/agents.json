@@ -24,7 +24,11 @@
         "canCreateSkills": false,
         "canAssignTasks": false
       },
-      "maxTurnsPerRun": 20
+      "maxTurnsPerRun": 20,
+      "executionPermissions": {
+        "permissionMode": "approve-reads",
+        "nonInteractivePermissions": "deny"
+      }
     },
     {
       "id": "0d15f598-8d34-405e-9131-3e769fb87489",
@@ -171,6 +175,10 @@
         "canCreateAgents": false,
         "canCreateSkills": false,
         "canAssignTasks": false
+      },
+      "executionPermissions": {
+        "permissionMode": "approve-reads",
+        "nonInteractivePermissions": "deny"
       }
     },
     {
@@ -227,6 +235,10 @@
         "canCreateAgents": false,
         "canCreateSkills": false,
         "canAssignTasks": false
+      },
+      "executionPermissions": {
+        "permissionMode": "approve-reads",
+        "nonInteractivePermissions": "deny"
       }
     }
   ]

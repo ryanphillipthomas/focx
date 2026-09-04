@@ -32,6 +32,7 @@ export function loadSource(root = ROOT) {
     requireThat(a.timeoutSec > 0 && a.timeoutSec <= 900, 'Per-run timeout cannot be relaxed')
     requireThat((Number.isInteger(a.maxDailyRuns) && a.maxDailyRuns > 0 && a.maxDailyRuns <= 3) || (a.maxDailyRuns === null && uncappedDevelopment), 'Uncapped runs require explicit development policy')
     requireThat(['claude_local','codex_local'].includes(a.adapterType), 'Unknown adapter')
+    requireThat(same(a.executionPermissions, {permissionMode:'approve-reads',nonInteractivePermissions:'deny'}), 'Pilot ACP permissions must be explicit and deny unattended writes')
     requireThat(a.adapterType !== 'claude_local' || (a.maxTurnsPerRun > 0 && a.maxTurnsPerRun <= 20), 'Claude turn limit required')
     requireThat(a.instructions === `.focx/roles/${a.roleKey}.md`, 'Instructions must be isolated role source')
     files[a.id] = {'AGENTS.md':read(a.instructions)}
@@ -108,6 +109,14 @@ export function plan(source, live) {
       body.runtimeConfig.heartbeat.maxConcurrentRuns = 1
       body.runtimeConfig.heartbeat.maxDailyRuns = a.maxDailyRuns === null ? null : tighter(c.runtimeConfig?.heartbeat?.maxDailyRuns,a.maxDailyRuns)
       body.adapterConfig = structuredClone(c.adapterConfig)
+      // ACP uses its own policy; the CLI bypass switch does not control it.
+      // Keep a stricter existing deny-all policy instead of loosening it.
+      const effectiveMode = [c.adapterConfig.permissionMode, c.adapterConfig.acpPermissionMode].find(v => typeof v === 'string' && v.trim())?.trim()
+      const effectiveNonInteractive = [c.adapterConfig.nonInteractivePermissions, c.adapterConfig.acpNonInteractivePermissions].find(v => typeof v === 'string' && v.trim())?.trim()
+      body.adapterConfig.permissionMode = effectiveMode === 'deny-all' ? 'deny-all' : a.executionPermissions.permissionMode
+      body.adapterConfig.nonInteractivePermissions = effectiveNonInteractive === 'fail' ? 'fail' : a.executionPermissions.nonInteractivePermissions
+      if (a.adapterType === 'claude_local') body.adapterConfig.dangerouslySkipPermissions = false
+      else body.adapterConfig.dangerouslyBypassApprovalsAndSandbox = false
       body.adapterConfig.timeoutSec = tighter(c.adapterConfig.timeoutSec,a.timeoutSec)
       // Zero timeout can mean unlimited; never preserve it as a stricter timeout.
       if (body.adapterConfig.timeoutSec === 0) body.adapterConfig.timeoutSec = a.timeoutSec
