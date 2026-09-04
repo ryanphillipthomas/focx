@@ -91,6 +91,53 @@ test('defaults preserve the original focx layout', () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
+test('auto-detects TypeScript token layers and scans src by default', () => {
+  const root = mkdtempSync(join(tmpdir(), 'drift-check-typescript-tokens-'));
+  write(root, 'themes/light.ts', "export const colors = { primary: '#123456' };\n");
+  write(root, 'src/card.tsx', "export const card = '<div style={{ color: \\\"#123456\\\" }} />';\n");
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /1 published values from 1 token files/);
+});
+
+test('accepts explicitly configured token files with arbitrary names', () => {
+  const root = mkdtempSync(join(tmpdir(), 'drift-check-explicit-tokens-'));
+  write(root, 'foundations/values.scss', '$brand-primary: #123456;\n');
+  write(root, 'src/card.css', '.card { color: #123456; }\n');
+  write(root, 'drift-check.config.json', JSON.stringify({ tokenFiles: ['foundations/values.scss'] }));
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('excludes generated output, token definitions, SVG art, and test/story fixtures', () => {
+  const root = mkdtempSync(join(tmpdir(), 'drift-check-exclusions-'));
+  write(root, 'themes/light.ts', "export const primary = '#123456';\n");
+  write(root, 'src/generated/report.generated.ts', "export const generated = '#aaaaaa';\n");
+  write(root, 'src/tokens/local.ts', "export const local = '#bbbbbb';\n");
+  write(root, 'src/components/Assets/Flags/Australia.tsx', "export const flag = '<svg><path fill=\\\"#012169\\\" /></svg>';\n");
+  write(root, 'src/card.test.ts', "assert.equal(color, '#cccccc');\n");
+  write(root, 'src/Card.stories.tsx', "export const story = { color: '#dddddd' };\n");
+  write(root, 'coverage/report.ts', "export const report = '#eeeeee';\n");
+  write(root, 'src/card.css', '.card { color: #123456; }\n');
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('parent/child integrity is opt-in', () => {
+  const root = mkdtempSync(join(tmpdir(), 'drift-check-parent-child-'));
+  write(root, 'design/tokens/focx/tokens.json', JSON.stringify({ color: { primary: { value: '#123456' } } }));
+  write(root, 'design/tokens/acme/tokens.json', JSON.stringify({ color: { secondary: { value: '#654321' } } }));
+  write(root, 'apps/site.css', '.card { color: #123456; }\n');
+
+  const defaultResult = run(root);
+  assert.equal(defaultResult.status, 0, defaultResult.stderr);
+
+  write(root, 'drift-check.config.json', JSON.stringify({ validateParentChild: true }));
+  const optedInResult = run(root);
+  assert.equal(optedInResult.status, 1);
+  assert.match(optedInResult.stderr, /silent parent redefinition is drift/);
+});
+
 test('invalid configuration fails without scanning outside the repository', () => {
   const root = fixture({
     config: {

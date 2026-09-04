@@ -15,8 +15,8 @@ Figma is the design source of truth. Its published variables and components are 
 
 [`tools/drift-check`](../tools/drift-check/) — a dependency-free Node CLI, runnable locally with `pnpm drift-check`, and published as the standalone `ryanphillipthomas/drift-check@v1` GitHub Action:
 
-- **Token integrity:** validates both token files parse, and that every `connect` token is either namespaced `connect.*` or an explicit override of an existing `focx` path.
-- **Raw-value scan:** scans `apps/` and `packages/` source for literal color values (hex, `rgb()`) and hard-coded typography/spacing pixel values that do not correspond to a published token value. Token definition files themselves are exempt.
+- **Token integrity (repo opt-in):** this repo sets `validateParentChild: true`, which validates both JSON token files and requires every `connect` token to be either namespaced `connect.*` or an explicit override of an existing `focx` path. Portable Action users do not inherit this focx-specific convention.
+- **Raw-value scan:** auto-detects published token values, including token layers authored as TypeScript, SCSS, and CSS, then scans `apps/`, `src/`, and `packages/` source for unmatched literal colors and hard-coded typography/spacing pixel values. Generated output, token definitions, SVG artwork, and test/story fixtures are exempt.
 - **Figma freshness (Phase 2):** compares `design/tokens/focx/` against the published Figma variables via the Figma MCP and fails on divergence. Until the MCP runs in CI, freshness is enforced at Design-role sync time and by review.
 
 Exit code 0 = clean; non-zero = drift, with a file/line report.

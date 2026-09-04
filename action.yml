@@ -9,6 +9,12 @@ inputs:
   token-path-pattern:
     description: Repository-relative token path containing a {namespace} segment. Overrides config when set.
     required: false
+  token-files:
+    description: Comma-separated repository-relative token files. Auto-detection is used when omitted.
+    required: false
+  validate-parent-child:
+    description: Enforce the focx-style parent/child JSON token convention. Disabled by default.
+    required: false
   scan-dirs:
     description: Comma-separated repository-relative directories to scan. Overrides config when set.
     required: false
