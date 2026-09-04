@@ -19,12 +19,9 @@ Where they appear to disagree, the repo wins on repo mechanics and this bundle w
 
 ### Cold start, in order
 
-1. The repo's `AGENTS.md`
-2. `docs/sources-of-truth.md`
-3. `docs/org.md` — who executes which pipeline stage
-4. `docs/pipeline.md`
-5. Your stage's role file in `docs/roles/`
-6. The JSON Schema for the artifact you must produce, in `pipeline/contracts/`
+Follow the repo's `AGENTS.md` scoped read order. The context and evidence policy
+is already embedded in this bundle. Read the current task's required artifacts;
+load organization, pipeline and other role documents only when applicable.
 
 ### Run mechanics
 
