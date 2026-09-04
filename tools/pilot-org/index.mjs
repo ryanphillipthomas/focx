@@ -28,7 +28,9 @@ export function loadSource(root = ROOT) {
     requireThat(/^[0-9a-f-]{36}$/.test(a.id) && a.status === 'paused' && ['pilot','disabled-candidate'].includes(a.disposition), 'Invalid retained identity or disposition')
     if (a.disposition !== 'pilot') continue
     requireThat(a.reportsTo === null && same(a.permissions, {canCreateAgents:false,canCreateSkills:false,canAssignTasks:false}), 'Pilot must have human ownership and no delegation')
-    requireThat(a.timeoutSec > 0 && a.timeoutSec <= 900 && a.maxDailyRuns > 0 && a.maxDailyRuns <= 3, 'Pilot limits cannot be relaxed')
+    const uncappedDevelopment = invariants.pilot.environment === 'development' && invariants.pilot.dailyRunCapPolicy === 'uncapped-during-development'
+    requireThat(a.timeoutSec > 0 && a.timeoutSec <= 900, 'Per-run timeout cannot be relaxed')
+    requireThat((Number.isInteger(a.maxDailyRuns) && a.maxDailyRuns > 0 && a.maxDailyRuns <= 3) || (a.maxDailyRuns === null && uncappedDevelopment), 'Uncapped runs require explicit development policy')
     requireThat(['claude_local','codex_local'].includes(a.adapterType), 'Unknown adapter')
     requireThat(a.adapterType !== 'claude_local' || (a.maxTurnsPerRun > 0 && a.maxTurnsPerRun <= 20), 'Claude turn limit required')
     requireThat(a.instructions === `.focx/roles/${a.roleKey}.md`, 'Instructions must be isolated role source')
@@ -104,7 +106,7 @@ export function plan(source, live) {
     if (a.disposition === 'pilot') {
       body.reportsTo = null
       body.runtimeConfig.heartbeat.maxConcurrentRuns = 1
-      body.runtimeConfig.heartbeat.maxDailyRuns = tighter(c.runtimeConfig?.heartbeat?.maxDailyRuns,a.maxDailyRuns)
+      body.runtimeConfig.heartbeat.maxDailyRuns = a.maxDailyRuns === null ? null : tighter(c.runtimeConfig?.heartbeat?.maxDailyRuns,a.maxDailyRuns)
       body.adapterConfig = structuredClone(c.adapterConfig)
       body.adapterConfig.timeoutSec = tighter(c.adapterConfig.timeoutSec,a.timeoutSec)
       // Zero timeout can mean unlimited; never preserve it as a stricter timeout.

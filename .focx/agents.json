@@ -14,7 +14,7 @@
       "reportsTo": null,
       "adapterType": "claude_local",
       "timeoutSec": 900,
-      "maxDailyRuns": 3,
+      "maxDailyRuns": null,
       "instructions": ".focx/roles/architecture-documentation-steward.md",
       "skills": [
         "focx-reconcile-truth"
@@ -162,7 +162,7 @@
       "reportsTo": null,
       "adapterType": "codex_local",
       "timeoutSec": 900,
-      "maxDailyRuns": 3,
+      "maxDailyRuns": null,
       "instructions": ".focx/roles/implementation-engineer.md",
       "skills": [
         "focx-implement-task"
@@ -218,7 +218,7 @@
       "reportsTo": null,
       "adapterType": "codex_local",
       "timeoutSec": 900,
-      "maxDailyRuns": 3,
+      "maxDailyRuns": null,
       "instructions": ".focx/roles/qa-engineer.md",
       "skills": [
         "focx-verify-change"
