@@ -1,6 +1,8 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {loadSource,snapshot,plan,synchronize,publicPlan} from './index.mjs'
+import {readFileSync} from 'node:fs'
+import {resolve} from 'node:path'
+import {loadSource,buildSource,snapshot,plan,synchronize,publicPlan,checkHost,ROOT} from './index.mjs'
 const source=loadSource()
 const clone=structuredClone
 function fake({drift=false}={}) {
@@ -49,3 +51,47 @@ test('missing or blanket ACP approval converges to explicit read-only approval',
 test('stricter deny-all and fail policies survive synchronization',async()=>{const f=fake({drift:true});for(const c of Object.values(f.configs)){c.adapterConfig.permissionMode='deny-all';c.adapterConfig.nonInteractivePermissions='fail'}const p=await synchronize(f,source);await synchronize(f,source,{apply:true,approvedDigest:p.digest});for(const c of Object.values(f.configs)){assert.equal(c.adapterConfig.permissionMode,'deny-all');assert.equal(c.adapterConfig.nonInteractivePermissions,'fail')}})
 
 test('stricter ACP aliases are preserved when canonical fields are absent',async()=>{const f=fake();for(const a of source.manifest.agents.filter(a=>a.disposition==='pilot')){const c=f.configs[a.id].adapterConfig;delete c.permissionMode;delete c.nonInteractivePermissions;c.acpPermissionMode='deny-all';c.acpNonInteractivePermissions='fail'}const p=await synchronize(f,source);await synchronize(f,source,{apply:true,approvedDigest:p.digest});for(const a of source.manifest.agents.filter(a=>a.disposition==='pilot')){assert.equal(f.configs[a.id].adapterConfig.permissionMode,'deny-all');assert.equal(f.configs[a.id].adapterConfig.nonInteractivePermissions,'fail')}})
+
+// --- source validation, migration, adapter-local plugins, host checks -------
+// Rebuild the source from the real files with one mutation applied, so every
+// rejection below exercises the same validation the CLI runs.
+const readRepo=p=>readFileSync(resolve(ROOT,p),'utf8')
+const rebuilt=(mutate,read=readRepo)=>{const manifest=clone(source.manifest),invariants=clone(source.invariants);mutate?.(manifest,invariants);return buildSource({manifest,invariants,baseline:source.baseline,read})}
+const qaOf=m=>m.agents.find(a=>a.roleKey==='qa-engineer')
+test('the committed QA entry records a reviewed Claude migration and its adapter-local tooling',()=>{const qa=qaOf(source.manifest);assert.equal(qa.adapterType,'claude_local');assert.equal(qa.maxTurnsPerRun,20);assert.deepEqual(qa.adapterMigration,{from:'codex_local',to:'claude_local',approvedBy:'Ryan Thomas',date:'2026-09-04'});assert.deepEqual(qa.adapterLocal.claudeCodePlugins,['differential-review@trailofbits','pr-review-toolkit@claude-plugins-official','spec-to-code-compliance@trailofbits']);assert(qa.adapterLocal.permissionsAllow.includes('Task(pr-review-toolkit:silent-failure-hunter)'));assert(!qa.adapterLocal.permissionsAllow.some(r=>/^Edit/.test(r)||r==='Write'||r==='Bash'));assert.deepEqual(qa.executionPermissions,{permissionMode:'approve-reads',nonInteractivePermissions:'deny'})})
+test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.1"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.1"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.1"','version: "0.1"'):readRepo(p)),/versioned/)})
+for(const [label,mutate] of Object.entries({
+  'a migration between the same adapter':m=>{qaOf(m).adapterMigration.to='codex_local';qaOf(m).adapterMigration.from='codex_local'},
+  'a migration whose target differs from adapterType':m=>{qaOf(m).adapterMigration.to='codex_local'},
+  'a migration with no approver':m=>{qaOf(m).adapterMigration.approvedBy=''},
+  'a migration with a non-ISO date':m=>{qaOf(m).adapterMigration.date='Sept 4'},
+  'adapterLocal on a Codex agent':m=>{const e=m.agents.find(a=>a.roleKey==='implementation-engineer');e.adapterLocal={claudeCodePlugins:[]}},
+  'a bare plugin name':m=>{qaOf(m).adapterLocal.claudeCodePlugins=['pr-review-toolkit']},
+  'a plugin:skill name':m=>{qaOf(m).adapterLocal.claudeCodePlugins=['design:critique']},
+  'a Paperclip registry key':m=>{qaOf(m).adapterLocal.claudeCodePlugins=['paperclipai/paperclip/paperclip']},
+  'a duplicate plugin':m=>{qaOf(m).adapterLocal.claudeCodePlugins.push('differential-review@trailofbits')},
+  'a bare Bash rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Bash')},
+  'a bare Write rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Write')},
+  'any Edit rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Edit(pipeline/runs/**)')},
+  'a Task for an undeclared plugin':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Task(feature-dev:code-reviewer)')},
+  'a malformed rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('bash(ls)')},
+}))test(`source refuses ${label}`,()=>{assert.throws(()=>rebuilt(mutate))})
+test('a migration is accepted only once the live adapter already matches it',async()=>{const f=fake();assert.deepEqual((await synchronize(f,source)).changes,[]);const qa=qaOf(source.manifest);f.configs[qa.id].adapterType='codex_local';await assert.rejects(synchronize(f,source),/declared but not yet performed/);assert.deepEqual(writes(f),[])})
+test('an adapter mismatch with no migration record is still refused',async()=>{const src=rebuilt(m=>{delete qaOf(m).adapterMigration});const f=fake();f.configs[qaOf(src.manifest).id].adapterType='codex_local';await assert.rejects(synchronize(f,src),/separate review/)})
+function hostFor(qa,{missingPlugin,unknownMarket,disabled,driftAllow}={}){
+  const cache='/host/plugins',cfg='/agent/.claude'
+  const installed={};for(const k of qa.adapterLocal.claudeCodePlugins)if(k!==missingPlugin)installed[k]=[{installPath:`${cache}/cache/${k.split('@')[1]}/${k.split('@')[0]}/1.0.0`}]
+  const markets={};for(const k of qa.adapterLocal.claudeCodePlugins){const m=k.split('@')[1];if(m!==unknownMarket)markets[m]={}}
+  const enabled={};for(const k of qa.adapterLocal.claudeCodePlugins)enabled[k]=k!==disabled
+  const files={[`${cache}/installed_plugins.json`]:{version:2,plugins:installed},[`${cache}/known_marketplaces.json`]:markets,[`${cfg}/settings.json`]:{enabledPlugins:enabled,permissions:{allow:driftAllow?['Read']:qa.adapterLocal.permissionsAllow}}}
+  return {cache,cfg,host:{readJson:p=>files[p]??null,exists:p=>/\/\.claude-plugin\/plugin\.json$/.test(p)&&Object.values(installed).some(r=>p.startsWith(r[0].installPath))}}
+}
+test('verify passes when the host carries exactly what the manifest declares, and writes nothing',async()=>{const f=fake();const qa=qaOf(source.manifest);const h=hostFor(qa);f.configs[qa.id].adapterConfig.env.CLAUDE_CODE_PLUGIN_CACHE_DIR={type:'plain',value:h.cache};f.configs[qa.id].adapterConfig.env.CLAUDE_CONFIG_DIR=h.cfg;const r=await synchronize(f,source,{host:h.host});assert.deepEqual(r.hostFindings,[]);assert.deepEqual(r.changes,[]);assert.deepEqual(writes(f),[])})
+for(const [label,opts,pattern] of [
+  ['a plugin missing from the host',{missingPlugin:'differential-review@trailofbits'},/not installed/],
+  ['a marketplace Claude Code does not know',{unknownMarket:'trailofbits'},/unknown to this host/],
+  ['a plugin not enabled in the agent settings',{disabled:'pr-review-toolkit@claude-plugins-official'},/not enabled/],
+  ['an allow-list that drifted from the manifest',{driftAllow:true},/permissions.allow differs/],
+])test(`verify reports ${label}`,async()=>{const f=fake();const qa=qaOf(source.manifest);const h=hostFor(qa,opts);f.configs[qa.id].adapterConfig.env.CLAUDE_CODE_PLUGIN_CACHE_DIR=h.cache;f.configs[qa.id].adapterConfig.env.CLAUDE_CONFIG_DIR=h.cfg;const r=await synchronize(f,source,{host:h.host});assert(r.hostFindings.some(x=>pattern.test(x)),r.hostFindings.join('\n'))})
+test('verify reports a live env that cannot find plugins at all',async()=>{const f=fake();const qa=qaOf(source.manifest);const r=await synchronize(f,source,{host:hostFor(qa).host});assert(r.hostFindings.some(x=>/CLAUDE_CODE_PLUGIN_CACHE_DIR is not set/.test(x)))})
+test('host checks never enter the plan digest or the apply path',async()=>{const f=fake({drift:true});const qa=qaOf(source.manifest);const p1=await synchronize(f,source);const p2=await synchronize(f,source,{host:hostFor(qa).host});assert.equal(p1.digest,p2.digest);const applied=await synchronize(f,source,{apply:true,approvedDigest:p1.digest});assert(applied.verified);assert.equal(applied.hostFindings,undefined)})
