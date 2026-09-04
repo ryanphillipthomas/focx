@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
@@ -11,6 +11,12 @@ const same = isDeepStrictEqual
 const requireThat = (ok, message) => { if (!ok) throw new Error(message) }
 const list = x => { const rows = Array.isArray(x) ? x : x?.agents ?? x?.routines ?? x?.data; requireThat(Array.isArray(rows), 'Incomplete API list response'); return rows }
 const pilotKeys = ['qa-engineer', 'architecture-documentation-steward', 'implementation-engineer']
+const ADAPTERS = ['claude_local', 'codex_local']
+// Claude Code's own key shape for an installed plugin: <plugin>@<marketplace>.
+const PLUGIN_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*@[a-z0-9]+(?:-[a-z0-9]+)*$/
+// A Claude Code permission rule: `Tool` or `Tool(pattern)`.
+const PERMISSION_RULE = /^[A-Z][A-Za-z]*(?:\(.+\))?$/
+const PROCEDURE_VERSION = /^\s*version: "\d+\.\d+\.\d+"$/m
 
 export function loadSource(root = ROOT) {
   const read = p => readFileSync(resolve(root, p), 'utf8')
@@ -18,6 +24,47 @@ export function loadSource(root = ROOT) {
   const invariants = JSON.parse(read('.focx/invariants.yaml'))
   const baseline = JSON.parse(read('.focx/baseline.yaml'))
   const manifest = JSON.parse(read('.focx/agents.json'))
+  return buildSource({manifest, invariants, baseline, read})
+}
+
+// An adapter change is a credential change: binding the Claude token to an
+// agent that was Codex is new access, and access is granted by a human. The
+// tool never performs the change. The record says a human did, and why the
+// manifest flipped; preflight refuses while the live agent still runs `from`.
+function validateMigration(a) {
+  const m = a.adapterMigration
+  if (m === undefined) return
+  requireThat(ADAPTERS.includes(m.from) && ADAPTERS.includes(m.to) && m.from !== m.to, `${a.name}: adapterMigration must move between the two supported adapters`)
+  requireThat(m.to === a.adapterType, `${a.name}: adapterMigration.to must equal adapterType`)
+  requireThat(typeof m.approvedBy === 'string' && m.approvedBy.trim() !== '' && /^\d{4}-\d{2}-\d{2}$/.test(m.date), `${a.name}: adapterMigration needs approvedBy and an ISO date`)
+}
+
+// Adapter-local plugins are installed on this host by a human and enabled in
+// the agent's own Claude config dir. The manifest records them so verify can
+// see drift; the tool never writes them. The allow-list is the agent's scoped
+// write workflow under approve-reads, and is bounded here so a source review
+// cannot quietly widen it into approve-all by other means.
+function validateAdapterLocal(a) {
+  const l = a.adapterLocal
+  if (l === undefined) return
+  requireThat(a.adapterType === 'claude_local', `${a.name}: adapterLocal is only meaningful for claude_local`)
+  const plugins = l.claudeCodePlugins ?? []
+  requireThat(Array.isArray(plugins) && plugins.every(k => typeof k === 'string' && PLUGIN_KEY.test(k)) && new Set(plugins).size === plugins.length, `${a.name}: claudeCodePlugins must be unique '<plugin>@<marketplace>' keys`)
+  const pluginNames = new Set(plugins.map(k => k.split('@')[0]))
+  const rules = l.permissionsAllow ?? []
+  requireThat(Array.isArray(rules) && rules.every(r => typeof r === 'string' && PERMISSION_RULE.test(r)) && new Set(rules).size === rules.length, `${a.name}: permissionsAllow must be unique Claude Code permission rules`)
+  for (const r of rules) {
+    const tool = r.split('(')[0]
+    requireThat(tool !== 'Edit', `${a.name}: Edit is never allowed for a report-only role`)
+    requireThat(r !== 'Write' && r !== 'Bash', `${a.name}: bare ${r} would allow any path or command; scope it`)
+    if (tool === 'Task') {
+      const name = r.slice(5, -1)
+      requireThat(pluginNames.has(name.split(':')[0]), `${a.name}: Task(${name}) names a subagent outside the declared plugins`)
+    }
+  }
+}
+
+export function buildSource({manifest, invariants, baseline, read}) {
   requireThat(invariants.pilot?.activation === 'paused' && invariants.pilot?.automaticWork === false && invariants.pilot?.agentDeletionAllowed === false && invariants.pilot?.legacyApplyAllowed === false, 'Pilot controls must prohibit activation, deletion, automatic work and legacy apply')
   requireThat(invariants.company === 'Focx' && same(invariants.activeProducts, ['Connect']) && invariants.controlPlane === 'Paperclip', 'Locked Focx baseline changed')
   requireThat(manifest.version === '0.1.0' && manifest.activation === 'paused' && manifest.expectedAgentCount === 26 && manifest.agents.length === 26, 'All 26 retained identities are required')
@@ -31,15 +78,17 @@ export function loadSource(root = ROOT) {
     const uncappedDevelopment = invariants.pilot.environment === 'development' && invariants.pilot.dailyRunCapPolicy === 'uncapped-during-development'
     requireThat(a.timeoutSec > 0 && a.timeoutSec <= 900, 'Per-run timeout cannot be relaxed')
     requireThat((Number.isInteger(a.maxDailyRuns) && a.maxDailyRuns > 0 && a.maxDailyRuns <= 3) || (a.maxDailyRuns === null && uncappedDevelopment), 'Uncapped runs require explicit development policy')
-    requireThat(['claude_local','codex_local'].includes(a.adapterType), 'Unknown adapter')
+    requireThat(ADAPTERS.includes(a.adapterType), 'Unknown adapter')
     requireThat(same(a.executionPermissions, {permissionMode:'approve-reads',nonInteractivePermissions:'deny'}), 'Pilot ACP permissions must be explicit and deny unattended writes')
     requireThat(a.adapterType !== 'claude_local' || (a.maxTurnsPerRun > 0 && a.maxTurnsPerRun <= 20), 'Claude turn limit required')
+    validateMigration(a)
+    validateAdapterLocal(a)
     requireThat(a.instructions === `.focx/roles/${a.roleKey}.md`, 'Instructions must be isolated role source')
     files[a.id] = {'AGENTS.md':read(a.instructions)}
     for (const s of a.skills) {
       requireThat(/^focx-[a-z-]+$/.test(s), 'Only scoped focx-* skills allowed')
       const content = read(`.focx/skills/${s}/SKILL.md`)
-      requireThat(content.includes('version: "0.1.0"'), 'Procedure must be versioned')
+      requireThat(PROCEDURE_VERSION.test(content), 'Procedure must be versioned')
       files[a.id][`skills/${s}/SKILL.md`] = content
     }
     requireThat(files[a.id]['AGENTS.md'].trim(), 'Empty role instructions')
@@ -67,7 +116,10 @@ export async function snapshot(api, source) {
     requireThat(live.companyId === company && live.id === a.id && live.status === 'paused', `${a.name}: must be paused in the expected company before synchronization`)
     configs[a.id] = live
     if (a.disposition === 'pilot') {
-      requireThat(live.adapterType === a.adapterType, `${a.name}: adapter migration requires separate review`)
+      const m = a.adapterMigration
+      requireThat(live.adapterType === a.adapterType, m && live.adapterType === m.from
+        ? `${a.name}: reviewed adapter migration ${m.from} → ${m.to} is declared but not yet performed; complete the manual step before synchronizing`
+        : `${a.name}: adapter migration requires separate review`)
       const b = await api.request('GET', `/api/agents/${a.id}/instructions-bundle`)
       requireThat(b && Array.isArray(b.files), `${a.name}: incomplete instruction bundle`)
       const files = {}
@@ -139,10 +191,50 @@ export function plan(source, live) {
 }
 export const publicPlan = p => ({digest:p.digest,changes:p.operations.map(o => ({method:o.method,path:o.path,fields:o.fields})),deletions:0,activations:0})
 
-export async function synchronize(api, source, {apply=false,approvedDigest} = {}) {
+// Host state the manifest describes but Paperclip does not hold: the plugins a
+// human installed on this machine and the agent's own Claude settings file.
+// Read-only, and outside the plan digest on purpose: the digest binds what the
+// tool writes; these are what the operator must already have done by hand.
+const envValue = (env, key) => { const v = env?.[key]; return typeof v === 'string' ? v : (v && typeof v === 'object' && typeof v.value === 'string' ? v.value : undefined) }
+export function checkHost(source, live, host = defaultHost()) {
+  const findings = []
+  for (const a of source.manifest.agents) {
+    const l = a.adapterLocal
+    if (a.disposition !== 'pilot' || !l) continue
+    const env = live.configs[a.id]?.adapterConfig?.env ?? {}
+    const cacheDir = envValue(env, 'CLAUDE_CODE_PLUGIN_CACHE_DIR')
+    const configDir = envValue(env, 'CLAUDE_CONFIG_DIR')
+    if (!cacheDir) findings.push(`${a.name}: CLAUDE_CODE_PLUGIN_CACHE_DIR is not set in the live env; a redirected config dir finds no plugins`)
+    if (!configDir) findings.push(`${a.name}: CLAUDE_CONFIG_DIR is not set in the live env`)
+    const installed = (cacheDir && host.readJson(`${cacheDir}/installed_plugins.json`)?.plugins) ?? {}
+    const marketplaces = (cacheDir && host.readJson(`${cacheDir}/known_marketplaces.json`)) ?? {}
+    const settings = (configDir && host.readJson(`${configDir}/settings.json`)) ?? {}
+    for (const key of l.claudeCodePlugins ?? []) {
+      const record = Array.isArray(installed[key]) ? installed[key][0] : installed[key]
+      if (!record?.installPath || !host.exists(`${record.installPath}/.claude-plugin/plugin.json`)) findings.push(`${a.name}: plugin ${key} is not installed on this host`)
+      const market = key.split('@')[1]
+      if (!(market in marketplaces)) findings.push(`${a.name}: marketplace ${market} is unknown to this host; Claude Code would drop ${key}`)
+      if (settings.enabledPlugins?.[key] !== true) findings.push(`${a.name}: ${key} is not enabled in ${configDir ?? '<CLAUDE_CONFIG_DIR>'}/settings.json`)
+    }
+    if (!same(settings.permissions?.allow ?? [], l.permissionsAllow ?? [])) findings.push(`${a.name}: settings.json permissions.allow differs from the manifest`)
+  }
+  return findings
+}
+function defaultHost() {
+  return {
+    readJson: p => { try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return null } },
+    exists: p => existsSync(p),
+  }
+}
+
+export async function synchronize(api, source, {apply=false,approvedDigest,host} = {}) {
   const first = await snapshot(api,source)
   const proposed = plan(source,first)
-  if (!apply) return publicPlan(proposed)
+  if (!apply) {
+    const result = publicPlan(proposed)
+    if (host) result.hostFindings = checkHost(source, first, host === true ? undefined : host)
+    return result
+  }
   requireThat(approvedDigest === proposed.digest, 'Preview changed or not approved; obtain a fresh plan digest')
   const checked = await snapshot(api,source)
   requireThat(plan(source,checked).digest === approvedDigest, 'Live state changed during preflight; no writes made')
@@ -161,8 +253,9 @@ export async function main(argv) {
   const token = process.env.PAPERCLIP_API_KEY
   requireThat(token, 'Set PAPERCLIP_API_KEY using existing authorized board access; the tool does not create credentials')
   requireThat(!process.env.PAPERCLIP_COMPANY_ID || process.env.PAPERCLIP_COMPANY_ID === source.manifest.companyId, 'Company mismatch')
-  const result = await synchronize(new Client(process.env.PAPERCLIP_API_URL ?? 'http://127.0.0.1:3100',token),source,{apply:argv.includes('--apply'),approvedDigest:argv.find(a=>a.startsWith('--plan-sha='))?.split('=')[1]})
+  const verifyOnly = argv.includes('--verify-only')
+  const result = await synchronize(new Client(process.env.PAPERCLIP_API_URL ?? 'http://127.0.0.1:3100',token),source,{apply:argv.includes('--apply'),approvedDigest:argv.find(a=>a.startsWith('--plan-sha='))?.split('=')[1],host:verifyOnly})
   console.log(JSON.stringify(result,null,2))
-  return argv.includes('--verify-only') && result.changes.length ? 1 : 0
+  return verifyOnly && (result.changes.length || result.hostFindings?.length) ? 1 : 0
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main(process.argv.slice(2)).then(c=>{process.exitCode=c}).catch(e=>{console.error(`pilot-org: ${e.message}`);process.exitCode=2})
