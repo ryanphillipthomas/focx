@@ -6,10 +6,9 @@ You are an agent (or a human) working in the focx.ai autonomous development repo
 
 1. This file.
 2. [`docs/sources-of-truth.md`](docs/sources-of-truth.md) — where every concern canonically lives.
-3. [`docs/org.md`](docs/org.md) — the operating company: who exists, who they report to, and which pipeline stage each agent runs.
-4. [`docs/pipeline.md`](docs/pipeline.md) — how a run flows and what artifact each stage produces.
-5. The role file for the role you are playing, in [`docs/roles/`](docs/roles/).
-6. The JSON Schema for the artifact you must produce, in [`pipeline/contracts/`](pipeline/contracts/).
+3. The [context and evidence policy](pipeline/org/instructions/_preamble.md#context-and-evidence-policy) — read that section, not every agent's instructions. Paperclip embeds it in each agent's visible bundle.
+4. Your assigned task, its acceptance criteria, and the role file applicable to that task. Load `docs/org.md` when routing/ownership matters and `docs/pipeline.md` when participating in a pipeline run.
+5. The JSON Schema for an artifact you must produce, in [`pipeline/contracts/`](pipeline/contracts/), and the source/tests relevant to the change. Do not load unrelated roles or historical runs as startup context.
 
 ## Non-negotiable guardrails
 

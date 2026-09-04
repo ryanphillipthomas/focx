@@ -1,0 +1,8 @@
+# Retrieval defaults only: keep historical evidence out of broad ripgrep searches.
+# This does not untrack files, alter validators, or restrict direct file access.
+# For an assigned run/release or historical investigation, use --no-ignore on
+# its explicit path, not on the whole repository. See the context policy.
+/pipeline/runs/*
+!/pipeline/runs/README.md
+/pipeline/releases/*
+!/pipeline/releases/README.md
