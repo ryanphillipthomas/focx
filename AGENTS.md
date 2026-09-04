@@ -19,7 +19,7 @@ You are an agent (or a human) working in the focx.ai autonomous development repo
 
 ## How to work
 
-- **Every run has a run ID** (assigned at trigger time) and a branch `run/<run-id>`. All of your work happens on that branch.
+- **Every run has a run ID** (assigned at trigger time) and a branch. Intake automation cuts `run/<run-id>`; a run that happens inside a Paperclip per-issue worktree is on the branch Paperclip named, `FOC-<issue>-<slug>`. All of your work happens on whichever branch you are on, and `00-run.json` records that branch — the one you are actually on, never the one the convention would prefer.
 - **Every stage writes an artifact** to `pipeline/runs/<run-id>/` conforming to its schema in `pipeline/contracts/`. Commit the artifact before handing off. An artifact that fails schema validation is an incomplete handoff.
 - **Handoffs are explicit.** You receive the previous role's artifact; you produce yours; the Chief routes between roles. Do not skip stages or consume artifacts out of order.
 - **Ask rather than assume.** If the brief is ambiguous, record the ambiguity and your chosen interpretation in your artifact's `assumptions` field. If the ambiguity is blocking, halt and escalate to the Chief, who may ask the human on the originating issue.

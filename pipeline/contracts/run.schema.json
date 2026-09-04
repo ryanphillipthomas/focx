@@ -24,6 +24,6 @@
     "prompt": { "type": "string", "minLength": 1, "description": "The raw request text as received, unedited" },
     "mode": { "enum": ["build", "research"], "default": "build" },
     "createdAt": { "type": "string", "format": "date-time" },
-    "branch": { "type": "string", "pattern": "^run/" }
+    "branch": { "type": "string", "pattern": "^(run/|FOC-)", "description": "run/<run-id> when intake automation cuts the branch; FOC-<issue>-<slug> when the run happens inside a Paperclip per-issue worktree, which names its own branch. Recording the branch the run was actually on is the point — this is the root of the audit trail." }
   }
 }

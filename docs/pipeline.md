@@ -107,5 +107,5 @@ cross-reference the Paperclip task that owns the run.
 ## Run identity
 
 - Run ID format: `run-<UTC yyyymmdd-HHMMSS>-<trigger>` (e.g., `run-20260830-142201-ticket`).
-- Branch: `run/<run-id>`. All work, including artifacts, lives on this branch until merged or closed.
+- Branch: `run/<run-id>` when intake automation cuts it, or `FOC-<issue>-<slug>` when the run happens inside a Paperclip per-issue worktree, which names its own branch. All work, including artifacts, lives on that branch until merged or closed. `00-run.json` records the branch the run was actually on; the audit trail is worth more than the naming convention.
 - The originating trigger (issue number, dispatcher identity, or schedule) is recorded in `00-run.json` — every run is traceable to who or what asked for it.
