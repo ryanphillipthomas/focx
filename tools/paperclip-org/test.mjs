@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join, dirname } from 'node:path'
-import { readFileSync, mkdirSync, mkdtempSync, existsSync, symlinkSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, symlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -18,6 +18,7 @@ import {
   PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
   PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
+  checkClaudeCodeSkills, claudeCodeSkillSources,
   agentClaudeConfigDir,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
@@ -491,6 +492,34 @@ const FAKE_SECRET_IDS = new Map([
 // verify's local-skill row reads the filesystem. Point it at a temp tree with
 // every expected link present, so these fixtures assert on the roster and not
 // on whatever happens to be installed on the machine running the tests.
+// The claudeCodeSkills row reads the HOST's Claude install. Fixtures that assert
+// every row passes must not depend on which plugins this machine happens to
+// have, so they inject a source set instead.
+const claudeSkillsPresent = (roster) => {
+  const wanted = new Set()
+  for (const a of roster.agents) for (const k of a.claudeCodeSkills ?? []) wanted.add(k)
+  const plugins = new Set(); const userSkills = new Set()
+  for (const k of wanted) (k.includes(':') ? plugins.add(k.split(':')[0]) : userSkills.add(k))
+  return { sources: { plugins, userSkills, repoSkills: new Set() } }
+}
+
+// A temp Claude install that provides exactly what the roster claims, for the
+// end-to-end CLI runs. CLAUDE_CONFIG_DIR is the same variable Claude Code reads,
+// so the tool inspects this instead of the developer's own machine.
+const fakeClaudeHome = (roster) => {
+  const home = mkdtempSync(join(tmpdir(), 'paperclip-org-claude-'))
+  const wanted = new Set()
+  for (const a of roster.agents) for (const k of a.claudeCodeSkills ?? []) wanted.add(k)
+  const plugins = {}
+  for (const k of wanted) {
+    if (k.includes(':')) plugins[`${k.split(':')[0]}@test`] = [{ scope: 'user' }]
+    else mkdirSync(join(home, 'skills', k), { recursive: true })
+  }
+  mkdirSync(join(home, 'plugins'), { recursive: true })
+  writeFileSync(join(home, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins }))
+  return home
+}
+
 const linkRoot = () => {
   const root = mkdtempSync(join(tmpdir(), 'paperclip-org-links-'))
   return { root, opts: { skillsRoot: join(root, 'skills'), workspacesRoot: join(root, 'workspaces') } }
@@ -645,7 +674,9 @@ test('--apply syncs skills with mode replace, and exits 0', async () => {
   const fake = createFakeApi({ companyId: roster.company.id })
   const url = await fake.listen()
   try {
-    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url })
+    const claudeHome = fakeClaudeHome(roster)
+    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    rmSync(claudeHome, { recursive: true, force: true })
     assert.equal(r.code, 0, r.stderr)
     const syncs = fake.state.calls.filter((c) => /\/skills\/sync$/.test(c.path))
     const wanted = roster.agents.filter((a) => (a.desiredSkills ?? []).length).length
@@ -695,7 +726,7 @@ test('verify passes against a live org built from the roster, and catches drift'
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
   const links = satisfiedLocalSkills(roster, agents, pre)
-  const rows = verify(roster, live, rendered, { localSkills: links.opts })
+  const rows = verify(roster, live, rendered, { localSkills: links.opts, claudeCodeSkills: claudeSkillsPresent(roster) })
   const failed = rows.filter((r) => !r.pass)
   assert.deepEqual(failed.map((f) => `${f.n}: ${f.detail}`), [], 'a correctly built org passes every check')
 
@@ -1019,6 +1050,53 @@ test('verify catches a claude agent whose config dir is unset or wrong', () => {
   const shared = { ...cfgs.get(agents[idx].id).adapterConfig.env, CLAUDE_CONFIG_DIR: { type: 'plain', value: '/Users/someone/.claude' } }
   assert.ok(!row(mutate(shared)).pass, 'pointing at a shared root is drift')
   rmSync(links.root, { recursive: true, force: true })
+})
+
+// The roster claimed four design skills and Product Designer had none of them:
+// the design plugin is not installed on this host. validateRoster checked they
+// were well formed, never that they existed, and the reconciler only printed a
+// hint. A capability asserted and not provided is drift.
+test('claudeCodeSkills resolve from plugins, user skills, or this repo', () => {
+  const { roster } = load()
+  const all = (r) => { const s = new Set(); for (const a of r.agents) for (const k of a.claudeCodeSkills ?? []) s.add(k); return s }
+  const wanted = all(roster)
+
+  const everything = { plugins: new Set(), userSkills: new Set(), repoSkills: new Set() }
+  for (const k of wanted) (k.includes(':') ? everything.plugins.add(k.split(':')[0]) : everything.userSkills.add(k))
+  assert.deepEqual(checkClaudeCodeSkills(roster, { sources: everything }).unresolved, [],
+    'everything provided resolves')
+
+  // A host with nothing installed — the state that shipped unnoticed.
+  const nothing = { plugins: new Set(), userSkills: new Set(), repoSkills: new Set() }
+  const bare = checkClaudeCodeSkills(roster, { sources: nothing })
+  assert.equal(bare.unresolved.length, wanted.size, 'every claim is reported, not just the first')
+  assert.match(bare.unresolved.join(' '), /plugin 'design' not installed/)
+
+  // A bare name may come from this repo's own .claude/skills.
+  const viaRepo = { plugins: new Set(['design']), userSkills: new Set(), repoSkills: new Set(['design', 'artifact-design']) }
+  assert.deepEqual(checkClaudeCodeSkills(roster, { sources: viaRepo }).unresolved, [],
+    'a skill committed to this repo counts — every worktree checks it out')
+
+  // Installed but disabled is not available.
+  const disabled = { plugins: new Set(), userSkills: new Set(['design', 'artifact-design']), repoSkills: new Set() }
+  assert.match(checkClaudeCodeSkills(roster, { sources: disabled }).unresolved.join(' '), /plugin 'design'/)
+})
+
+test('claudeCodeSkillSources reads a Claude install, and an absent one is empty', () => {
+  const home = mkdtempSync(join(tmpdir(), 'paperclip-org-src-'))
+  mkdirSync(join(home, 'plugins'), { recursive: true })
+  mkdirSync(join(home, 'skills', 'artifact-design'), { recursive: true })
+  writeFileSync(join(home, 'plugins', 'installed_plugins.json'),
+    JSON.stringify({ version: 2, plugins: { 'design@official': [{ scope: 'user' }], 'codex@openai-codex': [{ scope: 'user' }] } }))
+  writeFileSync(join(home, 'settings.json'), JSON.stringify({ enabledPlugins: { 'design@official': false } }))
+  const src = claudeCodeSkillSources({ claudeHome: home, repoRoot: home })
+  assert.ok(!src.plugins.has('design'), 'installed but disabled does not count as available')
+  assert.ok(src.plugins.has('codex'))
+  assert.ok(src.userSkills.has('artifact-design'))
+  rmSync(home, { recursive: true, force: true })
+
+  const missing = claudeCodeSkillSources({ claudeHome: join(home, 'gone'), repoRoot: join(home, 'gone') })
+  assert.equal(missing.plugins.size, 0, 'no install reads as nothing available, never as a crash')
 })
 
 test('PaperclipClient never puts the key in an error message', async () => {

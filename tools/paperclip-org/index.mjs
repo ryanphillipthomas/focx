@@ -18,7 +18,7 @@
 // Exit: 0 clean · 1 verification failed · 2 usage/roster error · 3 preflight failed
 //       4 PARTIAL APPLY — mixed state; rerun is safe but must be deliberate.
 
-import { readFileSync, existsSync, statSync, mkdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync } from 'node:fs'
+import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -720,6 +720,61 @@ export function agentClaudeConfigDir(agentId, opts = {}) {
   return join(workspaces, agentId, '.claude')
 }
 
+// claudeCodeSkills name skills provided by the local Claude Code install, not by
+// Paperclip. validateRoster checks they are well FORMED — no slash, so nobody
+// files a Paperclip key here — but nothing has ever checked they EXIST. The
+// roster claimed four for Product Designer and the agent had none of them: the
+// design plugin is not installed on this host, and the reconciler only ever
+// printed a hint about it at P7. A capability the roster asserts and the runtime
+// lacks is drift, and drift is supposed to fail rather than be mentioned.
+//
+// Only what is verifiable from disk is asserted. A "plugin:skill" entry resolves
+// when that plugin is installed AND enabled. A bare name resolves when it is a
+// user skill or a skill in this repo. Anything else is reported unresolved, with
+// where it was looked for, because a silent pass is what let this sit.
+export function claudeCodeSkillSources(opts = {}) {
+  // CLAUDE_CONFIG_DIR is the variable Claude Code itself honours, so reading it
+  // here means the tool inspects the same install the agents will.
+  const home = opts.claudeHome ?? (process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude'))
+  const readJson = (file) => {
+    try { return JSON.parse(readFileSync(file, 'utf8')) } catch { return null }
+  }
+  const installed = readJson(join(home, 'plugins', 'installed_plugins.json'))?.plugins ?? {}
+  const enabled = readJson(join(home, 'settings.json'))?.enabledPlugins ?? {}
+  // installed_plugins keys are "<name>@<marketplace>"; the roster prefix is the name.
+  const plugins = new Set()
+  for (const key of Object.keys(installed)) {
+    if (enabled[key] === false) continue
+    plugins.add(String(key).split('@')[0])
+  }
+  const dirSkills = (dir) => {
+    try { return statSync(dir).isDirectory() ? new Set(readdirSync(dir)) : new Set() } catch { return new Set() }
+  }
+  return {
+    plugins,
+    userSkills: dirSkills(join(home, 'skills')),
+    repoSkills: dirSkills(join(opts.repoRoot ?? REPO_ROOT, '.claude', 'skills')),
+  }
+}
+
+export function checkClaudeCodeSkills(roster, opts = {}) {
+  const src = opts.sources ?? claudeCodeSkillSources(opts)
+  const wanted = new Set()
+  for (const a of roster.agents ?? []) for (const k of a.claudeCodeSkills ?? []) wanted.add(k)
+  const unresolved = []
+  for (const skill of [...wanted].sort()) {
+    if (skill.includes(':')) {
+      const plugin = skill.split(':')[0]
+      if (!src.plugins.has(plugin)) unresolved.push(`${skill} (plugin '${plugin}' not installed)`)
+      continue
+    }
+    if (!src.userSkills.has(skill) && !src.repoSkills.has(skill)) {
+      unresolved.push(`${skill} (not a user skill or a skill in this repo)`)
+    }
+  }
+  return { wanted: wanted.size, unresolved }
+}
+
 export function needsLocalSkillLinks(roster, agent) {
   if (agent.adapter?.type !== 'claude_local') return false
   return !roster.workspaces?.[agent.workspace]?.workspaceStrategy
@@ -1036,6 +1091,16 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   const projectless = !issuesReadable ? [] : live.issues
     .filter((i) => OPEN_STATUSES.has(i.status) && i.assigneeAgentId && worktreeAgentSlug.has(i.assigneeAgentId) && !i.projectId)
     .map((i) => `${worktreeAgentSlug.get(i.assigneeAgentId)}: ${String(i.title ?? i.id).slice(0, 44)}`)
+  // The roster asserted four design skills and a Figma capability that the host
+  // does not provide. Nothing failed, because nothing looked.
+  const cc = checkClaudeCodeSkills(roster, opts.claudeCodeSkills ?? {})
+  rows.push({
+    n: '—',
+    condition: `Claude Code skills the roster claims are installed (${cc.wanted})`,
+    pass: cc.unresolved.length === 0,
+    detail: cc.unresolved.slice(0, 3).join('; '),
+  })
+
   // Without this every claude agent shares ~/.claude: one memory store for the
   // sixteen worktree agents, and no per-agent recall. It is one env var, so it
   // is also one silent revert away from being lost.
