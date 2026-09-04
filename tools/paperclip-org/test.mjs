@@ -520,6 +520,20 @@ const fakeClaudeHome = (roster) => {
   return home
 }
 
+// The CLI resolves adapter skills from $PAPERCLIP_HOME, so a subprocess test
+// that does not set it reads the developer's real Paperclip install — and
+// writes its skill symlinks into that install's workspaces. It passed on this
+// machine and failed anywhere else, which is why the suite could never be a
+// required check. Skill names come from the roster so this cannot drift from it.
+const fakePaperclipHome = (roster) => {
+  const home = mkdtempSync(join(tmpdir(), 'paperclip-home-'))
+  const skills = join(home, 'cli', 'current', 'node_modules', '@paperclipai', 'adapter-claude-local', 'skills')
+  const keys = new Set(roster.agents.flatMap((a) => a.desiredSkills ?? [])
+    .map((s) => s.split('/').pop()))
+  for (const k of keys) mkdirSync(join(skills, k), { recursive: true })
+  return home
+}
+
 const linkRoot = () => {
   const root = mkdtempSync(join(tmpdir(), 'paperclip-org-links-'))
   return { root, opts: { skillsRoot: join(root, 'skills'), workspacesRoot: join(root, 'workspaces') } }
@@ -675,8 +689,10 @@ test('--apply syncs skills with mode replace, and exits 0', async () => {
   const url = await fake.listen()
   try {
     const claudeHome = fakeClaudeHome(roster)
-    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    const pcHome = fakePaperclipHome(roster)
+    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
     rmSync(claudeHome, { recursive: true, force: true })
+    rmSync(pcHome, { recursive: true, force: true })
     assert.equal(r.code, 0, r.stderr)
     const syncs = fake.state.calls.filter((c) => /\/skills\/sync$/.test(c.path))
     const wanted = roster.agents.filter((a) => (a.desiredSkills ?? []).length).length
@@ -1319,8 +1335,15 @@ test('--apply does not re-arm an org that was contained out of band', async () =
   const url = await fake.listen()
   try {
     const claudeHome = fakeClaudeHome(fx.roster)
-    const r = await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    const pcHome = fakePaperclipHome(fx.roster)
+    const r = await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
     rmSync(claudeHome, { recursive: true, force: true })
+    rmSync(pcHome, { recursive: true, force: true })
+    // Exit 1, not 0, and that is the honest answer: the brake was held, so live
+    // really does diverge from a roster that wants these routines on. An apply
+    // that held something back must not report a clean org.
+    assert.equal(r.code, 1, r.stderr)
+    assert.match(r.stdout, /trigger disabled, roster says 'active'/)
 
     // Not one schedule trigger may have been switched back on.
     for (const [, list] of fake.state.triggers) {
@@ -1343,8 +1366,11 @@ test('--apply --enable-routines is the deliberate way back on', async () => {
   const url = await fake.listen()
   try {
     const claudeHome = fakeClaudeHome(fx.roster)
-    await cli(['--apply', '--confirm-terminate=0', '--enable-routines', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    const pcHome = fakePaperclipHome(fx.roster)
+    const r = await cli(['--apply', '--confirm-terminate=0', '--enable-routines', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
     rmSync(claudeHome, { recursive: true, force: true })
+    rmSync(pcHome, { recursive: true, force: true })
+    assert.equal(r.code, 0, r.stderr)
     const scheds = [...fake.state.triggers.values()].flat().filter((x) => x.kind === 'schedule')
     assert.equal(scheds.length, fx.roster.routines.length, 'no duplicate triggers were stacked')
     assert.ok(scheds.every((x) => x.enabled === true), 'the operator asked for it, so it happens')
@@ -1360,8 +1386,11 @@ test('a contained live org still converges cron drift without re-arming', async 
   const url = await fake.listen()
   try {
     const claudeHome = fakeClaudeHome(fx.roster)
-    await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    const pcHome = fakePaperclipHome(fx.roster)
+    const r = await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome, PAPERCLIP_HOME: pcHome })
     rmSync(claudeHome, { recursive: true, force: true })
+    rmSync(pcHome, { recursive: true, force: true })
+    assert.equal(r.code, 1, r.stderr)   // held, therefore not clean — see above
     const t0 = fake.state.triggers.get('live-r-0')[0]
     assert.equal(t0.cronExpression, fx.roster.routines[0].cron, 'cron still converges')
     assert.equal(t0.enabled, false, 'but the brake stays on')

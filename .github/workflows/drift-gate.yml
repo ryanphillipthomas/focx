@@ -25,3 +25,9 @@ jobs:
         uses: ryanphillipthomas/drift-check@v1
       - name: contract validation
         run: node tools/contracts/validate.mjs
+      # The reconciler decides who can push, who can wake, and what --apply is
+      # allowed to re-arm. Its suite ran only on developer machines, so every
+      # regression test written for it — including the ones guarding the
+      # 2026-09-04 comment loop — protected nothing on a pull request.
+      - name: org reconciler
+        run: node tools/paperclip-org/test.mjs
