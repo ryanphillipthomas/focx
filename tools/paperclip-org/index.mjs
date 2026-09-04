@@ -187,7 +187,16 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
       push(`${at} maxConcurrentRuns must be ${expectedConcurrency} for tier '${a.tier}'`)
     }
     if (typeof a.run?.heartbeat !== 'boolean') push(`${at} run.heartbeat must be a boolean`)
-    if (a.run?.wakeOnDemand !== true) push(`${at} wakeOnDemand must be true`)
+    // wakeOnDemand was mandated true here until the 2026-09-04 comment loop.
+    // Mandating it is what made the loop's precondition non-negotiable: an
+    // operator could not express "this agent does not wake on comments" in the
+    // one file that is supposed to hold desired state.
+    if (typeof a.run?.wakeOnDemand !== 'boolean') push(`${at} run.wakeOnDemand must be a boolean`)
+    for (const k of ['maxDailyRuns', 'maxDailyCostCents']) {
+      const v = a.run?.[k]
+      if (v === null || v === undefined) continue
+      if (!Number.isInteger(v) || v < 0) push(`${at} run.${k} must be a non-negative integer or null`)
+    }
 
     if (!roster.workspaces?.[a.workspace]) push(`${at} workspace '${a.workspace}' is not defined in roster.workspaces`)
     if (instructionFiles && !instructionFiles.has(a.instructions)) {
@@ -617,11 +626,20 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId, secret
         // Read from the roster, not hardcoded. It was false everywhere until
         // agents were given para-memory-files: PARA's Layer 1 rollup into
         // $AGENT_HOME/life/ happens on a heartbeat, so the agents that carry
-        // cross-issue context need one. wakeOnDemand stays true regardless —
-        // a heartbeat supplements event-driven waking, it never replaces it.
+        // cross-issue context need one.
         enabled: agent.run.heartbeat,
-        wakeOnDemand: true,
+        // Also from the roster now. This was `true`, unconditionally, and it is
+        // the switch the comment loop ran through: Paperclip skips every
+        // non-timer wake — assignment, mention, issue comment, automation —
+        // when it is false. Hardcoding it meant the roster could describe an
+        // org it had no way to quiet.
+        wakeOnDemand: opts.wakeOnDemand ?? agent.run.wakeOnDemand,
         maxConcurrentRuns: agent.run.maxConcurrentRuns,
+        // Per agent, per UTC day, enforced by Paperclip before the adapter is
+        // invoked. Omitted entirely when null so an absent cap stays absent
+        // rather than being written as a literal null.
+        ...(agent.run.maxDailyRuns == null ? {} : { maxDailyRuns: agent.run.maxDailyRuns }),
+        ...(agent.run.maxDailyCostCents == null ? {} : { maxDailyCostCents: agent.run.maxDailyCostCents }),
         cooldownSec: 300,
         intervalSec: 3600,
         skipTimerWhenNoActionableWork: true,
@@ -646,6 +664,22 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId, secret
       },
     },
   }
+}
+
+// The agent-side twin of planRoutineWrite, and the same asymmetry: apply may
+// always turn waking OFF, and may not turn it ON over an agent a human has
+// already quieted. Disabling wakeOnDemand in the Paperclip UI is the fastest
+// way to stop one runaway agent, and a reconciler that reads that as drift
+// would undo it on the next converge sweep.
+//
+// Pure and exported, for the same reason.
+export function planWakeWrite(agent, liveHeartbeat = null, flags = {}) {
+  const want = agent.run.wakeOnDemand
+  const live = liveHeartbeat?.wakeOnDemand
+  if (want === true && live === false && flags.enableWaking !== true) {
+    return { wakeOnDemand: false, held: 'wakeOnDemand is off live' }
+  }
+  return { wakeOnDemand: want, held: null }
 }
 
 export function buildRoutinePayload(roster, routine, assigneeAgentId, opts = {}) {
@@ -1070,11 +1104,20 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     // the roster — an agent quietly gaining a heartbeat in the UI is drift, and
     // so is one losing the heartbeat its memory rollup depends on.
     if (hb.enabled !== w.run.heartbeat) wakeBad.push(`${slug} heartbeat ${hb.enabled ? 'on' : 'off'}, roster says ${w.run.heartbeat ? 'on' : 'off'}`)
-    if (hb.wakeOnDemand !== true) wakeBad.push(`${slug} wakeOnDemand off`)
+    // Was `!== true`, which could only ever be satisfied by every agent waking
+    // on demand. A check that one value alone can satisfy is not a check.
+    if (hb.wakeOnDemand !== w.run.wakeOnDemand) {
+      wakeBad.push(`${slug} wakeOnDemand ${hb.wakeOnDemand ? 'on' : 'off'}, roster says ${w.run.wakeOnDemand ? 'on' : 'off'}`)
+    }
     if (hb.maxConcurrentRuns !== w.run.maxConcurrentRuns) wakeBad.push(`${slug} concurrency ${hb.maxConcurrentRuns}`)
+    for (const k of ['maxDailyRuns', 'maxDailyCostCents']) {
+      const live = hb[k] ?? null
+      if (live !== (w.run[k] ?? null)) wakeBad.push(`${slug} ${k} ${live ?? 'unset'}, roster says ${w.run[k] ?? 'unset'}`)
+    }
   }
   const hbOn = roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug)
-  check(9, `Waking matches the roster: wakeOnDemand everywhere, heartbeat on ${hbOn.length} (${hbOn.join(', ') || 'none'})`,
+  const wakeOn = roster.agents.filter((a) => a.run.wakeOnDemand).length
+  check(9, `Waking matches the roster: wakeOnDemand on ${wakeOn}/${roster.agents.length}, heartbeat on ${hbOn.length} (${hbOn.join(', ') || 'none'})`,
     wakeBad.length === 0, wakeBad.slice(0, 3).join('; '))
 
   const bundleBad = []
@@ -1281,7 +1324,7 @@ const bad = (s) => paint(C.red, s)
 const warn = (s) => paint(C.yellow, s)
 
 function parseArgs(argv) {
-  const flags = { apply: false, verifyOnly: false, renderOnly: false, json: false, roster: null, confirmTerminate: null, allowBuiltinTermination: false, terminateRunning: false, enableRoutines: false }
+  const flags = { apply: false, verifyOnly: false, renderOnly: false, json: false, roster: null, confirmTerminate: null, allowBuiltinTermination: false, terminateRunning: false, enableRoutines: false, enableWaking: false }
   for (const arg of argv) {
     if (arg === '--apply') flags.apply = true
     else if (arg === '--verify-only') flags.verifyOnly = true
@@ -1290,6 +1333,7 @@ function parseArgs(argv) {
     else if (arg === '--allow-builtin-termination') flags.allowBuiltinTermination = true
     else if (arg === '--terminate-running') flags.terminateRunning = true
     else if (arg === '--enable-routines') flags.enableRoutines = true
+    else if (arg === '--enable-waking') flags.enableWaking = true
     else if (arg.startsWith('--confirm-terminate=')) flags.confirmTerminate = Number(arg.split('=')[1])
     else if (arg.startsWith('--roster=')) flags.roster = arg.split('=')[1]
     else if (arg === '--help' || arg === '-h') flags.help = true
@@ -1312,6 +1356,9 @@ const USAGE = `paperclip-org — reconcile Paperclip to pipeline/org/roster.json
   --terminate-running          required if a termination target has a live run
   --enable-routines            required to re-enable a routine or schedule trigger that
                                is live-disabled — i.e. to release a containment brake
+  --enable-waking              required to turn an agent's wakeOnDemand back on when it
+                               is live-off. Waking gates assignment, mention and comment
+                               wakes; the 2026-09-04 loop ran entirely through it.
 
 Env: PAPERCLIP_API_URL (default http://127.0.0.1:3100), PAPERCLIP_API_KEY, PAPERCLIP_COMPANY_ID
 Exit: 0 clean · 1 verification failed · 2 usage/roster · 3 preflight · 4 partial apply`
@@ -1655,12 +1702,16 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
   // rebuilt agent would run without it until some later apply. That is precisely
   // the case this has to cover: agents get rebuilt after mistakes.
   const existing = roster.agents.filter((a) => idBySlug.has(a.slug))
+  const heldWaking = []
   if (existing.length) {
     step(`B' converge ${existing.length}`)
     for (const agent of existing) {
       const parentId = agent.reportsTo != null ? idBySlug.get(agent.reportsTo) : null
+      const liveHb = (live.configurations?.get(idBySlug.get(agent.slug))?.runtimeConfig ?? {}).heartbeat ?? null
+      const wake = planWakeWrite(agent, liveHb, flags)
+      if (wake.held) heldWaking.push(`${agent.slug} (${wake.held})`)
       const payload = buildAgentPayload(roster, agent, rendered.get(agent.slug), parentId, secretIds,
-        { claudeConfigDir: agentClaudeConfigDir(idBySlug.get(agent.slug)) })
+        { claudeConfigDir: agentClaudeConfigDir(idBySlug.get(agent.slug)), wakeOnDemand: wake.wakeOnDemand })
       delete payload.permissions // not accepted on PATCH
       try {
         await api.patch(`/api/agents/${idBySlug.get(agent.slug)}`, { ...payload, replaceAdapterConfig: true })
@@ -1668,6 +1719,11 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
       } catch (err) { return fail(`updating ${agent.slug}: ${err.message}`) }
     }
     console.log(`  ${ok('converged')} ${existing.length} agents`)
+    if (heldWaking.length) {
+      console.log(warn(`  ${heldWaking.length} agent(s) left unwakeable — apply did not turn waking back on.`))
+      console.log(paint(C.dim, '     Deliberate? Set run.wakeOnDemand false in the roster so verify agrees.'))
+      console.log(paint(C.dim, '     Meant to restore? Re-run with --enable-waking.'))
+    }
   }
 
   // --- C: permissions. canAssignTasks is NOT settable at create time, and

@@ -540,7 +540,18 @@
               "description": "Per agent. False by default: agents wake from assigned work, mentions, and routines, not idle polling. True only for the agents that carry cross-issue context, whose PARA memory rollup into $AGENT_HOME/life/ runs on a heartbeat. wakeOnDemand stays true either way — a heartbeat supplements event-driven waking, never replaces it."
             },
             "wakeOnDemand": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Gates every non-timer wake: assignment, mention, issue comment, automation. Paperclip skips those wakes with reason heartbeat.wakeOnDemand.disabled when this is false (server heartbeat.js: `source !== \"timer\" && !policy.wakeOnDemand`). It was hardcoded true here until the 2026-09-04 comment loop; false is the default now, and turning it back on is a deliberate act."
+            },
+            "maxDailyRuns": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "description": "Per agent, per UTC day. Paperclip counts heartbeatRuns in the current UTC day and blocks before adapter invocation, cancelling an already-queued run (reason heartbeat.daily_run_limit). null means no cap. This is the circuit breaker the comment loop did not have."
+            },
+            "maxDailyCostCents": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "description": "Per agent, per UTC day, summed from costEvents (reason heartbeat.daily_cost_limit). Distinct from budgetMonthlyCents, which warns but does not stop. null means no cap."
             },
             "maxConcurrentRuns": {
               "type": "integer",
