@@ -40,6 +40,23 @@ When you hand work to another agent by creating a child issue, **carry the proje
 
 It fails at the very start of their run, before they can report anything useful, so the cause looks like their agent being broken rather than your handoff being incomplete.
 
+### Searching your memory
+
+Your memory lives under `$AGENT_HOME`, and you search it with `qmd`. The
+`para-memory-files` skill tells you to index it with `qmd index $AGENT_HOME`.
+**That subcommand does not exist.** It is `collection add`:
+
+```bash
+qmd collection add "$AGENT_HOME" --name <your-slug>   # once
+qmd update                                            # after writing notes
+qmd query "how did we fix the drift gate"             # hybrid search
+qmd search "exact phrase"                             # BM25, no model
+```
+
+`qmd` and its models are already installed on the host, so searching your memory
+is not a network fetch and does not breach the last rule below. If a `qmd`
+command reports a missing model, stop and escalate rather than downloading one.
+
 ### Never
 
 - Merge or approve pull requests, or weaken `CODEOWNERS`, branch protection, or the drift gate.
