@@ -18,7 +18,7 @@
 // Exit: 0 clean · 1 verification failed · 2 usage/roster error · 3 preflight failed
 //       4 PARTIAL APPLY — mixed state; rerun is safe but must be deliberate.
 
-import { readFileSync, existsSync, statSync, mkdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync } from 'node:fs'
+import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -440,9 +440,13 @@ export function topoOrder(agents) {
 // COERCED to plain — which is how "[secret: name]" once became a literal 34-character
 // token on every agent. The roster says { secret: "<name>" }; resolveEnv turns that
 // into a real secret_ref, and refuses to emit anything it could not resolve.
-export function composeEnv(roster, agent) {
+export function composeEnv(roster, agent, opts = {}) {
   const env = { ...(roster.env?.common ?? {}) }
-  if (agent.adapter?.type === 'claude_local') Object.assign(env, roster.env?.claudeAuth ?? {})
+  if (agent.adapter?.type === 'claude_local') {
+    Object.assign(env, roster.env?.claudeAuth ?? {})
+    // Only claude_local reads it, and only when the live id is known.
+    if (opts.claudeConfigDir) env.CLAUDE_CONFIG_DIR = opts.claudeConfigDir
+  }
   // codex_local authenticates through the shared per-company codex-home/auth.json;
   // the adapter supplies CODEX_HOME itself. Do not invent a token here.
   if (agent.git === 'write') Object.assign(env, roster.env?.gitWrite ?? {})
@@ -463,10 +467,10 @@ export function resolveEnv(env, secretIds) {
   return out
 }
 
-export function composeAdapterConfig(roster, agent, secretIds = null) {
+export function composeAdapterConfig(roster, agent, secretIds = null, opts = {}) {
   const ws = roster.workspaces?.[agent.workspace] ?? {}
   const spec = REASONING[agent.adapter.type]
-  const env = composeEnv(roster, agent)
+  const env = composeEnv(roster, agent, opts)
   const cfg = {
     model: agent.adapter.model,
     [spec.key]: agent.adapter.reasoning,
@@ -474,9 +478,10 @@ export function composeAdapterConfig(roster, agent, secretIds = null) {
     timeoutSec: 3600,
     graceSec: 60,
   }
-  // The claude ACP lane ignores cwd entirely and runs in Paperclip's own
-  // workspace dir, so cwd is not a workable way to place a repo agent. A
-  // git_worktree gives both lanes a real checkout, per issue.
+  // cwd is left unset deliberately. The adapter does read it, but a worktree
+  // gives both lanes a real per-issue checkout, and pointing cwd elsewhere would
+  // move the repo out from under the agent. Isolation comes from
+  // CLAUDE_CONFIG_DIR instead, which does not disturb the workspace.
   if (ws.workspaceStrategy) cfg.workspaceStrategy = { ...ws.workspaceStrategy }
   if (ws.cwd) cfg.cwd = ws.cwd
 
@@ -590,7 +595,7 @@ export function bundleSha256(text) {
 // Payload building
 // ---------------------------------------------------------------------------
 
-export function buildAgentPayload(roster, agent, bundleText, reportsToId, secretIds = null) {
+export function buildAgentPayload(roster, agent, bundleText, reportsToId, secretIds = null, opts = {}) {
   return {
     name: agent.name,
     role: agent.role,
@@ -600,7 +605,7 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId, secret
     capabilities: agent.capabilities,
     desiredSkills: agent.desiredSkills ?? [],
     adapterType: agent.adapter.type,
-    adapterConfig: composeAdapterConfig(roster, agent, secretIds),
+    adapterConfig: composeAdapterConfig(roster, agent, secretIds, opts),
     instructionsBundle: { entryFile: 'AGENTS.md', files: { 'AGENTS.md': bundleText } },
     runtimeConfig: {
       heartbeat: {
@@ -697,6 +702,77 @@ export function instanceRoot(home = paperclipHome()) {
 // the next Paperclip upgrade, and breaks silently.
 export function adapterSkillsRoot(home = paperclipHome()) {
   return join(home, 'cli', 'current', 'node_modules', '@paperclipai', 'adapter-claude-local', 'skills')
+}
+
+// Claude Code keeps everything under one config root: projects/, sessions/,
+// memory/ and skills/. Left at the default ~/.claude, every agent on this host
+// shares it — and because Claude resolves a project by the git COMMON dir, all
+// sixteen worktree agents landed in one memory store. Pointing each agent at its
+// own $AGENT_HOME/.claude isolates them and, as a consequence, makes the native
+// memory index auto-load per agent: MEMORY.md arrives in context at session
+// start with no instruction to read it.
+//
+// The roster cannot express this — the path contains the agent id, and the
+// roster is keyed by slug precisely so ids stay Paperclip's business. So it is
+// injected here, at apply time, from live ids.
+export function agentClaudeConfigDir(agentId, opts = {}) {
+  const workspaces = opts.workspacesRoot ?? join(instanceRoot(), 'workspaces')
+  return join(workspaces, agentId, '.claude')
+}
+
+// claudeCodeSkills name skills provided by the local Claude Code install, not by
+// Paperclip. validateRoster checks they are well FORMED — no slash, so nobody
+// files a Paperclip key here — but nothing has ever checked they EXIST. The
+// roster claimed four for Product Designer and the agent had none of them: the
+// design plugin is not installed on this host, and the reconciler only ever
+// printed a hint about it at P7. A capability the roster asserts and the runtime
+// lacks is drift, and drift is supposed to fail rather than be mentioned.
+//
+// Only what is verifiable from disk is asserted. A "plugin:skill" entry resolves
+// when that plugin is installed AND enabled. A bare name resolves when it is a
+// user skill or a skill in this repo. Anything else is reported unresolved, with
+// where it was looked for, because a silent pass is what let this sit.
+export function claudeCodeSkillSources(opts = {}) {
+  // CLAUDE_CONFIG_DIR is the variable Claude Code itself honours, so reading it
+  // here means the tool inspects the same install the agents will.
+  const home = opts.claudeHome ?? (process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude'))
+  const readJson = (file) => {
+    try { return JSON.parse(readFileSync(file, 'utf8')) } catch { return null }
+  }
+  const installed = readJson(join(home, 'plugins', 'installed_plugins.json'))?.plugins ?? {}
+  const enabled = readJson(join(home, 'settings.json'))?.enabledPlugins ?? {}
+  // installed_plugins keys are "<name>@<marketplace>"; the roster prefix is the name.
+  const plugins = new Set()
+  for (const key of Object.keys(installed)) {
+    if (enabled[key] === false) continue
+    plugins.add(String(key).split('@')[0])
+  }
+  const dirSkills = (dir) => {
+    try { return statSync(dir).isDirectory() ? new Set(readdirSync(dir)) : new Set() } catch { return new Set() }
+  }
+  return {
+    plugins,
+    userSkills: dirSkills(join(home, 'skills')),
+    repoSkills: dirSkills(join(opts.repoRoot ?? REPO_ROOT, '.claude', 'skills')),
+  }
+}
+
+export function checkClaudeCodeSkills(roster, opts = {}) {
+  const src = opts.sources ?? claudeCodeSkillSources(opts)
+  const wanted = new Set()
+  for (const a of roster.agents ?? []) for (const k of a.claudeCodeSkills ?? []) wanted.add(k)
+  const unresolved = []
+  for (const skill of [...wanted].sort()) {
+    if (skill.includes(':')) {
+      const plugin = skill.split(':')[0]
+      if (!src.plugins.has(plugin)) unresolved.push(`${skill} (plugin '${plugin}' not installed)`)
+      continue
+    }
+    if (!src.userSkills.has(skill) && !src.repoSkills.has(skill)) {
+      unresolved.push(`${skill} (not a user skill or a skill in this repo)`)
+    }
+  }
+  return { wanted: wanted.size, unresolved }
 }
 
 export function needsLocalSkillLinks(roster, agent) {
@@ -1015,6 +1091,34 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   const projectless = !issuesReadable ? [] : live.issues
     .filter((i) => OPEN_STATUSES.has(i.status) && i.assigneeAgentId && worktreeAgentSlug.has(i.assigneeAgentId) && !i.projectId)
     .map((i) => `${worktreeAgentSlug.get(i.assigneeAgentId)}: ${String(i.title ?? i.id).slice(0, 44)}`)
+  // The roster asserted four design skills and a Figma capability that the host
+  // does not provide. Nothing failed, because nothing looked.
+  const cc = checkClaudeCodeSkills(roster, opts.claudeCodeSkills ?? {})
+  rows.push({
+    n: '—',
+    condition: `Claude Code skills the roster claims are installed (${cc.wanted})`,
+    pass: cc.unresolved.length === 0,
+    detail: cc.unresolved.slice(0, 3).join('; '),
+  })
+
+  // Without this every claude agent shares ~/.claude: one memory store for the
+  // sixteen worktree agents, and no per-agent recall. It is one env var, so it
+  // is also one silent revert away from being lost.
+  const cfgDirBad = []
+  for (const [slug, a] of bySlug) {
+    const w = want.get(slug); if (!w || w.adapter?.type !== 'claude_local') continue
+    const got = ((cfg.get(a.id)?.adapterConfig ?? {}).env ?? {}).CLAUDE_CONFIG_DIR
+    const value = typeof got === 'object' ? got?.value : got
+    const wanted = agentClaudeConfigDir(a.id, opts.localSkills ?? {})
+    if (value !== wanted) cfgDirBad.push(`${slug}: ${value ? 'points elsewhere' : 'unset'}`)
+  }
+  rows.push({
+    n: '—',
+    condition: 'Claude agents have their own config dir, so memory is per-agent',
+    pass: cfgDirBad.length === 0,
+    detail: cfgDirBad.slice(0, 3).join('; '),
+  })
+
   // A skill the roster assigns but the runtime never loads is worse than one it
   // never assigned: every board stays green while the capability is absent.
   // Worktree agents get theirs from .claude/skills in the repo; these cannot.
@@ -1028,6 +1132,27 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     condition: `Workspace-none agents have their skills attached locally (${linkExpect.length} link(s))`,
     pass: linkMissing.length === 0,
     detail: linkMissing.slice(0, 3).join('; '),
+  })
+
+  // POST /issues deduplicates on (title, description): an identical create
+  // returns the EXISTING issue and silently discards the fields you sent with
+  // it. An agent that retries a handoff — the natural response to any hiccup —
+  // gets back its first attempt, assignee and all dropped, and reports the
+  // assignee as having vanished. Reproduced 2026-09-03: create without an
+  // assignee, retry the same title and body with one, and the stored issue
+  // still has none.
+  //
+  // The cost lands on the child issue: work handed to nobody, which no agent
+  // will ever pick up and no other check notices. A parented issue with no
+  // assignee is that, and is never legitimate — a handoff names its recipient.
+  const orphanWork = !issuesReadable ? [] : live.issues
+    .filter((i) => OPEN_STATUSES.has(i.status) && i.parentId && !i.assigneeAgentId)
+    .map((i) => String(i.title ?? i.id).slice(0, 44))
+  rows.push({
+    n: '—',
+    condition: 'Every open child issue has someone to do it',
+    pass: issuesReadable && orphanWork.length === 0,
+    detail: !issuesReadable ? 'could not read issues — this check could not run' : orphanWork.slice(0, 3).join('; '),
   })
 
   rows.push({
@@ -1417,12 +1542,17 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
   }
 
   // --- adopt + update: converge everything that already exists ------------
-  const existing = roster.agents.filter((a) => !created.includes(a.slug) && idBySlug.has(a.slug))
+  // Every agent with an id, including ones created moments ago. A create cannot
+  // carry CLAUDE_CONFIG_DIR — the id does not exist until the API answers — so a
+  // rebuilt agent would run without it until some later apply. That is precisely
+  // the case this has to cover: agents get rebuilt after mistakes.
+  const existing = roster.agents.filter((a) => idBySlug.has(a.slug))
   if (existing.length) {
-    step(`B' converge ${existing.length} existing`)
+    step(`B' converge ${existing.length}`)
     for (const agent of existing) {
       const parentId = agent.reportsTo != null ? idBySlug.get(agent.reportsTo) : null
-      const payload = buildAgentPayload(roster, agent, rendered.get(agent.slug), parentId, secretIds)
+      const payload = buildAgentPayload(roster, agent, rendered.get(agent.slug), parentId, secretIds,
+        { claudeConfigDir: agentClaudeConfigDir(idBySlug.get(agent.slug)) })
       delete payload.permissions // not accepted on PATCH
       try {
         await api.patch(`/api/agents/${idBySlug.get(agent.slug)}`, { ...payload, replaceAdapterConfig: true })

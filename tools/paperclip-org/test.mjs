@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join, dirname } from 'node:path'
-import { readFileSync, mkdirSync, mkdtempSync, existsSync, symlinkSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, symlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -18,6 +18,8 @@ import {
   PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
   PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
+  checkClaudeCodeSkills, claudeCodeSkillSources,
+  agentClaudeConfigDir,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -164,9 +166,18 @@ test('the roster heartbeat reaches the payload, and wakeOnDemand survives it', (
     assert.equal(hb.enabled, a.run.heartbeat, `${slug} heartbeat follows the roster`)
     assert.equal(hb.wakeOnDemand, true, `${slug} still wakes on demand`)
   }
-  const on = roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug).sort()
-  assert.deepEqual(on, ['ceo', 'chief-of-staff', 'cto', 'finance', 'head-of-product'],
-    'heartbeats stay scoped to the agents carrying cross-issue context')
+  // No agent runs one today — enabled for five on 2026-09-03 and reverted the
+  // same night. skipTimerWhenNoActionableWork means an idle agent skips the
+  // wake, so in four hours not one timer-triggered run fired; a heartbeat only
+  // arrives when work already would have woken the agent. The mechanism is kept
+  // tested because the roster can still turn one on.
+  assert.deepEqual(roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug), [],
+    'heartbeat is off everywhere — agents wake from work, not polling')
+  const on = structuredClone(roster)
+  on.agents[0].run.heartbeat = true
+  const hb = buildAgentPayload(on, on.agents[0], rendered.get(on.agents[0].slug), null).runtimeConfig.heartbeat
+  assert.equal(hb.enabled, true, 'a roster that asks for one still gets one')
+  assert.equal(hb.wakeOnDemand, true, 'and wakeOnDemand survives it')
 })
 
 // --- design chain ---
@@ -481,24 +492,56 @@ const FAKE_SECRET_IDS = new Map([
 // verify's local-skill row reads the filesystem. Point it at a temp tree with
 // every expected link present, so these fixtures assert on the roster and not
 // on whatever happens to be installed on the machine running the tests.
-const satisfiedLocalSkills = (roster, agents) => {
+// The claudeCodeSkills row reads the HOST's Claude install. Fixtures that assert
+// every row passes must not depend on which plugins this machine happens to
+// have, so they inject a source set instead.
+const claudeSkillsPresent = (roster) => {
+  const wanted = new Set()
+  for (const a of roster.agents) for (const k of a.claudeCodeSkills ?? []) wanted.add(k)
+  const plugins = new Set(); const userSkills = new Set()
+  for (const k of wanted) (k.includes(':') ? plugins.add(k.split(':')[0]) : userSkills.add(k))
+  return { sources: { plugins, userSkills, repoSkills: new Set() } }
+}
+
+// A temp Claude install that provides exactly what the roster claims, for the
+// end-to-end CLI runs. CLAUDE_CONFIG_DIR is the same variable Claude Code reads,
+// so the tool inspects this instead of the developer's own machine.
+const fakeClaudeHome = (roster) => {
+  const home = mkdtempSync(join(tmpdir(), 'paperclip-org-claude-'))
+  const wanted = new Set()
+  for (const a of roster.agents) for (const k of a.claudeCodeSkills ?? []) wanted.add(k)
+  const plugins = {}
+  for (const k of wanted) {
+    if (k.includes(':')) plugins[`${k.split(':')[0]}@test`] = [{ scope: 'user' }]
+    else mkdirSync(join(home, 'skills', k), { recursive: true })
+  }
+  mkdirSync(join(home, 'plugins'), { recursive: true })
+  writeFileSync(join(home, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins }))
+  return home
+}
+
+const linkRoot = () => {
   const root = mkdtempSync(join(tmpdir(), 'paperclip-org-links-'))
-  const skillsRoot = join(root, 'skills')
-  const workspacesRoot = join(root, 'workspaces')
+  return { root, opts: { skillsRoot: join(root, 'skills'), workspacesRoot: join(root, 'workspaces') } }
+}
+
+const satisfiedLocalSkills = (roster, agents, given = null) => {
+  const { root, opts } = given ?? linkRoot()
   const ids = new Map(roster.agents.map((a, i) => [a.slug, agents[i].id]))
-  for (const l of planLocalSkillLinks(roster, ids, { skillsRoot, workspacesRoot })) {
+  for (const l of planLocalSkillLinks(roster, ids, opts)) {
     mkdirSync(l.source, { recursive: true })
     mkdirSync(dirname(l.target), { recursive: true })
     if (!existsSync(l.target)) symlinkSync(l.source, l.target)
   }
-  return { root, opts: { skillsRoot, workspacesRoot } }
+  return { root, opts }
 }
 
-const asLive = (roster, rendered) => roster.agents.map((a, i) => ({
+const asLive = (roster, rendered, opts = null) => roster.agents.map((a, i) => ({
   id: `id-${i}`, name: a.name, status: 'idle',
   reportsTo: a.reportsTo ? `id-${roster.agents.findIndex((x) => x.slug === a.reportsTo)}` : null,
   adapterType: a.adapter.type,
-  adapterConfig: composeAdapterConfig(roster, a, FAKE_SECRET_IDS),
+  adapterConfig: composeAdapterConfig(roster, a, FAKE_SECRET_IDS,
+    opts ? { claudeConfigDir: agentClaudeConfigDir(`id-${i}`, opts) } : {}),
   runtimeConfig: { heartbeat: { enabled: a.run.heartbeat, wakeOnDemand: true, maxConcurrentRuns: a.run.maxConcurrentRuns } },
   budgetMonthlyCents: a.budgetMonthlyCents,
   permissions: { canCreateAgents: false, canAssignTasks: a.permissions.canAssignTasks },
@@ -631,7 +674,9 @@ test('--apply syncs skills with mode replace, and exits 0', async () => {
   const fake = createFakeApi({ companyId: roster.company.id })
   const url = await fake.listen()
   try {
-    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url })
+    const claudeHome = fakeClaudeHome(roster)
+    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    rmSync(claudeHome, { recursive: true, force: true })
     assert.equal(r.code, 0, r.stderr)
     const syncs = fake.state.calls.filter((c) => /\/skills\/sync$/.test(c.path))
     const wanted = roster.agents.filter((a) => (a.desiredSkills ?? []).length).length
@@ -669,7 +714,8 @@ test('the create payload never sends canAssignTasks — the API rejects it there
 test('verify passes against a live org built from the roster, and catches drift', () => {
   const { roster, fragments } = load()
   const rendered = renderAll(roster, fragments)
-  const agents = asLive(roster, rendered)
+  const pre = linkRoot()
+  const agents = asLive(roster, rendered, pre.opts)
   const cfgs = new Map(agents.map((a) => [a.id, {
     adapterType: a.adapterType, adapterConfig: a.adapterConfig,
     runtimeConfig: a.runtimeConfig, permissions: a.permissions,
@@ -679,8 +725,8 @@ test('verify passes against a live org built from the roster, and catches drift'
   const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
-  const links = satisfiedLocalSkills(roster, agents)
-  const rows = verify(roster, live, rendered, { localSkills: links.opts })
+  const links = satisfiedLocalSkills(roster, agents, pre)
+  const rows = verify(roster, live, rendered, { localSkills: links.opts, claudeCodeSkills: claudeSkillsPresent(roster) })
   const failed = rows.filter((r) => !r.pass)
   assert.deepEqual(failed.map((f) => `${f.n}: ${f.detail}`), [], 'a correctly built org passes every check')
 
@@ -787,6 +833,39 @@ test('an open worktree-agent issue with no project is drift', () => {
     'a CLOSED issue is history, not something an agent will try to run')
   assert.ok(row([{ id: 'i4', status: 'todo', assigneeAgentId: desk, projectId: null, title: 'no repo' }]).pass,
     'an agent with no worktree needs no project — that is the point of workspace none')
+})
+
+// POST /issues dedupes on (title, description) and returns the existing issue,
+// discarding the fields sent with the retry. An agent retrying a handoff gets
+// its first attempt back with the assignee dropped, and the response looks like
+// success. The child issue is then work handed to nobody.
+test('an open child issue with no assignee is drift', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const pre = linkRoot()
+  const agents = asLive(roster, rendered, pre.opts)
+  const cfgs = new Map(agents.map((a) => [a.id, { adapterType: a.adapterType, adapterConfig: a.adapterConfig, runtimeConfig: a.runtimeConfig, permissions: a.permissions }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const links = satisfiedLocalSkills(roster, agents, pre)
+  const base = { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, company: { budgetMonthlyCents: 6000 } }
+  const row = (issues) => verify(roster, { ...base, issues }, rendered, { localSkills: links.opts })
+    .find((r) => /someone to do it/.test(r.condition))
+  const who = agents[0].id
+
+  assert.ok(row([]).pass, 'no issues is not drift')
+  assert.ok(row([{ id: 'i1', status: 'todo', parentId: 'p1', assigneeAgentId: who, title: 'ok' }]).pass,
+    'a child issue with an assignee is a complete handoff')
+  assert.ok(!row([{ id: 'i2', status: 'todo', parentId: 'p1', assigneeAgentId: null, title: 'nobody will do this' }]).pass,
+    'a child issue with no assignee is work handed to nobody')
+  assert.ok(row([{ id: 'i3', status: 'done', parentId: 'p1', assigneeAgentId: null, title: 'closed' }]).pass,
+    'a closed issue is history')
+  assert.ok(row([{ id: 'i4', status: 'todo', parentId: null, assigneeAgentId: null, title: 'top-level backlog' }]).pass,
+    'a top-level issue is not a handoff — a human may file one unassigned')
+
+  const rows = verify(roster, { ...base, issues: null }, rendered, { localSkills: links.opts })
+  const unread = rows.find((r) => /someone to do it/.test(r.condition))
+  assert.equal(unread.pass, false, 'an unread list must not verify as a clean one')
+  rmSync(links.root, { recursive: true, force: true })
 })
 
 test('verify refuses to vouch for issues it could not read', () => {
@@ -911,6 +990,113 @@ test('verify reports a workspace-none agent whose skill was never attached', () 
   assert.equal(after.pass, false)
   assert.match(after.detail, /finance\/para-memory-files/)
   rmSync(links.root, { recursive: true, force: true })
+})
+
+// Claude Code keeps projects/, sessions/, memory/ and skills/ under one config
+// root. At the default ~/.claude every agent on the host shares it, and because
+// Claude resolves a project by the git COMMON dir, all sixteen worktree agents
+// landed in one memory store — QA reading the builder's account of its own work.
+test('claude agents get their own config dir; codex agents are left alone', () => {
+  const { roster } = load()
+  const dir = (slug) => {
+    const a = bySlug(roster, slug)
+    const env = composeEnv(roster, a, { claudeConfigDir: `/w/id-${slug}/.claude` })
+    return env.CLAUDE_CONFIG_DIR
+  }
+  assert.equal(dir('cto'), '/w/id-cto/.claude', 'claude_local, worktree')
+  assert.equal(dir('finance'), '/w/id-finance/.claude', 'claude_local, workspace none')
+  assert.equal(dir('web-engineer'), undefined, 'codex_local uses codex-home, not a Claude config dir')
+
+  // Without a live id there is nothing to point at, and inventing one would be
+  // worse than omitting it — a wrong path silently isolates an agent from its
+  // own memory rather than from other agents.
+  assert.equal(composeEnv(roster, bySlug(roster, 'cto')).CLAUDE_CONFIG_DIR, undefined)
+})
+
+test('agentClaudeConfigDir is the agent home, not a shared root', () => {
+  const a = agentClaudeConfigDir('agent-a', { workspacesRoot: '/w' })
+  const b = agentClaudeConfigDir('agent-b', { workspacesRoot: '/w' })
+  assert.equal(a, '/w/agent-a/.claude')
+  assert.notEqual(a, b, 'two agents never share a config root')
+})
+
+test('verify catches a claude agent whose config dir is unset or wrong', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const pre = linkRoot()
+  const agents = asLive(roster, rendered, pre.opts)
+  const cfgs = new Map(agents.map((a) => [a.id, { adapterType: a.adapterType, adapterConfig: a.adapterConfig, runtimeConfig: a.runtimeConfig, permissions: a.permissions }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const live = { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
+  const links = satisfiedLocalSkills(roster, agents, pre)
+  const row = (configurations) => verify(roster, { ...live, configurations }, rendered, { localSkills: links.opts })
+    .find((r) => /own config dir/.test(r.condition))
+
+  assert.ok(row(cfgs).pass, 'a correctly built org passes')
+
+  const idx = roster.agents.findIndex((a) => a.slug === 'cto')
+  const mutate = (env) => {
+    const next = new Map(cfgs)
+    const e = { ...next.get(agents[idx].id) }
+    e.adapterConfig = { ...e.adapterConfig, env }
+    next.set(agents[idx].id, e)
+    return next
+  }
+  const base = { ...cfgs.get(agents[idx].id).adapterConfig.env }
+  delete base.CLAUDE_CONFIG_DIR
+  assert.ok(!row(mutate(base)).pass, 'unset is drift — that is the shared-store default')
+
+  // The shared root is the specific wrong value this exists to catch.
+  const shared = { ...cfgs.get(agents[idx].id).adapterConfig.env, CLAUDE_CONFIG_DIR: { type: 'plain', value: '/Users/someone/.claude' } }
+  assert.ok(!row(mutate(shared)).pass, 'pointing at a shared root is drift')
+  rmSync(links.root, { recursive: true, force: true })
+})
+
+// The roster claimed four design skills and Product Designer had none of them:
+// the design plugin is not installed on this host. validateRoster checked they
+// were well formed, never that they existed, and the reconciler only printed a
+// hint. A capability asserted and not provided is drift.
+test('claudeCodeSkills resolve from plugins, user skills, or this repo', () => {
+  const { roster } = load()
+  const all = (r) => { const s = new Set(); for (const a of r.agents) for (const k of a.claudeCodeSkills ?? []) s.add(k); return s }
+  const wanted = all(roster)
+
+  const everything = { plugins: new Set(), userSkills: new Set(), repoSkills: new Set() }
+  for (const k of wanted) (k.includes(':') ? everything.plugins.add(k.split(':')[0]) : everything.userSkills.add(k))
+  assert.deepEqual(checkClaudeCodeSkills(roster, { sources: everything }).unresolved, [],
+    'everything provided resolves')
+
+  // A host with nothing installed — the state that shipped unnoticed.
+  const nothing = { plugins: new Set(), userSkills: new Set(), repoSkills: new Set() }
+  const bare = checkClaudeCodeSkills(roster, { sources: nothing })
+  assert.equal(bare.unresolved.length, wanted.size, 'every claim is reported, not just the first')
+  assert.match(bare.unresolved.join(' '), /plugin 'design' not installed/)
+
+  // A bare name may come from this repo's own .claude/skills.
+  const viaRepo = { plugins: new Set(['design']), userSkills: new Set(), repoSkills: new Set(['design', 'artifact-design']) }
+  assert.deepEqual(checkClaudeCodeSkills(roster, { sources: viaRepo }).unresolved, [],
+    'a skill committed to this repo counts — every worktree checks it out')
+
+  // Installed but disabled is not available.
+  const disabled = { plugins: new Set(), userSkills: new Set(['design', 'artifact-design']), repoSkills: new Set() }
+  assert.match(checkClaudeCodeSkills(roster, { sources: disabled }).unresolved.join(' '), /plugin 'design'/)
+})
+
+test('claudeCodeSkillSources reads a Claude install, and an absent one is empty', () => {
+  const home = mkdtempSync(join(tmpdir(), 'paperclip-org-src-'))
+  mkdirSync(join(home, 'plugins'), { recursive: true })
+  mkdirSync(join(home, 'skills', 'artifact-design'), { recursive: true })
+  writeFileSync(join(home, 'plugins', 'installed_plugins.json'),
+    JSON.stringify({ version: 2, plugins: { 'design@official': [{ scope: 'user' }], 'codex@openai-codex': [{ scope: 'user' }] } }))
+  writeFileSync(join(home, 'settings.json'), JSON.stringify({ enabledPlugins: { 'design@official': false } }))
+  const src = claudeCodeSkillSources({ claudeHome: home, repoRoot: home })
+  assert.ok(!src.plugins.has('design'), 'installed but disabled does not count as available')
+  assert.ok(src.plugins.has('codex'))
+  assert.ok(src.userSkills.has('artifact-design'))
+  rmSync(home, { recursive: true, force: true })
+
+  const missing = claudeCodeSkillSources({ claudeHome: join(home, 'gone'), repoRoot: join(home, 'gone') })
+  assert.equal(missing.plugins.size, 0, 'no install reads as nothing available, never as a crash')
 })
 
 test('PaperclipClient never puts the key in an error message', async () => {
