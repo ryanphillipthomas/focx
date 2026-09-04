@@ -8,14 +8,18 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
-export function createFakeApi({ companyId, requireAuth = true, seedAgents = [], failSkillSync = false, seedIssues = [] } = {}) {
+export function createFakeApi({ companyId, requireAuth = true, seedAgents = [], failSkillSync = false, seedIssues = [], seedRoutines = [] } = {}) {
   const state = {
     company: { id: companyId, name: 'Focx.ai (fake)', budgetMonthlyCents: 0 },
     projectName: 'Connect',
     issues: [...seedIssues],
     agents: [...seedAgents],
-    routines: [],
-    triggers: new Map(),
+    // seedRoutines model an org that is already live — including one that a
+    // human has contained out of band, which is the state the reconciler must
+    // not silently undo. `triggers` on a seed is lifted into the trigger map,
+    // because that is how the real API serves them.
+    routines: seedRoutines.map(({ triggers, ...r }) => ({ ...r })),
+    triggers: new Map(seedRoutines.map((r) => [r.id, [...(r.triggers ?? [])]])),
     policies: [],
     secrets: [
       { id: 'sec-claude-0001', key: 'claude_subscription_token', name: 'claude_subscription_token', scope: 'company' },

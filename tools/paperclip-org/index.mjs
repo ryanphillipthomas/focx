@@ -11,6 +11,11 @@
 //   node tools/paperclip-org/index.mjs --apply --confirm-terminate=N
 //   node tools/paperclip-org/index.mjs --verify-only       read-only success-condition check
 //   node tools/paperclip-org/index.mjs --render-only       render bundles offline, no credential
+//   node tools/paperclip-org/index.mjs --apply --enable-routines   release a containment brake
+//
+// Containment is asymmetric on purpose: apply may always quiet the org, and may
+// never re-arm a routine or schedule trigger that is live-disabled unless
+// --enable-routines says so. See planRoutineWrite.
 //
 // Env: PAPERCLIP_API_URL (default http://127.0.0.1:3100), PAPERCLIP_API_KEY,
 //      PAPERCLIP_COMPANY_ID (defaults to roster.company.id).
@@ -643,7 +648,10 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId, secret
   }
 }
 
-export function buildRoutinePayload(roster, routine, assigneeAgentId) {
+export function buildRoutinePayload(roster, routine, assigneeAgentId, opts = {}) {
+  // status is nullable so a contained routine is not silently re-activated:
+  // planRoutineWrite passes null when a human paused it out of band.
+  const status = 'status' in opts ? opts.status : routine.status
   return {
     // Worktrees are cut from the PROJECT's checkout, so an issue with no project
     // has no repository to cut from and the agent dies on "not a git repository".
@@ -655,12 +663,70 @@ export function buildRoutinePayload(roster, routine, assigneeAgentId) {
     description: `focx-routine-key: ${routine.key}\n\n${routine.description}`,
     assigneeAgentId,
     priority: routine.priority,
-    status: routine.status,
+    ...(status == null ? {} : { status }),
     concurrencyPolicy: routine.concurrencyPolicy,
     catchUpPolicy: routine.catchUpPolicy,
     activityGatePolicy: routine.activityGatePolicy,
     ...(routine.activityGateScope ? { activityGateScope: routine.activityGateScope } : {}),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Containment safety.
+//
+// On 2026-09-04 the org ran ~200 runs in two hours off a comment loop. Stopping
+// it meant three out-of-band acts: pause every agent, pause the routines,
+// disable every schedule trigger. None of those are expressible in a roster
+// that says every routine is `active`.
+//
+// The reconciler wrote `enabled: true` on every schedule trigger and
+// `status: routine.status` on every routine, unconditionally. So the next
+// --apply would have read the emergency brake as drift and released it — the
+// board would have gone green while re-arming exactly what was contained. The
+// agents stayed paused (apply only ever calls /pause), so nothing would have
+// restarted that minute; the danger is the silence, not the speed.
+//
+// Two rules, and they are asymmetric on purpose:
+//
+//   1. Converging toward LESS automation is always safe and always allowed.
+//      A roster that says `paused` disables the trigger, no flag needed.
+//   2. Converging toward MORE automation, over a live state that is already
+//      disabled, requires --enable-routines. Terminating an agent needs
+//      --confirm-terminate=N because it is irreversible in the moment;
+//      re-arming automation after a containment event is the same category of
+//      act and earns the same kind of explicit consent.
+//
+// Pure and exported so the policy is testable without an API.
+export function planRoutineWrite(routine, live = {}, flags = {}) {
+  const schedules = (live.schedules ?? []).filter((t) => t.kind === 'schedule')
+  const enableRoutines = flags.enableRoutines === true
+  const wantEnabled = routine.status === 'active'
+  const held = []
+
+  // Routine status: hold only when live is quieter than the roster wants.
+  const liveStatus = live.routine?.status ?? null
+  let status = routine.status
+  if (wantEnabled && liveStatus != null && liveStatus !== 'active' && !enableRoutines) {
+    status = null
+    held.push(`routine is '${liveStatus}'`)
+  }
+
+  const base = { kind: 'schedule', cronExpression: routine.cron, timezone: routine.timezone, label: routine.key }
+  const primary = schedules[0] ?? null
+  let trigger
+  if (!primary) {
+    // A create must state `enabled` — there is no live value to preserve.
+    trigger = { op: 'create', id: null, body: { ...base, enabled: wantEnabled } }
+  } else if (wantEnabled && primary.enabled === false && !enableRoutines) {
+    // Cron, timezone and label still converge. `enabled` is deliberately absent
+    // from the body: omitting the key is what leaves the brake on.
+    trigger = { op: 'patch', id: primary.id, body: { ...base } }
+    held.push('schedule trigger is disabled')
+  } else {
+    trigger = { op: 'patch', id: primary.id, body: { ...base, enabled: wantEnabled } }
+  }
+
+  return { status, trigger, disableExtras: schedules.slice(1).map((t) => t.id), held }
 }
 
 // ---------------------------------------------------------------------------
@@ -978,11 +1044,22 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     const lr = (live.routines ?? []).find((x) => x.title === r.title)
     if (!lr) { routineBad.push(`${r.key} missing`); continue }
     if (lr.assigneeAgentId !== bySlug.get(r.owner)?.id) routineBad.push(`${r.key} wrong assignee`)
-    const trig = (live.triggers?.get(lr.id) ?? []).filter((t) => t.kind === 'schedule' && t.enabled)
-    if (trig.length !== 1) routineBad.push(`${r.key} has ${trig.length} enabled schedule triggers`)
-    else if (trig[0].cronExpression !== r.cron || trig[0].timezone !== r.timezone) routineBad.push(`${r.key} cron/timezone mismatch`)
+    // Enabled must MATCH the roster, not merely be on. The old check required
+    // every trigger enabled, so a deliberately contained org read as drift —
+    // and the only way to make the board green was to re-arm it.
+    const scheds = (live.triggers?.get(lr.id) ?? []).filter((t) => t.kind === 'schedule')
+    const wantEnabled = r.status === 'active'
+    if (scheds.length !== 1) routineBad.push(`${r.key} has ${scheds.length} schedule triggers`)
+    else {
+      if (Boolean(scheds[0].enabled) !== wantEnabled) {
+        routineBad.push(`${r.key} trigger ${scheds[0].enabled ? 'enabled' : 'disabled'}, roster says '${r.status}'`)
+      } else if (scheds[0].cronExpression !== r.cron || scheds[0].timezone !== r.timezone) {
+        routineBad.push(`${r.key} cron/timezone mismatch`)
+      }
+    }
   }
-  check(8, `${roster.routines.length} routines active, one enabled schedule trigger each`,
+  const activeCount = roster.routines.filter((r) => r.status === 'active').length
+  check(8, `${roster.routines.length} routines, one schedule trigger each, ${activeCount} enabled`,
     routineBad.length === 0, routineBad.slice(0, 3).join('; '))
 
   const wakeBad = []
@@ -1204,7 +1281,7 @@ const bad = (s) => paint(C.red, s)
 const warn = (s) => paint(C.yellow, s)
 
 function parseArgs(argv) {
-  const flags = { apply: false, verifyOnly: false, renderOnly: false, json: false, roster: null, confirmTerminate: null, allowBuiltinTermination: false, terminateRunning: false }
+  const flags = { apply: false, verifyOnly: false, renderOnly: false, json: false, roster: null, confirmTerminate: null, allowBuiltinTermination: false, terminateRunning: false, enableRoutines: false }
   for (const arg of argv) {
     if (arg === '--apply') flags.apply = true
     else if (arg === '--verify-only') flags.verifyOnly = true
@@ -1212,6 +1289,7 @@ function parseArgs(argv) {
     else if (arg === '--json') flags.json = true
     else if (arg === '--allow-builtin-termination') flags.allowBuiltinTermination = true
     else if (arg === '--terminate-running') flags.terminateRunning = true
+    else if (arg === '--enable-routines') flags.enableRoutines = true
     else if (arg.startsWith('--confirm-terminate=')) flags.confirmTerminate = Number(arg.split('=')[1])
     else if (arg.startsWith('--roster=')) flags.roster = arg.split('=')[1]
     else if (arg === '--help' || arg === '-h') flags.help = true
@@ -1232,6 +1310,8 @@ const USAGE = `paperclip-org — reconcile Paperclip to pipeline/org/roster.json
   --json                       machine-readable output
   --allow-builtin-termination  required if a termination target is platform-managed
   --terminate-running          required if a termination target has a live run
+  --enable-routines            required to re-enable a routine or schedule trigger that
+                               is live-disabled — i.e. to release a containment brake
 
 Env: PAPERCLIP_API_URL (default http://127.0.0.1:3100), PAPERCLIP_API_KEY, PAPERCLIP_COMPANY_ID
 Exit: 0 clean · 1 verification failed · 2 usage/roster · 3 preflight · 4 partial apply`
@@ -1397,6 +1477,15 @@ async function main(argv) {
   try { live.routines = listOf(await api.get(`/api/companies/${companyId}/routines`)) } catch { live.routines = [] }
   // null on failure, never [] — an unread list must not verify as a clean one.
   try { live.issues = listOf(await api.get(`/api/companies/${companyId}/issues?limit=500`)) } catch { live.issues = null }
+  // Triggers are read on every path, not just --verify-only: a dry run that
+  // cannot see a disabled trigger cannot warn that --apply would re-arm it,
+  // and that invisibility is the whole reason this went unnoticed.
+  for (const r of live.routines) {
+    try {
+      const full = await api.get(`/api/routines/${r.id}`)
+      live.triggers.set(r.id, full?.triggers ?? full?.routine?.triggers ?? [])
+    } catch { live.triggers.set(r.id, []) }
+  }
   console.log(ok(`P9  live: ${live.agents.filter((a) => a.status !== 'terminated').length} active agents, ${live.routines.length} routines`))
 
   // ---- project checkout ---------------------------------------------------
@@ -1441,6 +1530,25 @@ async function main(argv) {
   console.log(`  update    ${plan.update.length}`)
   if (plan.adopt.length) console.log(warn(`  adopt     ${plan.adopt.length}: ${plan.adopt.map((a) => a.name).join(', ')} (name-matched, will be given metadata.focx.slug)`))
   console.log(`  routines  ${plan.routineCreate.length} create, ${plan.routineUpdate.length} update`)
+
+  // Containment is invisible in a plan that only counts creates and updates.
+  // Say out loud what apply would leave alone, and what --enable-routines
+  // would release, before anyone types --apply.
+  const contained = []
+  for (const r of roster.routines) {
+    const lr = live.routines.find((x) => x.title === r.title)
+    if (!lr) continue
+    const w = planRoutineWrite(r, { routine: lr, schedules: live.triggers.get(lr.id) ?? [] }, flags)
+    if (w.held.length) contained.push(`${r.key} (${w.held.join(', ')})`)
+  }
+  if (contained.length) {
+    console.log('')
+    console.log(warn(`  ${contained.length} routine(s) are contained live but 'active' in the roster:`))
+    for (const c of contained.slice(0, 10)) console.log(paint(C.dim, `     ${c}`))
+    console.log(paint(C.dim, flags.enableRoutines
+      ? '     --enable-routines is set: apply WILL re-arm these.'
+      : '     apply will leave these contained. To re-arm: --enable-routines'))
+  }
 
   if (!flags.apply) {
     if (flags.verifyOnly) return await runVerify(api, companyId, roster, live, rendered, flags)
@@ -1650,12 +1758,32 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
   } catch (err) { return fail(`budget policy: ${err.message}`) }
 
   // --- F: routines. There is no upsert for triggers — a blind second POST
-  //     stacks a duplicate schedule that double-fires. Read, then write. ---
+  //     stacks a duplicate schedule that double-fires. Read, then write.
+  //
+  //     The read now happens BEFORE the routine PATCH, not after. What the
+  //     reconciler must not silently undo is only visible before it converges:
+  //     patch the routine first and its live status is already overwritten. ---
   step(`F  routines (${roster.routines.length})`)
+  const heldRoutines = []
   for (const r of roster.routines) {
     const assignee = idBySlug.get(r.owner)
-    const payload = buildRoutinePayload(roster, r, assignee)
     let routineId = plan.routineUpdate.find((x) => x.key === r.key)?.id ?? null
+    const existed = routineId != null
+
+    let liveRoutine = null
+    let schedules = []
+    if (routineId) {
+      try {
+        const full = await api.get(`/api/routines/${routineId}`)
+        liveRoutine = full?.routine ?? full ?? null
+        schedules = (full?.triggers ?? full?.routine?.triggers ?? []).filter((t) => t.kind === 'schedule')
+      } catch { /* treat as no live state, and create below */ }
+    }
+
+    const write = planRoutineWrite(r, { routine: liveRoutine, schedules }, flags)
+    if (write.held.length) heldRoutines.push(`${r.key} (${write.held.join(', ')})`)
+    const payload = buildRoutinePayload(roster, r, assignee, { status: write.status })
+
     try {
       if (routineId) await api.patch(`/api/routines/${routineId}`, payload)
       else {
@@ -1666,25 +1794,22 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
       mutated = true
     } catch (err) { return fail(`routine ${r.key}: ${err.message}`) }
 
-    let triggers = []
     try {
-      const full = await api.get(`/api/routines/${routineId}`)
-      triggers = full?.triggers ?? full?.routine?.triggers ?? []
-    } catch { /* treat as none, and create below */ }
-    const schedules = triggers.filter((t) => t.kind === 'schedule')
-    const body = { kind: 'schedule', cronExpression: r.cron, timezone: r.timezone, enabled: true, label: r.key }
-    try {
-      if (schedules.length === 0) await api.post(`/api/routines/${routineId}/triggers`, body)
-      else {
-        await api.patch(`/api/routine-triggers/${schedules[0].id}`, body)
-        for (const extra of schedules.slice(1)) {
-          await api.patch(`/api/routine-triggers/${extra.id}`, { enabled: false })
-          console.log(warn(`  ${r.key}: disabled a duplicate schedule trigger`))
-        }
+      if (write.trigger.op === 'create') await api.post(`/api/routines/${routineId}/triggers`, write.trigger.body)
+      else await api.patch(`/api/routine-triggers/${write.trigger.id}`, write.trigger.body)
+      for (const extra of write.disableExtras) {
+        await api.patch(`/api/routine-triggers/${extra}`, { enabled: false })
+        console.log(warn(`  ${r.key}: disabled a duplicate schedule trigger`))
       }
       mutated = true
-      console.log(`  ${ok(routineId ? 'ok' : 'created')} ${r.title} — ${r.cron} ${r.timezone}`)
+      const note = write.held.length ? paint(C.dim, `  — held: ${write.held.join(', ')}`) : ''
+      console.log(`  ${ok(existed ? 'ok' : 'created')} ${r.title} — ${r.cron} ${r.timezone}${note}`)
     } catch (err) { return fail(`trigger for ${r.key}: ${err.message}`) }
+  }
+  if (heldRoutines.length) {
+    console.log(warn(`  ${heldRoutines.length} routine(s) left contained — apply did not re-arm them.`))
+    console.log(paint(C.dim, '     Deliberate? Record it in the roster as status "paused" so verify agrees.'))
+    console.log(paint(C.dim, '     Meant to restore? Re-run with --enable-routines.'))
   }
 
   // --- G: verify -----------------------------------------------------------
@@ -1726,7 +1851,11 @@ async function runVerify(api, companyId, roster, live, rendered, flags) {
     } catch { /* reported as a failed row */ }
   }
   for (const r of live.routines) {
-    try { live.triggers.set(r.id, listOf(await api.get(`/api/routines/${r.id}`))?.triggers ?? (await api.get(`/api/routines/${r.id}`))?.triggers ?? []) } catch { live.triggers.set(r.id, []) }
+    if (live.triggers.has(r.id)) continue
+    try {
+      const full = await api.get(`/api/routines/${r.id}`)
+      live.triggers.set(r.id, full?.triggers ?? full?.routine?.triggers ?? [])
+    } catch { live.triggers.set(r.id, []) }
   }
   const rows = verify(roster, live, rendered)
   console.log('')
