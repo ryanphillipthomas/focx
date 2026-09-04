@@ -18,7 +18,8 @@
 // Exit: 0 clean · 1 verification failed · 2 usage/roster error · 3 preflight failed
 //       4 PARTIAL APPLY — mixed state; rerun is safe but must be deliberate.
 
-import { readFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, existsSync, statSync, mkdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
@@ -667,6 +668,77 @@ export function liveSlug(liveAgent) {
   return liveAgent?.metadata?.focx?.slug ?? null
 }
 
+// ---------------------------------------------------------------------------
+// Local skill attachment.
+//
+// Assigning a skill in the roster does not attach it to a claude_local agent.
+// That adapter's syncClaudeSkills ignores its argument and only reports what is
+// already installed. Claude Code loads skills from <cwd>/.claude/skills, so:
+//
+//   repo-worktree    cwd is the worktree  -> .claude/skills/ in THIS repo, committed
+//   workspace: none  cwd is $AGENT_HOME   -> nothing carries it there
+//
+// The second case is what these helpers cover. Left to a human it is invisible
+// machine state: rebuild an agent, it gets a new id and a new empty $AGENT_HOME,
+// and its memory silently stops with every check still green.
+// ---------------------------------------------------------------------------
+
+export const PAPERCLIP_SKILL_KEY = /^paperclipai\/paperclip\/([A-Za-z0-9._-]+)$/
+
+export function paperclipHome() {
+  return process.env.PAPERCLIP_HOME?.trim() || join(homedir(), '.paperclip')
+}
+
+export function instanceRoot(home = paperclipHome()) {
+  return join(home, 'instances', process.env.PAPERCLIP_INSTANCE_ID?.trim() || 'default')
+}
+
+// cli/current, never the versioned install under it — a pinned path breaks on
+// the next Paperclip upgrade, and breaks silently.
+export function adapterSkillsRoot(home = paperclipHome()) {
+  return join(home, 'cli', 'current', 'node_modules', '@paperclipai', 'adapter-claude-local', 'skills')
+}
+
+export function needsLocalSkillLinks(roster, agent) {
+  if (agent.adapter?.type !== 'claude_local') return false
+  return !roster.workspaces?.[agent.workspace]?.workspaceStrategy
+}
+
+// Pure: what SHOULD exist, given live agent ids. The caller decides whether to
+// create it (apply) or merely check it (verify).
+export function planLocalSkillLinks(roster, idBySlug, opts = {}) {
+  const skillsRoot = opts.skillsRoot ?? adapterSkillsRoot()
+  const workspaces = opts.workspacesRoot ?? join(instanceRoot(), 'workspaces')
+  const out = []
+  for (const agent of roster.agents ?? []) {
+    if (!needsLocalSkillLinks(roster, agent)) continue
+    const id = idBySlug.get(agent.slug)
+    if (!id) continue
+    for (const key of agent.desiredSkills ?? []) {
+      const m = PAPERCLIP_SKILL_KEY.exec(key)
+      if (!m) continue
+      out.push({
+        slug: agent.slug,
+        skill: m[1],
+        source: join(skillsRoot, m[1]),
+        target: join(workspaces, id, '.claude', 'skills', m[1]),
+      })
+    }
+  }
+  return out
+}
+
+export function ensureLocalSkillLink({ source, target }) {
+  if (!existsSync(source)) return 'source-missing'
+  mkdirSync(dirname(target), { recursive: true })
+  let current = null
+  try { current = lstatSync(target).isSymbolicLink() ? readlinkSync(target) : '<not a symlink>' } catch { /* absent */ }
+  if (current === source) return 'ok'
+  if (current !== null) unlinkSync(target)
+  symlinkSync(source, target)
+  return current === null ? 'created' : 'repointed'
+}
+
 export function planActions(roster, live) {
   const liveAgents = (live.agents ?? []).filter((a) => a.status !== 'terminated')
   const liveRoutines = live.routines ?? []
@@ -762,7 +834,7 @@ const listOf = (r) => (Array.isArray(r) ? r : (r?.data ?? r?.items ?? r?.agents 
 // Verification — Ryan's twelve success conditions, mechanically.
 // ---------------------------------------------------------------------------
 
-export function verify(roster, live, renderedBySlug) {
+export function verify(roster, live, renderedBySlug, opts = {}) {
   const rows = []
   const check = (n, condition, pass, detail = '') => rows.push({ n, condition, pass, detail })
 
@@ -943,6 +1015,21 @@ export function verify(roster, live, renderedBySlug) {
   const projectless = !issuesReadable ? [] : live.issues
     .filter((i) => OPEN_STATUSES.has(i.status) && i.assigneeAgentId && worktreeAgentSlug.has(i.assigneeAgentId) && !i.projectId)
     .map((i) => `${worktreeAgentSlug.get(i.assigneeAgentId)}: ${String(i.title ?? i.id).slice(0, 44)}`)
+  // A skill the roster assigns but the runtime never loads is worse than one it
+  // never assigned: every board stays green while the capability is absent.
+  // Worktree agents get theirs from .claude/skills in the repo; these cannot.
+  const liveIds = new Map([...bySlug].map(([slug, a]) => [slug, a.id]))
+  const linkExpect = planLocalSkillLinks(roster, liveIds, opts.localSkills ?? {})
+  const linkMissing = linkExpect
+    .filter((l) => { try { return !existsSync(l.target) } catch { return true } })
+    .map((l) => `${l.slug}/${l.skill}`)
+  rows.push({
+    n: '—',
+    condition: `Workspace-none agents have their skills attached locally (${linkExpect.length} link(s))`,
+    pass: linkMissing.length === 0,
+    detail: linkMissing.slice(0, 3).join('; '),
+  })
+
   rows.push({
     n: '—',
     condition: 'Open worktree-agent issues all carry a project',
@@ -1382,6 +1469,27 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
     }
   }
 
+  // --- D2: local skill attachment -----------------------------------------
+  const linkPlan = planLocalSkillLinks(roster, idBySlug)
+  const linkFailures = []
+  if (linkPlan.length) {
+    step(`D2 attach skills locally (${linkPlan.length} link(s) for workspace-none agents)`)
+    const counts = { ok: 0, created: 0, repointed: 0 }
+    for (const link of linkPlan) {
+      let result
+      try { result = ensureLocalSkillLink(link) }
+      catch (err) { result = `error: ${err.message}` }
+      if (result === 'ok' || result === 'created' || result === 'repointed') {
+        counts[result] += 1
+        if (result !== 'ok') mutated = true
+      } else {
+        linkFailures.push(`${link.slug}/${link.skill}: ${result}`)
+        console.log(warn(`  ${link.slug}: ${link.skill} — ${result}`))
+      }
+    }
+    console.log(`  ${ok('linked')} ${counts.created} created, ${counts.repointed} repointed, ${counts.ok} already correct`)
+  }
+
   // --- E: budgets ---------------------------------------------------------
   step('E  budgets and policies')
   try {
@@ -1464,6 +1572,11 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
   // budgets and routines — it never reads skills, so a green board below says
   // nothing about whether step D landed. Left silent, every agent could miss
   // every skill and this would still report success.
+  if (linkFailures.length) {
+    console.error(bad(`D2 could not attach ${linkFailures.length} local skill link(s): ${linkFailures.slice(0, 3).join('; ')}`))
+    console.error(bad('   those agents cannot load the skill, whatever the roster says — this is a PARTIAL APPLY.'))
+    return 4
+  }
   if (skillFailures.length) {
     const shown = skillFailures.slice(0, 3).join(', ')
     console.error(bad(`D  skills sync failed for ${skillFailures.length} agent(s): ${shown}${skillFailures.length > 3 ? ', …' : ''}`))

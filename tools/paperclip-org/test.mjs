@@ -6,8 +6,9 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { join } from 'node:path'
-import { readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { readFileSync, mkdirSync, mkdtempSync, existsSync, symlinkSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
@@ -16,7 +17,7 @@ import {
   renderBundle, planActions, loadRoster, renderAll, buildAgentPayload,
   PaperclipClient, verify, liveSlug, checkCharterCoupling, ROUTINE_PRIORITIES,
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
-  PLATFORM_OWNED_KEYS,
+  PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -477,6 +478,22 @@ const FAKE_SECRET_IDS = new Map([
   ['github_focx_write_token', 'sec-github-0002'],
 ])
 
+// verify's local-skill row reads the filesystem. Point it at a temp tree with
+// every expected link present, so these fixtures assert on the roster and not
+// on whatever happens to be installed on the machine running the tests.
+const satisfiedLocalSkills = (roster, agents) => {
+  const root = mkdtempSync(join(tmpdir(), 'paperclip-org-links-'))
+  const skillsRoot = join(root, 'skills')
+  const workspacesRoot = join(root, 'workspaces')
+  const ids = new Map(roster.agents.map((a, i) => [a.slug, agents[i].id]))
+  for (const l of planLocalSkillLinks(roster, ids, { skillsRoot, workspacesRoot })) {
+    mkdirSync(l.source, { recursive: true })
+    mkdirSync(dirname(l.target), { recursive: true })
+    if (!existsSync(l.target)) symlinkSync(l.source, l.target)
+  }
+  return { root, opts: { skillsRoot, workspacesRoot } }
+}
+
 const asLive = (roster, rendered) => roster.agents.map((a, i) => ({
   id: `id-${i}`, name: a.name, status: 'idle',
   reportsTo: a.reportsTo ? `id-${roster.agents.findIndex((x) => x.slug === a.reportsTo)}` : null,
@@ -662,14 +679,15 @@ test('verify passes against a live org built from the roster, and catches drift'
   const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
-  const rows = verify(roster, live, rendered)
+  const links = satisfiedLocalSkills(roster, agents)
+  const rows = verify(roster, live, rendered, { localSkills: links.opts })
   const failed = rows.filter((r) => !r.pass)
   assert.deepEqual(failed.map((f) => `${f.n}: ${f.detail}`), [], 'a correctly built org passes every check')
 
   // A hand-edit in the Paperclip UI must surface as drift, not become the org.
   const drifted = new Map(bundles)
   drifted.set(agents[0].id, 'hand-edited in the UI')
-  const after = verify(roster, { ...live, bundles: drifted }, rendered)
+  const after = verify(roster, { ...live, bundles: drifted }, rendered, { localSkills: links.opts })
   assert.ok(after.find((r) => r.n === 10 && !r.pass), 'check 10 catches a bundle hand-edit')
 
   // And so must a reviewer quietly gaining write access.
@@ -678,7 +696,8 @@ test('verify passes against a live org built from the roster, and catches drift'
   const c = { ...withToken.get(stewardId) }
   c.adapterConfig = { ...c.adapterConfig, env: { ...c.adapterConfig.env, GH_TOKEN: 'x' } }
   withToken.set(stewardId, c)
-  const after2 = verify(roster, { ...live, configurations: withToken }, rendered)
+  const after2 = verify(roster, { ...live, configurations: withToken }, rendered, { localSkills: links.opts })
+  rmSync(links.root, { recursive: true, force: true })
   assert.ok(after2.find((r) => r.n === 11 && !r.pass), 'check 11 catches Design Steward gaining GH_TOKEN')
 })
 
@@ -810,6 +829,88 @@ test('check 9 catches a heartbeat that drifts from the roster, either way', () =
   assert.ok(!row9(flip('web-engineer')).pass, 'a heartbeat switched on off-roster is drift')
   // ...and so is one losing the heartbeat its memory rollup depends on.
   assert.ok(!row9(flip('cto')).pass, 'a heartbeat switched off is drift too')
+})
+
+// Assigning a skill in the roster does not attach it to a claude_local agent:
+// syncClaudeSkills ignores its argument and only reports what is installed.
+// Worktree agents get theirs from .claude/skills in this repo; workspace-none
+// agents have nothing carrying it into $AGENT_HOME, so the tool does it.
+test('only workspace-none claude agents need a local skill link', () => {
+  const { roster } = load()
+  const want = (slug) => needsLocalSkillLinks(roster, bySlug(roster, slug))
+  assert.equal(want('finance'), true, 'workspace none, claude_local — cwd is $AGENT_HOME')
+  assert.equal(want('ceo'), true, 'workspace none, claude_local')
+  assert.equal(want('cto'), false, 'repo-worktree — the repo carries .claude/skills')
+  assert.equal(want('web-engineer'), false, 'codex_local — Paperclip populates codex-home itself')
+  assert.equal(want('qa-engineer'), false, 'codex_local, and on a worktree')
+})
+
+test('the local skill plan covers every desired Paperclip skill, and nothing else', () => {
+  const { roster } = load()
+  const ids = new Map(roster.agents.map((a) => [a.slug, `id-${a.slug}`]))
+  const plan = planLocalSkillLinks(roster, ids, { skillsRoot: '/s', workspacesRoot: '/w' })
+
+  const slugs = new Set(plan.map((l) => l.slug))
+  for (const a of roster.agents) {
+    const expected = needsLocalSkillLinks(roster, a) && (a.desiredSkills ?? []).length > 0
+    assert.equal(slugs.has(a.slug), expected, `${a.slug} in plan`)
+  }
+  const ceo = plan.filter((l) => l.slug === 'ceo')
+  assert.equal(ceo.length, 5, 'the CEO carries all five core skills, so all five are linked')
+  const one = plan.find((l) => l.slug === 'finance')
+  assert.equal(one.skill, 'para-memory-files')
+  assert.equal(one.source, '/s/para-memory-files')
+  assert.equal(one.target, '/w/id-finance/.claude/skills/para-memory-files')
+
+  // A Claude Code plugin skill is not a Paperclip registry key and must not be
+  // linked — claudeCodeSkills are documentation of what the local CLI provides.
+  const bad = structuredClone(roster)
+  bySlug(bad, 'finance').desiredSkills = ['design:ux-copy']
+  assert.deepEqual(planLocalSkillLinks(bad, ids, { skillsRoot: '/s', workspacesRoot: '/w' }).filter((l) => l.slug === 'finance'), [])
+})
+
+test('ensureLocalSkillLink is idempotent, repoints, and reports a missing source', () => {
+  const root = mkdtempSync(join(tmpdir(), 'paperclip-org-ensure-'))
+  const source = join(root, 'skills', 'para-memory-files')
+  const stale = join(root, 'skills', 'old-version')
+  const target = join(root, 'home', '.claude', 'skills', 'para-memory-files')
+  mkdirSync(source, { recursive: true })
+  mkdirSync(stale, { recursive: true })
+
+  assert.equal(ensureLocalSkillLink({ source, target }), 'created')
+  assert.equal(ensureLocalSkillLink({ source, target }), 'ok', 'a second apply changes nothing')
+
+  // A version-pinned target is how this breaks on upgrade: the old path goes
+  // away and memory stops silently. Repointing must be automatic.
+  rmSync(target); symlinkSync(stale, target)
+  assert.equal(ensureLocalSkillLink({ source, target }), 'repointed')
+  assert.equal(ensureLocalSkillLink({ source, target }), 'ok')
+
+  assert.equal(ensureLocalSkillLink({ source: join(root, 'nope'), target }), 'source-missing',
+    'never silently succeed when the skill is not installed')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('verify reports a workspace-none agent whose skill was never attached', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const agents = asLive(roster, rendered)
+  const cfgs = new Map(agents.map((a) => [a.id, { adapterType: a.adapterType, adapterConfig: a.adapterConfig, runtimeConfig: a.runtimeConfig, permissions: a.permissions }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const live = { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
+  const row = (opts) => verify(roster, live, rendered, { localSkills: opts }).find((r) => /attached locally/.test(r.condition))
+
+  const links = satisfiedLocalSkills(roster, agents)
+  assert.ok(row(links.opts).pass, 'every expected link present')
+
+  // Rebuild an agent and it gets a new id and an empty $AGENT_HOME. That is
+  // exactly how this goes missing, so it has to be a failing row, not silence.
+  const financeId = agents[roster.agents.findIndex((a) => a.slug === 'finance')].id
+  rmSync(join(links.opts.workspacesRoot, financeId), { recursive: true, force: true })
+  const after = row(links.opts)
+  assert.equal(after.pass, false)
+  assert.match(after.detail, /finance\/para-memory-files/)
+  rmSync(links.root, { recursive: true, force: true })
 })
 
 test('PaperclipClient never puts the key in an error message', async () => {
