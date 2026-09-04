@@ -1,0 +1,26 @@
+;; Deny-by-default egress profile for macOS agent runs — see foc-81-platform-escalation.md §5.
+;;
+;; Verified on macOS 27.0 (arm64) on 2026-09-04: blocks all outbound network
+;; (curl exits rc=6) while leaving local execution and filesystem access intact.
+;;
+;; Intended to be applied by the SPAWNER, not entered voluntarily by the agent:
+;;     sandbox-exec -f macos-egress-deny.sb <agent-command>
+;; A sandbox the agent may choose to enter is not a boundary.
+;;
+;; SBPL filters on ip:port and cannot express DNS-name allowlists. Reaching
+;; ops.focx.ai / github.com therefore requires a loopback broker that enforces
+;; the domain allowlist itself; permit only that port below.
+;;
+;; NOTE: sandbox-exec is deprecated-but-functional Apple API. Sound for ~12
+;; months; track withdrawal as a standing risk.
+
+(version 1)
+
+(allow default)
+
+;; Deny all network operations — outbound, inbound, and binding.
+(deny network*)
+
+;; Permit only the loopback egress broker. Change the port to match the
+;; broker's listener; add no other network-outbound rules.
+(allow network-outbound (remote ip "localhost:18099"))
