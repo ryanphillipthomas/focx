@@ -1,0 +1,233 @@
+{
+  "version": "0.1.0",
+  "companyId": "5f772ef2-25ce-466f-9392-027be5055470",
+  "expectedAgentCount": 26,
+  "activation": "paused",
+  "agents": [
+    {
+      "id": "50373b51-509c-4472-aa03-3c792a69c207",
+      "name": "Architecture & Documentation Steward",
+      "title": "Architecture & Documentation Steward \u2014 v0.1 pilot",
+      "disposition": "pilot",
+      "status": "paused",
+      "roleKey": "architecture-documentation-steward",
+      "reportsTo": null,
+      "adapterType": "claude_local",
+      "timeoutSec": 900,
+      "maxDailyRuns": 3,
+      "instructions": ".focx/roles/architecture-documentation-steward.md",
+      "skills": [
+        "focx-reconcile-truth"
+      ],
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false
+      },
+      "maxTurnsPerRun": 20
+    },
+    {
+      "id": "0d15f598-8d34-405e-9131-3e769fb87489",
+      "name": "Focx CEO",
+      "title": "Chief Executive Officer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "f46f5b5a-dd63-4b37-8e3e-12748bb6b02f",
+      "name": "CTO",
+      "title": "Chief Technology Officer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "8f97a6a9-8411-4af9-9470-20aed47c0d42",
+      "name": "Backend & AI Engineer",
+      "title": "Backend & AI Engineer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "12c2df43-aedb-4df0-8a83-e5fa313fbb92",
+      "name": "Design Research",
+      "title": "Design Researcher \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "525c6fb5-cc69-415e-bc5d-96b70debdf3b",
+      "name": "Chief of Staff",
+      "title": "Chief of Staff \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "46128246-ece6-42a3-9272-b8b32619a696",
+      "name": "Lifecycle & Referral",
+      "title": "Lifecycle & Referral Lead \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "ccd6620d-1277-402d-86cf-acbbcd5b5ae0",
+      "name": "Brand & Content",
+      "title": "Brand & Content Lead \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "998bd7d6-77b5-4e25-9867-d42af6acb68a",
+      "name": "Product Analytics",
+      "title": "Product Analyst \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "3fa7896a-64da-4bd1-8c79-9eac14b6ac8b",
+      "name": "Head of Growth",
+      "title": "Head of Growth \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "9b93a2ee-dd97-42a4-ae74-147197b3a97b",
+      "name": "Community & Creators",
+      "title": "Community & Creators Lead \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "9cd9dd6e-845a-4709-8622-af95783edaf5",
+      "name": "Legal & Privacy",
+      "title": "Legal & Privacy Counsel \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "ed2c450f-5d8a-4b82-8a5b-ec570decbfb4",
+      "name": "Customer Success",
+      "title": "Customer Success Lead \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "37c6b040-ca23-453e-9402-c2fc5318364f",
+      "name": "Growth Engineer",
+      "title": "Growth Engineer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "d0f578ab-2535-486f-8179-87da26d7f109",
+      "name": "Product Research",
+      "title": "Product Researcher \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "e6649061-9db2-4467-9ab9-bdd091ccf4d1",
+      "name": "Finance",
+      "title": "Finance Lead \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "5721a90d-bf46-42ec-90da-41bec0cd4a29",
+      "name": "Product Designer",
+      "title": "Product Designer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "f06f143f-1c65-40fd-a960-974f945f83d1",
+      "name": "AI Experience",
+      "title": "AI Experience Lead \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "9f4b2c71-66fb-4f55-b4f7-300b4e2ba3d9",
+      "name": "Business Operations",
+      "title": "Head of Business Operations \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "34f730a9-0fa0-426b-a8b6-5cb7c163311b",
+      "name": "Implementation Engineer (on demand)",
+      "title": "Implementation Engineer (on demand) \u2014 v0.1 pilot",
+      "disposition": "pilot",
+      "status": "paused",
+      "roleKey": "implementation-engineer",
+      "reportsTo": null,
+      "adapterType": "codex_local",
+      "timeoutSec": 900,
+      "maxDailyRuns": 3,
+      "instructions": ".focx/roles/implementation-engineer.md",
+      "skills": [
+        "focx-implement-task"
+      ],
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false
+      }
+    },
+    {
+      "id": "f399b4f4-44a9-4f23-942a-3495af19aac8",
+      "name": "Security Engineer",
+      "title": "Security Engineer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "5e162710-3768-4823-bfd7-aa22cf58100c",
+      "name": "Head of Product",
+      "title": "Head of Product \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "f64bcc77-ab12-4569-9125-517007e44ba1",
+      "name": "Apple Engineer",
+      "title": "Apple Engineer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "f287395a-15d0-461f-bb08-a4cea22bf9c7",
+      "name": "Release Engineer",
+      "title": "Release Engineer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "1c345057-aa00-4b75-a34a-68c8ef492e09",
+      "name": "AI Evals Engineer",
+      "title": "AI Evaluations Engineer \u2014 disabled / retirement candidate",
+      "disposition": "disabled-candidate",
+      "status": "paused"
+    },
+    {
+      "id": "96fccef1-efa8-49db-8751-d2dc6b843566",
+      "name": "QA Engineer",
+      "title": "QA Engineer \u2014 v0.1 pilot",
+      "disposition": "pilot",
+      "status": "paused",
+      "roleKey": "qa-engineer",
+      "reportsTo": null,
+      "adapterType": "codex_local",
+      "timeoutSec": 900,
+      "maxDailyRuns": 3,
+      "instructions": ".focx/roles/qa-engineer.md",
+      "skills": [
+        "focx-verify-change"
+      ],
+      "permissions": {
+        "canCreateAgents": false,
+        "canCreateSkills": false,
+        "canAssignTasks": false
+      }
+    }
+  ]
+}

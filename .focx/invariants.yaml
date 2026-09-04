@@ -1,0 +1,34 @@
+{
+  "version": "0.1.0",
+  "company": "Focx",
+  "brand": "Focx",
+  "platform": "Focx",
+  "activeProducts": [
+    "Connect"
+  ],
+  "finalRepository": "ryanphillipthomas/focx",
+  "legacyRepositories": "reference-only",
+  "controlPlane": "Paperclip",
+  "humanApprover": "Ryan Thomas",
+  "separationOfDuties": {
+    "humanApprovalRequired": true,
+    "independentVerificationRequired": true,
+    "selfApprovalAllowed": false,
+    "selfVerificationAllowed": false
+  },
+  "pilot": {
+    "activation": "paused",
+    "automaticWork": false,
+    "maxActiveImplementationTasks": 1,
+    "maxActiveImplementationPRs": 1,
+    "legacyApplyAllowed": false,
+    "agentDeletionAllowed": false
+  },
+  "companyPurpose": "Focx.ai is an AI product and experience company encompassing end-to-end technology-company operations.",
+  "agentAssignment": {
+    "ownership": "company-wide",
+    "projectScope": "Any explicitly assigned Focx.ai project appropriate to the role",
+    "context": "Project, repository or workspace, acceptance criteria, and source revision are task-specific",
+    "access": "Assignment does not itself grant credentials or broaden permissions"
+  }
+}

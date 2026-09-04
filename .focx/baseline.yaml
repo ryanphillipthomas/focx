@@ -1,0 +1,67 @@
+{
+  "version": "0.1.0",
+  "status": "staged-pilot",
+  "evidenceDate": "2026-09-04",
+  "implementationSnapshot": {
+    "repository": "ryanphillipthomas/focx",
+    "revision": "7638f7114fb840fadac1483f35174a33ee98294f",
+    "status": "active",
+    "meaning": "Existing implementation; not a claim of product completeness."
+  },
+  "statements": [
+    {
+      "status": "active",
+      "statement": "Focx is company/platform/brand; Connect is the only active product.",
+      "source": "Ryan: locked baseline and approved pilot migration, 2026-09-04"
+    },
+    {
+      "status": "active",
+      "statement": "Agents work for Focx.ai across assigned projects. The company covers AI products, experiences and end-to-end technology-company operations; Connect is its only currently active product, not a permanent limit on company scope.",
+      "source": "Ryan: company-wide agent assignment clarification, 2026-09-04"
+    },
+    {
+      "status": "active",
+      "statement": "Three pilot roles staged; all 26 existing agent identities retained and paused.",
+      "source": ".focx/agents.json"
+    },
+    {
+      "status": "superseded",
+      "statement": "The 26-role autonomous departmental roster is the desired operating organization.",
+      "source": "pipeline/org/roster.json",
+      "replacement": ".focx/agents.json"
+    },
+    {
+      "status": "retired",
+      "statement": "Old repositories are active build or deployment authorities.",
+      "source": "Ryan: final home /focx; legacy/reference only"
+    },
+    {
+      "status": "unknown",
+      "statement": "Which complete legacy product behaviors should be adopted into Connect.",
+      "source": "Recovery branch identified, feature-by-feature adoption not yet approved."
+    },
+    {
+      "status": "unknown",
+      "statement": "Pilot runtime enforcement and isolated QA session behavior are independently verified.",
+      "source": "Configuration readback only; first-run verification pending."
+    }
+  ],
+  "recoveryCandidate": {
+    "repository": "ryanphillipthomas/focx-legacy",
+    "branch": "codex/ds-001-governance",
+    "revision": "028638e460286c25f338c91bd87d3c4d97e49ace",
+    "status": "reference-only",
+    "observed": "Source-owned React Aria Button, tokens, preview and tests; no product routes migrated.",
+    "adoption": "Not automatically adopted; use as evidence of intended direction."
+  },
+  "authorities": {
+    "invariants": ".focx/invariants.yaml",
+    "agentDesiredState": ".focx/agents.json",
+    "sourceIndex": "docs/sources-of-truth.md",
+    "legacyOrg": "docs/org.md",
+    "historicalEvidence": [
+      "pipeline/runs/",
+      "pipeline/releases/"
+    ]
+  }
+}

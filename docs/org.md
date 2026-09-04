@@ -1,3 +1,5 @@
+> **Historical reference — superseded for v0.1.** The current authority is [`.focx/agents.json`](../.focx/agents.json), explained in [pilot operation](pilot-operation.md). The organization, delegation, skills and schedules described below are retained for comparison and must not be activated.
+
 # The operating company
 
 The **source of truth for who executes the pipeline**: which agents exist, who they report to, what model they run, what they may write, what they cost, and what they are scheduled to do.

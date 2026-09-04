@@ -1321,6 +1321,10 @@ async function main(argv) {
   if (parsed.error) { console.error(`paperclip-org: ${parsed.error}\n\n${USAGE}`); return 2 }
   const flags = parsed.flags
   if (flags.help) { console.log(USAGE); return 0 }
+  if (flags.apply) {
+    console.error('Legacy organization apply is retired. Use tools/pilot-org/index.mjs; activation and deletion are unavailable.')
+    return 2
+  }
 
   const rosterPath = resolve(flags.roster ?? join(REPO_ROOT, 'pipeline/org/roster.json'))
   if (!existsSync(rosterPath)) { console.error(`paperclip-org: roster not found at ${rosterPath}`); return 2 }
