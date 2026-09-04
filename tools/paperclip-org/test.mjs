@@ -19,7 +19,7 @@ import {
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
   PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
   checkClaudeCodeSkills, claudeCodeSkillSources,
-  agentClaudeConfigDir,
+  agentClaudeConfigDir, planRoutineWrite,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -722,7 +722,7 @@ test('verify passes against a live org built from the roster, and catches drift'
   }]))
   const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
   const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
-  const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
+  const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: roster.routines[i].status === 'active', cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
   const links = satisfiedLocalSkills(roster, agents, pre)
@@ -783,7 +783,7 @@ test('verify does not read Paperclip-owned live keys as drift', () => {
   }]))
   const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
   const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
-  const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
+  const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: roster.routines[i].status === 'active', cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
   const ctoId = agents[roster.agents.findIndex((a) => a.slug === 'cto')].id
@@ -1166,4 +1166,223 @@ test('coupling check reports when it can no longer see any handoff at all', () =
 test('coupling check accepts the current roster name', () => {
   const { roster } = load()
   assert.deepEqual(checkCharterCoupling(roster, () => 'assign it to the agent named `QA Engineer`'), [])
+})
+
+// ---------------------------------------------------------------------------
+// Containment safety (FOC incident 2026-09-04)
+//
+// ~200 runs in two hours off a comment loop. Containment was three out-of-band
+// acts — pause agents, pause routines, disable schedule triggers — and the
+// reconciler wrote `enabled: true` and `status: active` unconditionally, so the
+// next --apply would have released a brake it did not set.
+//
+// These fixtures name `enabled` and `status` literally rather than deriving
+// them from the roster or from planRoutineWrite's own output. A test that built
+// its input from the code under test would keep passing after the fix was
+// reverted, which is exactly how the last silent-success bug survived.
+// ---------------------------------------------------------------------------
+
+const ROUTINE = Object.freeze({
+  key: 'morning-brief', title: 'Morning Brief', owner: 'chief-of-staff',
+  priority: 'high', status: 'active', concurrencyPolicy: 'coalesce_if_active',
+  catchUpPolicy: 'skip_missed', activityGatePolicy: 'always',
+  cron: '0 7 * * 1-5', timezone: 'America/New_York', description: 'brief',
+})
+const SCHED = (over = {}) => ({ id: 't-1', kind: 'schedule', enabled: true, cronExpression: '0 7 * * 1-5', timezone: 'America/New_York', ...over })
+
+test('apply does not re-enable a schedule trigger a human disabled', () => {
+  const w = planRoutineWrite(ROUTINE, { routine: { status: 'active' }, schedules: [SCHED({ enabled: false })] }, {})
+  assert.equal(w.trigger.op, 'patch')
+  // Absent, not false: omitting the key is what leaves the live value alone.
+  assert.equal('enabled' in w.trigger.body, false, 'apply would have re-armed the contained trigger')
+  assert.ok(w.held.some((h) => /disabled/.test(h)), 'the hold must be reported, not silent')
+})
+
+test('a held trigger still converges cron, timezone and label', () => {
+  const drifted = SCHED({ enabled: false, cronExpression: '0 3 * * *', timezone: 'UTC' })
+  const w = planRoutineWrite(ROUTINE, { routine: { status: 'active' }, schedules: [drifted] }, {})
+  assert.equal(w.trigger.body.cronExpression, '0 7 * * 1-5')
+  assert.equal(w.trigger.body.timezone, 'America/New_York')
+  assert.equal(w.trigger.body.label, 'morning-brief')
+})
+
+test('--enable-routines is what releases the brake', () => {
+  const live = { routine: { status: 'active' }, schedules: [SCHED({ enabled: false })] }
+  const w = planRoutineWrite(ROUTINE, live, { enableRoutines: true })
+  assert.equal(w.trigger.body.enabled, true)
+  assert.deepEqual(w.held, [], 'nothing is held when the operator asked for it')
+})
+
+test('apply does not re-activate a routine a human paused', () => {
+  const w = planRoutineWrite(ROUTINE, { routine: { status: 'paused' }, schedules: [SCHED()] }, {})
+  assert.equal(w.status, null)
+  assert.ok(w.held.some((h) => /paused/.test(h)))
+  const payload = buildRoutinePayload({ project: { id: 'p1' } }, ROUTINE, 'a1', { status: w.status })
+  assert.equal('status' in payload, false, 'a null status must be omitted, not sent as null')
+})
+
+test('an archived routine is held too', () => {
+  const w = planRoutineWrite(ROUTINE, { routine: { status: 'archived' }, schedules: [SCHED()] }, {})
+  assert.equal(w.status, null)
+})
+
+test('converging toward LESS automation never needs a flag', () => {
+  const paused = { ...ROUTINE, status: 'paused' }
+  const w = planRoutineWrite(paused, { routine: { status: 'active' }, schedules: [SCHED({ enabled: true })] }, {})
+  assert.equal(w.status, 'paused')
+  assert.equal(w.trigger.body.enabled, false, 'a paused roster routine disables its trigger')
+  assert.deepEqual(w.held, [], 'quieting the org is always allowed')
+})
+
+test('a routine with no live trigger is created enabled per the roster', () => {
+  const on = planRoutineWrite(ROUTINE, { routine: null, schedules: [] }, {})
+  assert.equal(on.trigger.op, 'create')
+  assert.equal(on.trigger.body.enabled, true)
+  const off = planRoutineWrite({ ...ROUTINE, status: 'paused' }, { routine: null, schedules: [] }, {})
+  assert.equal(off.trigger.body.enabled, false)
+})
+
+test('duplicate schedule triggers are still disabled while the primary is held', () => {
+  const live = { routine: { status: 'active' }, schedules: [SCHED({ enabled: false }), SCHED({ id: 't-2' }), SCHED({ id: 't-3' })] }
+  const w = planRoutineWrite(ROUTINE, live, {})
+  assert.deepEqual(w.disableExtras, ['t-2', 't-3'])
+  assert.equal('enabled' in w.trigger.body, false)
+})
+
+test('non-schedule triggers are never touched', () => {
+  const live = { routine: { status: 'active' }, schedules: [{ id: 'c-1', kind: 'issue_comment', enabled: true }] }
+  const w = planRoutineWrite(ROUTINE, live, {})
+  assert.equal(w.trigger.op, 'create', 'a comment trigger is not a schedule and must not be adopted as one')
+  assert.deepEqual(w.disableExtras, [])
+})
+
+test('--enable-routines parses and defaults off', () => {
+  const { roster } = load()
+  assert.ok(roster.routines.length > 0)
+  // Parsed via the CLI so the flag is wired end to end, not just in a literal.
+  return run('node', [CLI, '--help']).then(({ stdout }) => {
+    assert.match(stdout, /--enable-routines/)
+    assert.match(stdout, /containment brake/)
+  })
+})
+
+test('verify accepts a deliberately contained org and rejects an undeclared one', () => {
+  const { roster: real } = load()
+  const roster = clone(real)
+  const agents = roster.agents.map((a, i) => ({ id: `a-${i}`, name: a.name, status: 'idle', metadata: { focx: { slug: a.slug } } }))
+  const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
+
+  // Declared: roster says paused, live is disabled. That is agreement.
+  for (const r of roster.routines) r.status = 'paused'
+  const declared = new Map(routines.map((lr, i) => [lr.id, [{ id: `t-${i}`, kind: 'schedule', enabled: false, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
+  const rowOf = (triggers) => verify(roster, { agents, routines, triggers, configurations: new Map(), bundles: new Map(), issues: [], company: { budgetMonthlyCents: 6000 } }, new Map()).find((x) => x.n === 8)
+  assert.equal(rowOf(declared).pass, true, 'a contained org that says so must not read as drift')
+
+  // Undeclared: roster says active, live is disabled. That is drift, and the
+  // old check could only be satisfied by re-arming the org.
+  for (const r of roster.routines) r.status = 'active'
+  const row = rowOf(declared)
+  assert.equal(row.pass, false)
+  assert.match(row.detail, /disabled, roster says 'active'/)
+})
+
+// The end-to-end version of the same guarantee: not "the pure function returns
+// the right shape" but "the CLI, run against a contained org, does not re-arm
+// it." This is the test that would have caught the incident.
+// The committed roster now declares the containment (every routine 'paused'),
+// which is the honest state — but it means the guard itself is unreachable from
+// it, because the guard only fires when the roster wants a routine ON and the
+// live trigger is OFF. So these tests supply a roster that wants them on.
+// Written beside the real one because loadRoster resolves instruction fragments
+// from the roster file's own directory.
+const activeRosterFile = () => {
+  const { roster } = load()
+  const r = clone(roster)
+  for (const x of r.routines) x.status = 'active'
+  const path = join(REPO_ROOT, 'pipeline/org/roster.containment-fixture.json')
+  writeFileSync(path, JSON.stringify(r, null, 2))
+  return { path, roster: r, cleanup: () => rmSync(path, { force: true }) }
+}
+
+const containedFake = (roster, { enabled = false, status = 'paused' } = {}) => roster.routines.map((r, i) => ({
+  id: `live-r-${i}`,
+  title: r.title,
+  description: `focx-routine-key: ${r.key}\n\n${r.description}`,
+  status,
+  projectId: roster.project.id,
+  triggers: [{ id: `live-t-${i}`, kind: 'schedule', enabled, cronExpression: r.cron, timezone: r.timezone, label: r.key }],
+}))
+
+test('--apply does not re-arm an org that was contained out of band', async () => {
+  const fx = activeRosterFile()
+  const fake = createFakeApi({ companyId: fx.roster.company.id, seedRoutines: containedFake(fx.roster) })
+  const url = await fake.listen()
+  try {
+    const claudeHome = fakeClaudeHome(fx.roster)
+    const r = await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    rmSync(claudeHome, { recursive: true, force: true })
+
+    // Not one schedule trigger may have been switched back on.
+    for (const [, list] of fake.state.triggers) {
+      for (const trig of list.filter((x) => x.kind === 'schedule')) {
+        assert.equal(trig.enabled, false, `apply re-enabled ${trig.label} — the brake was released`)
+      }
+    }
+    // Nor may a paused routine have been re-activated.
+    for (const live of fake.state.routines) {
+      assert.notEqual(live.status, 'active', `apply re-activated ${live.title}`)
+    }
+    assert.match(r.stdout, /left contained/)
+    assert.match(r.stdout, /--enable-routines/)
+  } finally { await fake.close(); fx.cleanup() }
+})
+
+test('--apply --enable-routines is the deliberate way back on', async () => {
+  const fx = activeRosterFile()
+  const fake = createFakeApi({ companyId: fx.roster.company.id, seedRoutines: containedFake(fx.roster) })
+  const url = await fake.listen()
+  try {
+    const claudeHome = fakeClaudeHome(fx.roster)
+    await cli(['--apply', '--confirm-terminate=0', '--enable-routines', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    rmSync(claudeHome, { recursive: true, force: true })
+    const scheds = [...fake.state.triggers.values()].flat().filter((x) => x.kind === 'schedule')
+    assert.equal(scheds.length, fx.roster.routines.length, 'no duplicate triggers were stacked')
+    assert.ok(scheds.every((x) => x.enabled === true), 'the operator asked for it, so it happens')
+    assert.ok(fake.state.routines.every((x) => x.status === 'active'))
+  } finally { await fake.close(); fx.cleanup() }
+})
+
+test('a contained live org still converges cron drift without re-arming', async () => {
+  const fx = activeRosterFile()
+  const seeded = containedFake(fx.roster)
+  seeded[0].triggers[0].cronExpression = '*/5 * * * *'   // drifted, and disabled
+  const fake = createFakeApi({ companyId: fx.roster.company.id, seedRoutines: seeded })
+  const url = await fake.listen()
+  try {
+    const claudeHome = fakeClaudeHome(fx.roster)
+    await cli(['--apply', '--confirm-terminate=0', `--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    rmSync(claudeHome, { recursive: true, force: true })
+    const t0 = fake.state.triggers.get('live-r-0')[0]
+    assert.equal(t0.cronExpression, fx.roster.routines[0].cron, 'cron still converges')
+    assert.equal(t0.enabled, false, 'but the brake stays on')
+  } finally { await fake.close(); fx.cleanup() }
+})
+
+test('a dry run warns that routines are contained, and still writes nothing', async () => {
+  const fx = activeRosterFile()
+  const fake = createFakeApi({ companyId: fx.roster.company.id, seedRoutines: containedFake(fx.roster) })
+  const url = await fake.listen()
+  try {
+    const r = await cli([`--roster=${fx.path}`], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url })
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(r.stdout, /routine\(s\) are contained live but 'active' in the roster/)
+    assert.match(r.stdout, /apply will leave these contained/)
+    assert.deepEqual(fake.state.calls.filter((c) => c.method !== 'GET'), [], 'still a dry run')
+  } finally { await fake.close(); fx.cleanup() }
+})
+
+test('the committed roster records the containment rather than lying about it', () => {
+  const { roster } = load()
+  const active = roster.routines.filter((r) => r.status === 'active').map((r) => r.key)
+  assert.deepEqual(active, [], 'routines are paused after the 2026-09-04 comment loop; re-arm deliberately')
 })
