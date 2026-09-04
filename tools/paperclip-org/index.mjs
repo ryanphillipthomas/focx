@@ -279,7 +279,21 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
   // --- workspaces ---------------------------------------------------------
   for (const [name, ws] of Object.entries(roster.workspaces ?? {})) {
     const strat = ws.workspaceStrategy
-    if (!strat) continue
+    if (!strat) {
+      // FOC-69. Leaving a repo-less preset empty does not withhold a repo — a
+      // missing strategy is read as project_primary, and the agent lands in the
+      // project's primary checkout, writable, on whatever branch it is on. Only
+      // mode agent_default keeps the checkout off disk, so a preset that claims
+      // to have no repository has to say so in the one field Paperclip reads.
+      const mode = ws.executionWorkspaceSettings?.mode
+      if (mode !== 'agent_default') {
+        push(`workspaces.${name}: declares no workspaceStrategy, so Paperclip defaults it to project_primary and the agent gets the shared project checkout. Set executionWorkspaceSettings.mode = 'agent_default'${mode ? ` (found '${mode}')` : ''}.`)
+      }
+      continue
+    }
+    if (ws.executionWorkspaceSettings) {
+      push(`workspaces.${name}: has both a workspaceStrategy and executionWorkspaceSettings — the settings win at run time and would take the worktree away. Repo-tier presets carry the strategy only.`)
+    }
     if (strat.type === 'git_worktree') {
       const ref = String(strat.baseRef ?? '')
       // Paperclip only fetches when baseRef parses as <remote>/<branch>
@@ -643,6 +657,48 @@ export function buildAgentPayload(roster, agent, bundleText, reportsToId, secret
   }
 }
 
+// A repo-less workspace preset is one that declares no workspaceStrategy.
+// Paperclip reads that absence as project_primary, not as "no repository", so
+// the preset's executionWorkspaceSettings is the setting that actually keeps a
+// checkout off the agent's disk. Returns null for repo-tier slugs, which is
+// also the value that CLEARS a stale pin — see reconcileDeskWorkspaceSettings.
+export function deskWorkspaceSettings(roster, slug) {
+  const agent = (roster.agents ?? []).find((a) => a.slug === slug)
+  if (!agent) return null
+  const ws = roster.workspaces?.[agent.workspace]
+  if (!ws || ws.workspaceStrategy) return null
+  return ws.executionWorkspaceSettings ?? null
+}
+
+export const OPEN_STATUSES = new Set(['backlog', 'todo', 'in_progress', 'in_review', 'blocked'])
+
+// Pure: which open issues carry the wrong execution-workspace pin for whoever
+// currently holds them. Routines cover the scheduled lane; this covers the rest,
+// because an issue opened by any agent and handed to a desk agent gets the
+// shared checkout for exactly the same reason. Two-way by design: an issue that
+// moves from a desk agent to an engineer has to LOSE the pin, or agent_default
+// follows it over and deletes the engineer's worktree strategy.
+export function planIssueWorkspaceSettings(roster, idBySlug, issues) {
+  const wantByAgentId = new Map()
+  for (const a of roster.agents ?? []) {
+    const id = idBySlug.get(a.slug)
+    if (id) wantByAgentId.set(id, { slug: a.slug, settings: deskWorkspaceSettings(roster, a.slug) })
+  }
+  const out = []
+  for (const i of issues ?? []) {
+    if (!OPEN_STATUSES.has(i.status) || !i.assigneeAgentId) continue
+    const want = wantByAgentId.get(i.assigneeAgentId)
+    if (!want) continue
+    const from = i.executionWorkspaceSettings?.mode ?? null
+    const to = want.settings?.mode ?? null
+    // Only ever add or remove agent_default. Anything else on an issue was set
+    // deliberately by a human or an agent, and is not this tool's to overwrite.
+    if (from === to || (from !== null && from !== 'agent_default')) continue
+    out.push({ id: i.id, title: String(i.title ?? i.id).slice(0, 44), slug: want.slug, from, to })
+  }
+  return out
+}
+
 export function buildRoutinePayload(roster, routine, assigneeAgentId) {
   return {
     // Worktrees are cut from the PROJECT's checkout, so an issue with no project
@@ -650,6 +706,14 @@ export function buildRoutinePayload(roster, routine, assigneeAgentId) {
     // Routine-created issues inherit the routine's project, so this is where the
     // binding has to happen.
     ...(roster.project?.id ? { projectId: roster.project.id } : {}),
+    // ...and that same binding is what put desk agents in the shared checkout
+    // (FOC-69): a routine-created issue inherits projectId, and an issue with a
+    // projectId resolves to the project's primary workspace unless the run is
+    // told otherwise. Routine-created issues inherit executionWorkspaceSettings
+    // too, so telling it otherwise also happens here. Written on every routine,
+    // null included: a repo-tier owner must actively lose a stale agent_default
+    // pin, or the reconciler is one reassignment away from being a trap.
+    executionWorkspaceSettings: deskWorkspaceSettings(roster, routine.owner),
     title: routine.title,
     // Routines have no metadata field, so identity rides in the description.
     description: `focx-routine-key: ${routine.key}\n\n${routine.description}`,
@@ -981,8 +1045,17 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     const trig = (live.triggers?.get(lr.id) ?? []).filter((t) => t.kind === 'schedule' && t.enabled)
     if (trig.length !== 1) routineBad.push(`${r.key} has ${trig.length} enabled schedule triggers`)
     else if (trig[0].cronExpression !== r.cron || trig[0].timezone !== r.timezone) routineBad.push(`${r.key} cron/timezone mismatch`)
+    // FOC-69: five of these routines are owned by agents the roster says have
+    // no repository. Every routine carries the project, so without this the
+    // scheduled runs land in the shared checkout on a fixed cron.
+    const wantMode = deskWorkspaceSettings(roster, r.owner)?.mode ?? null
+    const gotMode = lr.executionWorkspaceSettings?.mode ?? null
+    if (gotMode !== wantMode) {
+      routineBad.push(`${r.key} workspace mode ${gotMode ?? 'unset'}, roster says ${wantMode ?? 'unset'}`)
+    }
   }
-  check(8, `${roster.routines.length} routines active, one enabled schedule trigger each`,
+  const deskRoutines = roster.routines.filter((r) => deskWorkspaceSettings(roster, r.owner))
+  check(8, `${roster.routines.length} routines active, one enabled schedule trigger each; ${deskRoutines.length} desk-owned pinned to agent_default`,
     routineBad.length === 0, routineBad.slice(0, 3).join('; '))
 
   const wakeBad = []
@@ -1079,7 +1152,6 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   // issue is still only ASKED to carry the project across, in prose, in
   // _repo-discipline.md — and prose in a bundle is a request. This makes it a
   // fact the same way the credential tiers are.
-  const OPEN_STATUSES = new Set(['backlog', 'todo', 'in_progress', 'in_review', 'blocked'])
   const worktreeAgentSlug = new Map()
   for (const [slug, a] of bySlug) {
     const w = want.get(slug)
@@ -1160,6 +1232,21 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     condition: 'Open worktree-agent issues all carry a project',
     pass: issuesReadable && projectless.length === 0,
     detail: !issuesReadable ? 'could not read issues — this check could not run' : projectless.slice(0, 3).join('; '),
+  })
+
+  // FOC-69. The mirror of the check above: worktree agents must carry the
+  // project, and desk agents must carry the pin that stops the project's
+  // checkout being handed to them. Both are properties of an open issue, and
+  // neither survives on prose.
+  const pinDrift = !issuesReadable
+    ? []
+    : planIssueWorkspaceSettings(roster, new Map([...bySlug].map(([slug, a]) => [slug, a.id])), live.issues)
+      .map((p) => `${p.slug}: ${p.title} (${p.from ?? 'unset'} -> ${p.to ?? 'unset'})`)
+  rows.push({
+    n: '—',
+    condition: 'Open desk-agent issues are pinned to agent_default, and no worktree-agent issue is',
+    pass: issuesReadable && pinDrift.length === 0,
+    detail: !issuesReadable ? 'could not read issues — this check could not run' : pinDrift.slice(0, 3).join('; '),
   })
 
   return rows
@@ -1685,6 +1772,27 @@ async function runApply(api, companyId, roster, live, rendered, plan, flags, sec
       mutated = true
       console.log(`  ${ok(routineId ? 'ok' : 'created')} ${r.title} — ${r.cron} ${r.timezone}`)
     } catch (err) { return fail(`trigger for ${r.key}: ${err.message}`) }
+  }
+
+  // --- F2: open issues already on the board. Routines fix every FUTURE
+  //     scheduled run, but the pin lives on the issue, so the issues that exist
+  //     right now keep resolving to the shared checkout until they are moved.
+  //     Bounded to adding and removing agent_default — see
+  //     planIssueWorkspaceSettings. ---
+  step('F2 execution-workspace pins on open issues')
+  let openIssues = null
+  try { openIssues = listOf(await api.get(`/api/companies/${companyId}/issues?limit=500`)) }
+  catch (err) { console.error(warn(`  could not read issues (${err.message}) — pins left alone; verify will report them`)) }
+  if (openIssues) {
+    const pins = planIssueWorkspaceSettings(roster, idBySlug, openIssues)
+    for (const p of pins) {
+      try {
+        await api.patch(`/api/issues/${p.id}`, { executionWorkspaceSettings: p.to ? { mode: p.to } : null })
+        mutated = true
+        console.log(`  ${ok(p.to ? 'pinned' : 'cleared')} ${p.slug}: ${p.title}`)
+      } catch (err) { return fail(`issue ${p.id} workspace pin: ${err.message}`) }
+    }
+    if (pins.length === 0) console.log(`  ${ok('ok')} ${openIssues.length} issue(s) read, no pin drift`)
   }
 
   // --- G: verify -----------------------------------------------------------

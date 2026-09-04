@@ -94,7 +94,7 @@ So these are the parts that hold on their own:
 - **QA Engineer works from its own clone** at `focx-qa`, which no other agent shares.
 - **`canCreateAgents: false`** on all 25 — the org cannot grow itself past its budget.
 - **`canAssignTasks`** only for the six managers.
-- **10 agents have no repository on the filesystem at all**, and **two more are read-only** — the strongest guarantee a non-technical agent cannot edit application code.
+- **10 agents have no repository on the filesystem**, and **two more are read-only** — the strongest guarantee a non-technical agent cannot edit application code. It holds because their routines and issues are pinned to `agent_default`; it did not hold before FOC-69, when leaving the strategy blank was mistaken for withholding a repo. See [Repo-less is a setting, not an omission](#repo-less-is-a-setting-not-an-omission).
 - **`CODEOWNERS` + branch protection** are the merge backstop.
 
 Everything else is prose, and should be judged as prose.
@@ -204,6 +204,25 @@ Two places that binding has to happen:
 
 This was found the hard way: every workspace probe written during the migration set `projectId` by hand, so the tests only ever exercised the path that construction made work. Real issues do not come with one.
 
+### Repo-less is a setting, not an omission
+
+Binding routines to the project fixed the repo tier and broke the desk tier, and the second half went unnoticed for the same reason the first half was needed. `workspace: "none"` was expressed only as an **absent** `workspaceStrategy` — and Paperclip does not read absence as "no repository". `resolveEffectiveWorkspaceStrategyType` defaults a missing strategy to `project_primary`. So any issue carrying a `projectId` — which now means every routine-created issue — resolved to the project's **primary checkout**, and the desk agent got it writable, on whatever branch it happened to be sitting on.
+
+The Weekly Security & Privacy Review found this live (FOC-67, finding 2): the Legal & Privacy agent — `workspace: "none"`, `git: "none"` — ran with `PAPERCLIP_WORKSPACE_STRATEGY=project_primary`, `cwd` set to the shared checkout, then on Growth Engineer's branch, and a write probe to it succeeded. Ten agents are `workspace: "none"` and five of the ten routines are theirs, so it recurred on a cron.
+
+The setting that actually withholds a repo is **`executionWorkspaceSettings.mode = agent_default`**: it makes the run pass `useProjectWorkspace: false`, which leaves `workspaceProjectId` null, so no project workspace is resolved and the agent falls back to its own directory under `instance/workspaces/<agentId>` — the same directory its skill links already point at.
+
+Paperclip has **no per-agent form of that setting**. It lives on the routine and on the issue, so `paperclip-org` writes it in both places:
+
+- **Routines** — `buildRoutinePayload` writes the owning tier's setting on every routine, `null` included.
+- **Open issues** — step F2 reconciles the board, because the pin lives on the issue and routines only fix future runs.
+
+Both are **two-way on purpose**. `agent_default` also deletes an agent's `workspaceStrategy`, so a pin left on an issue that moves from a desk agent to an engineer would take that engineer's worktree away. The reconciler adds the pin and removes it, and touches nothing else: any other mode on an issue was set deliberately and is not the tool's to overwrite.
+
+`validateRoster` now rejects a repo-less preset that does not say so in the field Paperclip reads, which is the regression that started this.
+
+**What is still prose:** an issue created and assigned to a desk agent is unpinned until the next `paperclip-org` run. The window is real; it is bounded by how often the tool runs, and verify reports any issue sitting in it.
+
 ### QA's independence moved, and got stronger
 
 It used to be a separate clone at `focx-qa`, visible as a distinct `cwd`. Now QA works its own **child issue**, so git gives it a different branch *and* a different directory from the build it verifies — per issue rather than per agent, enforced by the tool rather than asserted by a path convention. Success condition 11 checks the worktree strategy and the per-issue default instead of comparing paths.
@@ -215,7 +234,7 @@ The adapters offer spawn-level confinement through `filesystemScope` and `networ
 So there is **no OS-level sandbox around any agent**. What remains, and what the org actually leans on:
 
 - the `git` tier — who holds `GH_TOKEN` at all
-- each agent's `cwd`, and the 10 agents with no repository on the filesystem
+- each agent's `cwd`, and the 10 agents pinned to `agent_default` so no repository reaches their disk
 - the CLI's own permission system (`dangerouslySkipPermissions: false`, `dangerouslyBypassApprovalsAndSandbox: false`)
 - `CODEOWNERS` and branch protection
 

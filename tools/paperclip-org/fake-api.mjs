@@ -101,6 +101,12 @@ export function createFakeApi({ companyId, requireAuth = true, seedAgents = [], 
     if (path.startsWith(`/api/companies/${companyId}/issues`) && req.method === 'GET') {
       return send(200, state.issues)
     }
+    // Desk agents are kept out of the project checkout by a pin on the issue —
+    // there is no per-agent form of the setting — so apply writes issues too.
+    if ((m = path.match(/^\/api\/issues\/([^/]+)$/)) && req.method === 'PATCH') {
+      const i = state.issues.find((x) => x.id === m[1]); if (!i) return send(404, {})
+      Object.assign(i, body); return send(200, i)
+    }
     if ((m = path.match(/^\/api\/projects\/([^/]+)$/)) && req.method === 'GET') {
       return send(200, { id: m[1], name: state.projectName })
     }

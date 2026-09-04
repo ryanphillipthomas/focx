@@ -62,7 +62,10 @@
       }
     },
     "none": {
-      "comment": "No repository on the filesystem. That, not prose, is what stops a non-technical agent editing application code."
+      "comment": "No repository on the filesystem. Omitting workspaceStrategy does NOT produce that, which is what FOC-69 found: Paperclip defaults a MISSING strategy to project_primary (resolveEffectiveWorkspaceStrategyType), so a desk agent working any issue that carries a projectId is handed the shared primary checkout — writable, on whatever branch it happens to be on. The setting that does hold is executionWorkspaceSettings.mode = agent_default: it makes the run pass useProjectWorkspace false, which leaves workspaceProjectId null, so no project workspace is resolved and the agent falls back to its own directory under instance/workspaces/<agentId>. Paperclip has no per-agent form of this setting — it lives on the issue and on the routine — so paperclip-org writes it onto every desk-owned routine and reconciles it onto open desk-assigned issues. That reconcile is two-way on purpose: pinned to a repo-tier assignee, agent_default would take an engineer's worktree away.",
+      "executionWorkspaceSettings": {
+        "mode": "agent_default"
+      }
     }
   },
   "designChain": {

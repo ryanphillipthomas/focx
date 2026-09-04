@@ -139,7 +139,28 @@
             "type": "string"
           },
           "workspaceStrategy": {
-            "type": "string"
+            "type": "object",
+            "description": "Paperclip execution workspace strategy, copied verbatim into each agent's adapterConfig. Presence of this key is what makes a workspace repo-tier. Absence does NOT mean 'no repository': Paperclip defaults a missing strategy to project_primary, so a repo-less workspace must also declare executionWorkspaceSettings."
+          },
+          "executionWorkspaceSettings": {
+            "type": "object",
+            "description": "Paperclip execution workspace settings, written onto the routines and issues that a repo-less workspace's agents own. mode = agent_default is the only setting that actually keeps a project checkout off disk.",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "agent_default",
+                  "inherit",
+                  "isolated_workspace",
+                  "operator_branch",
+                  "reuse_existing",
+                  "shared_workspace"
+                ]
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false
           },
           "repository": {
             "type": [

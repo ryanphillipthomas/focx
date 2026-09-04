@@ -19,7 +19,7 @@ import {
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
   PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
   checkClaudeCodeSkills, claudeCodeSkillSources,
-  agentClaudeConfigDir,
+  agentClaudeConfigDir, deskWorkspaceSettings, planIssueWorkspaceSettings,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -688,6 +688,44 @@ test('--apply syncs skills with mode replace, and exits 0', async () => {
   } finally { await fake.close() }
 })
 
+// FOC-69. The pin that keeps a desk agent out of the project checkout lives on
+// the issue, and Paperclip has no per-agent form of it, so apply has to reach
+// the issues already on the board — the routines only fix future runs.
+test('--apply pins open desk-agent issues to agent_default and clears stale pins', async () => {
+  const { roster } = load()
+  const deskName = roster.agents.find((a) => a.slug === 'legal-privacy').name
+  const repoName = roster.agents.find((a) => a.slug === 'cto').name
+  const fake = createFakeApi({
+    companyId: roster.company.id,
+    seedAgents: [
+      { id: 'agent-desk', name: deskName, status: 'idle', metadata: { focx: { slug: 'legal-privacy' } } },
+      { id: 'agent-repo', name: repoName, status: 'idle', metadata: { focx: { slug: 'cto' } } },
+    ],
+    seedIssues: [
+      // The FOC-67 case: a desk agent holding a live, project-bound issue.
+      { id: 'i-desk', title: 'Weekly Security & Privacy Review', status: 'in_progress', assigneeAgentId: 'agent-desk', projectId: roster.project.id },
+      // Reassigned desk -> engineer with the pin still on it. Left alone, it
+      // would strip the worktree strategy and drop CTO in the shared checkout.
+      { id: 'i-repo', title: 'ship it', status: 'todo', assigneeAgentId: 'agent-repo', projectId: roster.project.id, executionWorkspaceSettings: { mode: 'agent_default' } },
+      // Closed work is not reopened business.
+      { id: 'i-done', title: 'closed', status: 'done', assigneeAgentId: 'agent-desk', projectId: roster.project.id },
+    ],
+  })
+  const url = await fake.listen()
+  try {
+    const claudeHome = fakeClaudeHome(roster)
+    const r = await cli(['--apply', '--confirm-terminate=0'], { PAPERCLIP_API_KEY: 'k', PAPERCLIP_API_URL: url, CLAUDE_CONFIG_DIR: claudeHome })
+    rmSync(claudeHome, { recursive: true, force: true })
+    assert.equal(r.code, 0, r.stderr)
+    const byId = new Map(fake.state.issues.map((i) => [i.id, i]))
+    assert.deepEqual(byId.get('i-desk').executionWorkspaceSettings, { mode: 'agent_default' })
+    assert.equal(byId.get('i-repo').executionWorkspaceSettings, null)
+    assert.ok(!('executionWorkspaceSettings' in byId.get('i-done')), 'a closed issue is not touched')
+    const deskRoutine = fake.state.routines.find((x) => x.title === 'Weekly Security & Privacy Review')
+    assert.deepEqual(deskRoutine.executionWorkspaceSettings, { mode: 'agent_default' }, 'and the schedule stops recreating the problem')
+  } finally { await fake.close() }
+})
+
 test('a failed skills sync is a partial apply, not a green run', async () => {
   const { roster } = load()
   const fake = createFakeApi({ companyId: roster.company.id, failSkillSync: true })
@@ -721,7 +759,13 @@ test('verify passes against a live org built from the roster, and catches drift'
     runtimeConfig: a.runtimeConfig, permissions: a.permissions,
   }]))
   const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
-  const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
+  const routines = roster.routines.map((r, i) => {
+    const assigneeAgentId = agents[roster.agents.findIndex((x) => x.slug === r.owner)].id
+    // Built the way apply builds it, so the desk-tier workspace pin is part of
+    // "correctly built" rather than something only verify knows about.
+    const { executionWorkspaceSettings } = buildRoutinePayload(roster, r, assigneeAgentId)
+    return { id: `r-${i}`, title: r.title, assigneeAgentId, executionWorkspaceSettings }
+  })
   const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
@@ -782,7 +826,13 @@ test('verify does not read Paperclip-owned live keys as drift', () => {
     runtimeConfig: a.runtimeConfig, permissions: a.permissions,
   }]))
   const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
-  const routines = roster.routines.map((r, i) => ({ id: `r-${i}`, title: r.title, assigneeAgentId: agents[roster.agents.findIndex((x) => x.slug === r.owner)].id }))
+  const routines = roster.routines.map((r, i) => {
+    const assigneeAgentId = agents[roster.agents.findIndex((x) => x.slug === r.owner)].id
+    // Built the way apply builds it, so the desk-tier workspace pin is part of
+    // "correctly built" rather than something only verify knows about.
+    const { executionWorkspaceSettings } = buildRoutinePayload(roster, r, assigneeAgentId)
+    return { id: `r-${i}`, title: r.title, assigneeAgentId, executionWorkspaceSettings }
+  })
   const triggers = new Map(routines.map((r, i) => [r.id, [{ id: `t-${i}`, kind: 'schedule', enabled: true, cronExpression: roster.routines[i].cron, timezone: roster.routines[i].timezone }]]))
   const live = { agents, routines, triggers, configurations: cfgs, bundles, issues: [], company: { budgetMonthlyCents: 6000 } }
 
@@ -1117,6 +1167,79 @@ test('every routine payload carries the project', () => {
     const p = buildRoutinePayload(roster, r, 'agent-id')
     assert.equal(p.projectId, roster.project.id, `${r.key} has no project — its issues would get no worktree`)
   }
+})
+
+// ---------------------------------------------------------------------------
+// FOC-69. workspace: none was expressed only as an ABSENT workspaceStrategy,
+// and Paperclip reads a missing strategy as project_primary. Every desk agent
+// working a project-bound issue — which is every routine-created issue — was
+// handed the shared primary checkout, writable, on whichever branch it sat on.
+// ---------------------------------------------------------------------------
+
+test('desk-owned routines pin agent_default, repo-owned routines explicitly do not', () => {
+  const { roster } = load()
+  const desk = new Set(roster.agents.filter((a) => a.workspace === 'none').map((a) => a.slug))
+  let pinned = 0
+  for (const r of roster.routines) {
+    const p = buildRoutinePayload(roster, r, 'agent-id')
+    if (desk.has(r.owner)) {
+      assert.deepEqual(p.executionWorkspaceSettings, { mode: 'agent_default' },
+        `${r.key} is owned by a desk agent and would run in the shared checkout on a cron`)
+      pinned += 1
+    } else {
+      // Explicitly null, not absent: a repo-tier owner has to actively lose a
+      // stale pin, or agent_default deletes the engineer's worktree strategy.
+      assert.equal(p.executionWorkspaceSettings, null, `${r.key} would lose its worktree`)
+    }
+  }
+  assert.equal(pinned, 5, 'the five desk-owned routines named in FOC-69')
+})
+
+test('a repo-less workspace preset must say so in the field Paperclip reads', () => {
+  const { roster, instructionFiles } = load()
+  const r = clone(roster)
+  delete r.workspaces.none.executionWorkspaceSettings
+  const errs = validateRoster(r, { instructionFiles })
+  assert.ok(errs.some((e) => e.includes('project_primary') && e.includes('agent_default')), errs.join('\n'))
+})
+
+test('a workspace preset may not carry both a strategy and workspace settings', () => {
+  const { roster, instructionFiles } = load()
+  const r = clone(roster)
+  r.workspaces['repo-worktree'].executionWorkspaceSettings = { mode: 'agent_default' }
+  const errs = validateRoster(r, { instructionFiles })
+  assert.ok(errs.some((e) => e.includes('take the worktree away')), errs.join('\n'))
+})
+
+test('open issues are pinned by who holds them, in both directions', () => {
+  const { roster } = load()
+  const idBySlug = new Map(roster.agents.map((a) => [a.slug, `id-${a.slug}`]))
+  const plan = planIssueWorkspaceSettings(roster, idBySlug, [
+    // A desk agent holding a live issue: the FOC-67 case, still writable today.
+    { id: 'i1', title: 'weekly review', status: 'in_progress', assigneeAgentId: 'id-legal-privacy' },
+    // Reassigned desk -> engineer. The pin has to come off with it.
+    { id: 'i2', title: 'ship it', status: 'todo', assigneeAgentId: 'id-cto', executionWorkspaceSettings: { mode: 'agent_default' } },
+    // Already correct, both tiers.
+    { id: 'i3', title: 'done right', status: 'todo', assigneeAgentId: 'id-ceo', executionWorkspaceSettings: { mode: 'agent_default' } },
+    { id: 'i4', title: 'engineering', status: 'in_review', assigneeAgentId: 'id-cto' },
+    // Not ours to touch: closed, unassigned, or deliberately set to something else.
+    { id: 'i5', title: 'closed', status: 'done', assigneeAgentId: 'id-ceo' },
+    { id: 'i6', title: 'orphan', status: 'todo', assigneeAgentId: null },
+    { id: 'i7', title: 'hand-tuned', status: 'todo', assigneeAgentId: 'id-ceo', executionWorkspaceSettings: { mode: 'isolated_workspace' } },
+  ])
+  assert.deepEqual(plan.map((p) => [p.id, p.from, p.to]), [
+    ['i1', null, 'agent_default'],
+    ['i2', 'agent_default', null],
+  ])
+})
+
+test('deskWorkspaceSettings splits the roster by tier, not by name', () => {
+  const { roster } = load()
+  const desk = roster.agents.filter((a) => deskWorkspaceSettings(roster, a.slug)?.mode === 'agent_default')
+  assert.equal(desk.length, 10, 'the ten workspace: none agents FOC-69 enumerated')
+  assert.ok(desk.every((a) => a.workspace === 'none'))
+  assert.equal(deskWorkspaceSettings(roster, 'cto'), null)
+  assert.equal(deskWorkspaceSettings(roster, 'not-a-slug'), null)
 })
 
 test('rejects repo-tier routines with no project configured', () => {
