@@ -6,7 +6,7 @@ This repository is built so that work can enter from a GitHub Issue, a manual in
 
 ## Drift Check GitHub Action
 
-Drift Check is a dependency-free GitHub Action that blocks raw visual values and invalid design-token overrides. It reads only the checked-out repository and sends no telemetry.
+Drift Check is a dependency-free GitHub Action that finds raw visual values which do not resolve to a repository's published design tokens. It reads only the checked-out repository and sends no telemetry.
 
 ### Quickstart
 
@@ -27,20 +27,19 @@ jobs:
       - uses: ryanphillipthomas/drift-check@v1
 ```
 
-The defaults preserve focx's original layout: parent namespace `focx`, token files at `design/tokens/{namespace}/tokens.json`, scan directories `apps` and `packages`, and extensions `.js`, `.jsx`, `.ts`, `.tsx`, `.css`, `.scss`, `.svelte`, `.vue`, and `.html`.
+By default it auto-detects token/theme/palette files, scans `apps`, `src`, and `packages`, and excludes generated output, token definitions, SVG artwork, and test/story fixtures. It accepts JSON, TypeScript, JavaScript, CSS, SCSS, and the other scanned source formats without evaluating repository code.
 
 To customize them, add `drift-check.config.json` at the repository root:
 
 ```json
 {
-  "parentNamespace": "acme",
-  "tokenPathPattern": "design/tokens/{namespace}/tokens.json",
+  "tokenFiles": ["foundations/colors.scss"],
   "scanDirs": ["src", "components"],
   "scanExtensions": [".ts", ".tsx", ".css"]
 }
 ```
 
-Workflow inputs with the names `parent-namespace`, `token-path-pattern`, `scan-dirs`, and `scan-extensions` override the corresponding config values when supplied. List inputs are comma-separated. Violations exit non-zero and are emitted as GitHub file/line annotations on the pull request diff; reviewed exceptions can include `drift-allow` on the affected line.
+The focx-only parent/child JSON integrity convention is disabled for third parties and enabled here through `validateParentChild: true` in this repository's config. Workflow inputs named `token-files`, `validate-parent-child`, `parent-namespace`, `token-path-pattern`, `scan-dirs`, and `scan-extensions` override corresponding config values. List inputs are comma-separated. Violations exit non-zero and are emitted as GitHub file/line annotations; reviewed exceptions can include `drift-allow` on the affected line.
 
 ## Map
 
