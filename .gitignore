@@ -8,3 +8,5 @@ build/
 coverage/
 .pnpm-store/
 .claude-flow/
+.paperclip/
+.claude/settings.local.json
