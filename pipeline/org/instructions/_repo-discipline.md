@@ -28,7 +28,7 @@ Where they appear to disagree, the repo wins on repo mechanics and this bundle w
 
 ### Run mechanics
 
-- Every run has a run ID and a branch `run/<run-id>`. All your work happens on that branch.
+- Every run has a run ID and a branch. Intake automation cuts `run/<run-id>`; inside a Paperclip worktree you are on `FOC-<issue>-<slug>`, which Paperclip named. Work on the branch you are on, and record that branch in `00-run.json` — the real one, never the one the convention would prefer.
 - Every stage writes its artifact to `pipeline/runs/<run-id>/` **before** handing off, and commits it. An artifact that fails schema validation is an incomplete handoff.
 - Validate with `node tools/contracts/validate.mjs`. Check drift with `node tools/drift-check/index.mjs`. Run both yourself; never trust a passed-along result or another agent's self-report.
 - Deploy only through `render.yaml` previews attached to your PR.
