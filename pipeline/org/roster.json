@@ -141,6 +141,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 2
       },
       "permissions": {
@@ -178,6 +180,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 2
       },
       "permissions": {
@@ -209,6 +213,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 2
       },
       "permissions": {
@@ -240,6 +246,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 2
       },
       "permissions": {
@@ -271,6 +279,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 2
       },
       "permissions": {
@@ -302,6 +312,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 2
       },
       "permissions": {
@@ -333,6 +345,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -364,6 +378,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -395,6 +411,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -433,6 +451,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -470,6 +490,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -505,6 +527,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -536,6 +560,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -567,6 +593,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -598,6 +626,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -629,6 +659,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -660,6 +692,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -691,6 +725,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -722,6 +758,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -753,6 +791,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -784,6 +824,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -815,6 +857,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -846,6 +890,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -877,6 +923,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -908,6 +956,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {
@@ -939,6 +989,8 @@
       "run": {
         "heartbeat": false,
         "wakeOnDemand": true,
+        "maxDailyRuns": 5,
+        "maxDailyCostCents": null,
         "maxConcurrentRuns": 1
       },
       "permissions": {

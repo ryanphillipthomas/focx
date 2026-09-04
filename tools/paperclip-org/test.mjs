@@ -556,7 +556,10 @@ const asLive = (roster, rendered, opts = null) => roster.agents.map((a, i) => ({
   adapterType: a.adapter.type,
   adapterConfig: composeAdapterConfig(roster, a, FAKE_SECRET_IDS,
     opts ? { claudeConfigDir: agentClaudeConfigDir(`id-${i}`, opts) } : {}),
-  runtimeConfig: { heartbeat: { enabled: a.run.heartbeat, wakeOnDemand: true, maxConcurrentRuns: a.run.maxConcurrentRuns } },
+  // Derived from the payload builder, not hand-written. A hand-written heartbeat
+  // silently stops covering every field added to run.* — which is how this
+  // fixture went on asserting wakeOnDemand:true after it became roster-controlled.
+  runtimeConfig: buildAgentPayload(roster, a, rendered.get(a.slug), null, FAKE_SECRET_IDS).runtimeConfig,
   budgetMonthlyCents: a.budgetMonthlyCents,
   permissions: { canCreateAgents: false, canAssignTasks: a.permissions.canAssignTasks },
   instructionsBundle: { files: { 'AGENTS.md': rendered.get(a.slug) } },
@@ -1414,4 +1417,67 @@ test('the committed roster records the containment rather than lying about it', 
   const { roster } = load()
   const active = roster.routines.filter((r) => r.status === 'active').map((r) => r.key)
   assert.deepEqual(active, [], 'routines are paused after the 2026-09-04 comment loop; re-arm deliberately')
+})
+
+// ---------------------------------------------------------------------------
+// Daily run cap
+//
+// The company budget policy measures billed_cents. Both adapters run against
+// SUBSCRIPTIONS, so agent runs consume Ryan's own allowance and bill nothing —
+// the hard stop could not have fired during the 2026-09-04 loop no matter how
+// bad it got. maxDailyRuns is the control that does not need to know about
+// money: Paperclip counts the agent's runs in the current UTC day and blocks
+// before the adapter is invoked.
+// ---------------------------------------------------------------------------
+
+test('every agent carries a daily run cap', () => {
+  const { roster } = load()
+  const uncapped = roster.agents.filter((a) => a.run.maxDailyRuns == null).map((a) => a.slug)
+  assert.deepEqual(uncapped, [], 'an uncapped agent can spend the whole subscription in a night')
+  for (const a of roster.agents) {
+    assert.ok(a.run.maxDailyRuns >= 1 && a.run.maxDailyRuns <= 20,
+      `${a.slug} cap ${a.run.maxDailyRuns} is outside the deliberate range — raise it on purpose, not by drift`)
+  }
+})
+
+test('the cap reaches the agent payload, and a null cap is omitted not sent', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const cto = bySlug(roster, 'cto')
+  const hb = buildAgentPayload(roster, cto, rendered.get('cto'), null).runtimeConfig.heartbeat
+  assert.equal(hb.maxDailyRuns, cto.run.maxDailyRuns)
+  // null must not be written: Paperclip reads absence as "no cap", and a
+  // literal null round-trips differently from an absent key.
+  assert.equal('maxDailyCostCents' in hb, false)
+
+  const capped = clone(cto)
+  capped.run.maxDailyCostCents = 250
+  const hb2 = buildAgentPayload(roster, capped, rendered.get('cto'), null).runtimeConfig.heartbeat
+  assert.equal(hb2.maxDailyCostCents, 250)
+})
+
+test('verify catches a daily cap that drifts from the roster', () => {
+  const { roster: real, fragments } = load()
+  const roster = clone(real)
+  const rendered = renderAll(roster, fragments)
+  const agents = roster.agents.map((a, i) => ({ id: `a-${i}`, name: a.name, status: 'idle', metadata: { focx: { slug: a.slug } } }))
+  const cfgs = new Map(agents.map((a, i) => [a.id, {
+    adapterType: roster.agents[i].adapter.type,
+    adapterConfig: {},
+    runtimeConfig: { heartbeat: {
+      enabled: roster.agents[i].run.heartbeat,
+      wakeOnDemand: roster.agents[i].run.wakeOnDemand,
+      maxConcurrentRuns: roster.agents[i].run.maxConcurrentRuns,
+      maxDailyRuns: roster.agents[i].run.maxDailyRuns,
+    } },
+  }]))
+  const row = () => verify(roster, { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles: new Map(), issues: [], company: { budgetMonthlyCents: 6000 } }, rendered).find((r) => r.n === 9)
+  assert.equal(row().pass, true)
+
+  // An agent quietly losing its cap in the UI is exactly the drift that matters.
+  const first = cfgs.get('a-0')
+  cfgs.set('a-0', { ...first, runtimeConfig: { heartbeat: { ...first.runtimeConfig.heartbeat, maxDailyRuns: null } } })
+  const bad = row()
+  assert.equal(bad.pass, false)
+  assert.match(bad.detail, /maxDailyRuns unset, roster says 5/)
 })
