@@ -1,6 +1,6 @@
 {
   "comment": "The Focx.ai operating company. Source of truth for who exists, who they report to, what model they run, what they cost, what they may write, and what they are scheduled to do. Applied by tools/paperclip-org/index.mjs. This file is desired state; Paperclip holds live state. desiredSkills means Paperclip-registered skills; claudeCodeSkills is documentation of the local Claude Code plugin skills an agent relies on, and is never sent to the API. Secrets are referenced by name only - never inline a credential here, this file is committed to git.",
-  "version": 1,
+  "version": 2,
   "expectedAgentCount": 26,
   "goal": "Reach 2,000 registered Focx Connect users within 180 days of public launch, with evidence of strong activation, retention, trust, and sustainable unit economics.",
   "company": {
@@ -32,12 +32,13 @@
     },
     {
       "name": "github_focx_write_token",
-      "usedFor": "GH_TOKEN on every agent with git: write"
+      "usedFor": "Seed and rotate the root-owned credential broker's macOS system-Keychain item; never injected into an agent environment"
     }
   ],
   "env": {
     "common": {
-      "PATH": "/Users/ryanthomas/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+      "PATH": "/Users/ryanthomas/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+      "PAPERCLIP_CLIENT": "/usr/local/bin/paperclip"
     },
     "claudeAuth": {
       "CLAUDE_CODE_OAUTH_TOKEN": {
@@ -45,13 +46,25 @@
       }
     },
     "gitWrite": {
-      "GH_TOKEN": {
-        "secret": "github_focx_write_token"
-      },
-      "GIT_CONFIG_COUNT": "1",
+      "GIT_CONFIG_COUNT": "3",
       "GIT_CONFIG_KEY_0": "credential.helper",
-      "GIT_CONFIG_VALUE_0": "!f() { [ \"$1\" = get ] || exit 0; host=; while IFS='=' read -r k v; do [ \"$k\" = host ] && host=\"$v\"; done; [ \"$host\" = github.com ] || exit 0; echo username=x-access-token; echo \"password=$GH_TOKEN\"; }; f"
+      "GIT_CONFIG_VALUE_0": "!/usr/local/bin/git-credential-focx",
+      "GIT_CONFIG_KEY_1": "credential.useHttpPath",
+      "GIT_CONFIG_VALUE_1": "true",
+      "GIT_CONFIG_KEY_2": "credential.https://github.com.username",
+      "GIT_CONFIG_VALUE_2": "x-access-token"
     }
+  },
+  "credentialBroker": {
+    "version": 1,
+    "paperclipOrigin": "https://ops.focx.ai:443",
+    "binaryPath": "/Library/Application Support/Focx/CredentialBroker/focx-credential-broker",
+    "paperclipClientPath": "/usr/local/bin/paperclip",
+    "gitCredentialHelperPath": "/usr/local/bin/git-credential-focx",
+    "socketPath": "/var/run/focx-credential-broker.sock",
+    "githubRepository": "ryanphillipthomas/focx",
+    "requestBodyLimitBytes": 65536,
+    "responseBodyLimitBytes": 2097152
   },
   "workspaces": {
     "repo-worktree": {
@@ -1086,7 +1099,7 @@
     }
   ],
   "confinement": {
-    "comment": "filesystemScope and networkScope are spawn-level confinement and BOTH require Bubblewrap, which is Linux only (adapter docs: 'filesystemSandboxCommand ... Linux only'). This host is macOS, so they are omitted: setting them makes every run fail with \"bwrap was not found in PATH\". Without them there is no OS-level sandbox, and the controls that remain are the git tier (who holds GH_TOKEN), each agent's cwd, the CLI's own permission system, and CODEOWNERS plus branch protection.",
+    "comment": "filesystemScope and networkScope are spawn-level confinement and BOTH require Bubblewrap, which is Linux only (adapter docs: 'filesystemSandboxCommand ... Linux only'). This host is macOS, so they are omitted: setting them makes every run fail with \"bwrap was not found in PATH\". Without them there is no OS-level sandbox. Git write authentication is now mediated by the root-owned credential broker rather than GH_TOKEN in agent environments; remaining controls are each agent's cwd, the CLI's permission system, and CODEOWNERS plus branch protection.",
     "requiresBubblewrap": [
       "filesystemScope",
       "networkScope",

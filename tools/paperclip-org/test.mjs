@@ -19,7 +19,7 @@ import {
   resolveEnv, checkAdapterConfig, BUBBLEWRAP_KEYS, ADAPTER_KEYS, buildRoutinePayload,
   PLATFORM_OWNED_KEYS, planLocalSkillLinks, ensureLocalSkillLink, needsLocalSkillLinks,
   checkClaudeCodeSkills, claudeCodeSkillSources,
-  agentClaudeConfigDir,
+  agentClaudeConfigDir, inspectCredentialBrokerInstall,
 } from './index.mjs'
 import { createFakeApi } from './fake-api.mjs'
 
@@ -196,11 +196,14 @@ test('rejects an escalator that is also the decider', () => rejects((r) => {
 
 // --- secrets ---
 test('rejects the legacy string form even when the secret name is real', () => rejects((r) => {
-  r.env.gitWrite.GH_TOKEN = '[secret: github_focx_write_token]'
+  r.env.claudeAuth.CLAUDE_CODE_OAUTH_TOKEN = '[secret: claude_subscription_token]'
 }, 'stores as a PLAIN value'))
 test('rejects a literal credential pasted into env', () => rejects((r) => {
-  r.env.gitWrite.GH_TOKEN = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789'
+  r.env.common.LEAKED_TOKEN = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789'
 }, 'literal credential'))
+test('rejects any attempt to restore GH_TOKEN to an agent env block', () => rejects((r) => {
+  r.env.gitWrite.GH_TOKEN = { secret: 'github_focx_write_token' }
+}, 'GH_TOKEN is forbidden'))
 
 // ---------------------------------------------------------------------------
 // topoOrder
@@ -245,28 +248,31 @@ test('composeEnv gives the Claude token to claude_local agents only', () => {
   for (const a of codex) assert.ok(!('CODEX_HOME' in composeEnv(roster, a)), 'the adapter supplies CODEX_HOME, not the roster')
 })
 
-test('composeEnv gives GH_TOKEN and the credential helper to git:write agents only', () => {
+test('composeEnv gives brokered Git config, never GH_TOKEN, to git:write agents only', () => {
   const { roster } = load()
   for (const a of roster.agents) {
     const env = composeEnv(roster, a)
-    const has = 'GH_TOKEN' in env
-    assert.equal(has, a.git === 'write', `${a.slug}`)
-    if (has) {
-      assert.equal(env.GIT_CONFIG_COUNT, '1')
+    assert.ok(!('GH_TOKEN' in env), `${a.slug} exposes GH_TOKEN`)
+    const hasBroker = 'GIT_CONFIG_VALUE_0' in env
+    assert.equal(hasBroker, a.git === 'write', `${a.slug}`)
+    if (hasBroker) {
+      assert.equal(env.GIT_CONFIG_COUNT, '3')
       assert.equal(env.GIT_CONFIG_KEY_0, 'credential.helper')
-      assert.ok(env.GIT_CONFIG_VALUE_0.includes('x-access-token'))
-      assert.equal(env.GH_TOKEN.secret, 'github_focx_write_token', 'referenced by name, not inlined')
+      assert.equal(env.GIT_CONFIG_VALUE_0, '!/usr/local/bin/git-credential-focx')
+      assert.equal(env.GIT_CONFIG_KEY_1, 'credential.useHttpPath')
+      assert.equal(env.GIT_CONFIG_VALUE_1, 'true')
     }
   }
 })
 
-test('Design Steward has no GH_TOKEN — the reviewer cannot write what it approves', () => {
+test('Design Steward has no Git broker while the proposer gets only the broker', () => {
   const { roster } = load()
   const steward = bySlug(roster, roster.designChain.approver)
   assert.equal(steward.git, 'read')
-  assert.ok(!('GH_TOKEN' in composeEnv(roster, steward)))
+  assert.ok(!('GIT_CONFIG_VALUE_0' in composeEnv(roster, steward)))
   const designer = bySlug(roster, roster.designChain.proposer)
-  assert.ok('GH_TOKEN' in composeEnv(roster, designer), 'the proposer does write, and needs the token')
+  assert.equal(composeEnv(roster, designer).GIT_CONFIG_VALUE_0, '!/usr/local/bin/git-credential-focx')
+  assert.ok(!('GH_TOKEN' in composeEnv(roster, designer)))
 })
 
 test('composeAdapterConfig maps reasoning to each adapter\'s own key and disarms the dangerous defaults', () => {
@@ -346,7 +352,8 @@ test('resolveEnv refuses to fall back to a plain value when a secret does not re
 test('the roster references secrets by name, never with the string form', () => {
   const { roster } = load()
   assert.deepEqual(roster.env.claudeAuth.CLAUDE_CODE_OAUTH_TOKEN, { secret: 'claude_subscription_token' })
-  assert.deepEqual(roster.env.gitWrite.GH_TOKEN, { secret: 'github_focx_write_token' })
+  assert.ok(!('GH_TOKEN' in roster.env.gitWrite))
+  assert.ok(roster.secrets.some((s) => s.name === 'github_focx_write_token'))
 })
 
 test('rejects the "[secret: name]" string form that Paperclip stores as plain', () => rejects((r) => {
@@ -354,8 +361,31 @@ test('rejects the "[secret: name]" string form that Paperclip stores as plain', 
 }, 'stores as a PLAIN value'))
 
 test('rejects a secret reference to something not declared', () => rejects((r) => {
-  r.env.gitWrite.GH_TOKEN = { secret: 'nope' }
+  r.env.common.UNKNOWN_TOKEN = { secret: 'nope' }
 }, "undeclared secret 'nope'"))
+
+test('credential broker readiness checks ownership, paths, doctor version, origin, and Keychain', () => {
+  const { roster } = load()
+  const file = { uid: 0, mode: 0o100555, isFile: () => true }
+  const directory = { uid: 0, mode: 0o040755, isFile: () => false }
+  const deps = {
+    stat: (path) => path === roster.credentialBroker.binaryPath ? file : directory,
+    lstat: () => ({ uid: 0, mode: 0o120777, isFile: () => false }),
+    realpath: () => roster.credentialBroker.binaryPath,
+    execFile: () => JSON.stringify({
+      ok: true, version: '1', origin: roster.credentialBroker.paperclipOrigin,
+      githubCredentialAvailable: true,
+    }),
+  }
+  assert.deepEqual(inspectCredentialBrokerInstall(roster.credentialBroker, deps), { ready: true, problems: [] })
+  const missingKeychain = inspectCredentialBrokerInstall(roster.credentialBroker, {
+    ...deps,
+    execFile: () => JSON.stringify({ ok: true, version: '1', origin: roster.credentialBroker.paperclipOrigin,
+      githubCredentialAvailable: false }),
+  })
+  assert.equal(missingKeychain.ready, false)
+  assert.match(missingKeychain.problems.join('\n'), /no GitHub credential/)
+})
 
 test('no agent config carries a Bubblewrap-only key on a non-Linux host', () => {
   const { roster } = load()

@@ -1,0 +1,32 @@
+{
+  "runId": "run-20260904-143801-ticket",
+  "storiesImplemented": [
+    "FOC-77-1: compiled root-installed Paperclip broker with exact HTTPS origin, no redirect/proxy/config override, method/path scope, process-tree run binding, and bounded bodies",
+    "FOC-77-2: Keychain-backed repository-scoped Git credential helper with no GH_TOKEN agent environment injection",
+    "FOC-77-3: all rendered agent bundles select the opaque Paperclip client and the org reconciler refuses migration before broker readiness"
+  ],
+  "filesChanged": [
+    "docs/org.md",
+    "docs/sources-of-truth.md",
+    "packages/credential-broker/README.md",
+    "packages/credential-broker/build.sh",
+    "packages/credential-broker/install.sh",
+    "packages/credential-broker/package.json",
+    "packages/credential-broker/src/focx-credential-broker.m",
+    "packages/credential-broker/test.mjs",
+    "pipeline/org/instructions/_preamble.md",
+    "pipeline/org/roster.json",
+    "pipeline/org/roster.schema.json",
+    "pipeline/runs/run-20260904-143801-ticket/00-run.json",
+    "pipeline/runs/run-20260904-143801-ticket/50-build-report.json",
+    "tools/paperclip-org/index.mjs",
+    "tools/paperclip-org/test.mjs"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean — no design drift detected (23 published values from 2 token files)."
+  }
+}

@@ -12,6 +12,7 @@
     "budgetPolicy",
     "secrets",
     "env",
+    "credentialBroker",
     "workspaces",
     "networkAllowlist",
     "designChain",
@@ -107,7 +108,7 @@
     },
     "env": {
       "type": "object",
-      "description": "Composable env blocks. common applies to every agent; claudeAuth to every claude_local agent; gitWrite to every agent with git: write.",
+      "description": "Composable env blocks. common applies to every agent; claudeAuth to every claude_local agent; gitWrite selects the root-owned Git credential broker for agents with git: write. GH_TOKEN is never an agent env binding.",
       "required": [
         "common",
         "claudeAuth",
@@ -123,6 +124,33 @@
         "gitWrite": {
           "$ref": "#/$defs/envBlock"
         }
+      },
+      "additionalProperties": false
+    },
+    "credentialBroker": {
+      "type": "object",
+      "description": "Immutable host-install contract for the out-of-process Paperclip and Git credential broker.",
+      "required": [
+        "version",
+        "paperclipOrigin",
+        "binaryPath",
+        "paperclipClientPath",
+        "gitCredentialHelperPath",
+        "socketPath",
+        "githubRepository",
+        "requestBodyLimitBytes",
+        "responseBodyLimitBytes"
+      ],
+      "properties": {
+        "version": { "const": 1 },
+        "paperclipOrigin": { "type": "string", "pattern": "^https://[^/:]+:[0-9]+$" },
+        "binaryPath": { "type": "string", "pattern": "^/Library/" },
+        "paperclipClientPath": { "const": "/usr/local/bin/paperclip" },
+        "gitCredentialHelperPath": { "const": "/usr/local/bin/git-credential-focx" },
+        "socketPath": { "const": "/var/run/focx-credential-broker.sock" },
+        "githubRepository": { "const": "ryanphillipthomas/focx" },
+        "requestBodyLimitBytes": { "const": 65536 },
+        "responseBodyLimitBytes": { "const": 2097152 }
       },
       "additionalProperties": false
     },
@@ -496,7 +524,7 @@
             "read",
             "none"
           ],
-          "description": "write injects GH_TOKEN and the git credential helper. Withholding it is how a reviewer is mechanically prevented from writing what it approves."
+          "description": "write selects the root-owned, repository-scoped Git credential helper. No agent receives GH_TOKEN. Withholding the helper is how a reviewer is mechanically prevented from writing what it approves."
         },
         "capabilities": {
           "type": "string",

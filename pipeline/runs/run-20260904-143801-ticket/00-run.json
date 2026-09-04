@@ -1,0 +1,13 @@
+{
+  "runId": "run-20260904-143801-ticket",
+  "trigger": {
+    "source": "ticket",
+    "issueNumber": 77,
+    "actor": "paperclip",
+    "paperclipTaskId": "145c42f6-2ccd-40e0-a341-ac88f6a43076"
+  },
+  "prompt": "Ship credential broker v1 for the Paperclip control plane, replace agent GH_TOKEN injection with a host-installed Keychain-backed Git credential helper, migrate all agents to the opaque broker client, then revoke raw env/curl grants without revoking before the replacement is live.",
+  "mode": "build",
+  "createdAt": "2026-09-04T14:38:01Z",
+  "branch": "FOC-77-ship-credential-broker-v1-migrate-agents-off-raw-curl-then-revoke-env-curl-grants"
+}

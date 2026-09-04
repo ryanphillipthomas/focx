@@ -1,0 +1,14 @@
+{
+  "name": "@focx/credential-broker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Root-installed, task-scoped Paperclip and Git credential broker for macOS agent hosts",
+  "type": "module",
+  "scripts": {
+    "build": "sh build.sh",
+    "test": "node --test test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

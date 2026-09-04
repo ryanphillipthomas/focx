@@ -89,8 +89,9 @@ Prose in a bundle is a request; a credential is a fact. [`pipeline/runs/run-2026
 
 So these are the parts that hold on their own:
 
-- **Design Steward has no `GH_TOKEN` and only Figma read.** It cannot write the record it approves.
-- **Design Research has no `GH_TOKEN` either.** A researcher that can implement is not independent of what it evaluates.
+- **No agent has `GH_TOKEN`.** Git-write agents receive only the root-owned,
+  repository-scoped credential helper; read/none agents do not receive that helper.
+- **Design Steward and Design Research have neither Git-write broker config nor Figma write.** They cannot write the record they approve or evaluate.
 - **QA Engineer works from its own clone** at `focx-qa`, which no other agent shares.
 - **`canCreateAgents: false`** on all 25 — the org cannot grow itself past its budget.
 - **`canAssignTasks`** only for the six managers.
@@ -214,7 +215,7 @@ The adapters offer spawn-level confinement through `filesystemScope` and `networ
 
 So there is **no OS-level sandbox around any agent**. What remains, and what the org actually leans on:
 
-- the `git` tier — who holds `GH_TOKEN` at all
+- the `git` tier — who receives the root-owned, repository-scoped credential helper
 - each agent's `cwd`, and the 10 agents with no repository on the filesystem
 - the CLI's own permission system (`dangerouslySkipPermissions: false`, `dangerouslyBypassApprovalsAndSandbox: false`)
 - `CODEOWNERS` and branch protection
@@ -223,13 +224,19 @@ That is a weaker posture than the original plan assumed, and it is worth stating
 
 ## Secrets are referenced by name, resolved to ids
 
-The roster names a secret (`{ "secret": "claude_subscription_token" }`); the reconciler resolves that name against the live store and writes Paperclip's real reference shape:
+The roster names the Claude adapter secret (`{ "secret": "claude_subscription_token" }`); the reconciler resolves that name against the live store and writes Paperclip's real reference shape. The GitHub secret remains declared for controlled Keychain rotation but is never composed into an agent environment:
 
 ```json
 { "type": "secret_ref", "secretId": "<uuid>" }
 ```
 
 This matters more than it looks. Paperclip's env union also accepts a **bare string**, and coerces it to `{ "type": "plain" }`. An earlier roster used a `"[secret: name]"` string, so every agent was created with that literal 34-character string where its token belonged — accepted by the API, invisible until first run. `validateRoster` now rejects the string form outright, `resolveEnv` throws rather than falling back to a plain value, and `verify` checks the **stored type** rather than mere presence.
+
+The macOS credential broker contract lives in
+`packages/credential-broker/`. Its reviewed source is compiled and installed as
+a root-owned LaunchDaemon outside all agent-writable paths. The reconciler
+refuses to remove live GitHub env bindings unless the installed broker reports
+the expected version/origin and a Keychain credential is present.
 
 ## Known gaps
 

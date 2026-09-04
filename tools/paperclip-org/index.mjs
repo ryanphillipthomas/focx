@@ -18,11 +18,12 @@
 // Exit: 0 clean · 1 verification failed · 2 usage/roster error · 3 preflight failed
 //       4 PARTIAL APPLY — mixed state; rerun is safe but must be deliberate.
 
-import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync } from 'node:fs'
+import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, lstatSync, readlinkSync, realpathSync, symlinkSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 
 const here = dirname(fileURLToPath(import.meta.url))
 export const REPO_ROOT = resolve(here, '../..')
@@ -268,6 +269,28 @@ export function validateRoster(roster, { instructionFiles = null } = {}) {
       }
     }
   }
+  const broker = roster.credentialBroker ?? {}
+  const brokerOrigin = (() => { try { return new URL(broker.paperclipOrigin) } catch { return null } })()
+  if (!brokerOrigin || !/^https:\/\/[^/:]+:[0-9]+$/.test(String(broker.paperclipOrigin ?? '')) ||
+      brokerOrigin.protocol !== 'https:' || !brokerOrigin.hostname ||
+      brokerOrigin.pathname !== '/' || brokerOrigin.username || brokerOrigin.password || brokerOrigin.search || brokerOrigin.hash) {
+    push('credentialBroker.paperclipOrigin must be exactly https://host:port with no path, userinfo, query, or fragment')
+  }
+  if (broker.version !== 1) push('credentialBroker.version must be 1')
+  if (!String(broker.binaryPath ?? '').startsWith('/Library/')) push('credentialBroker.binaryPath must live under /Library, outside agent-writable paths')
+  if (broker.paperclipClientPath !== '/usr/local/bin/paperclip') push('credentialBroker.paperclipClientPath must be /usr/local/bin/paperclip')
+  if (broker.gitCredentialHelperPath !== '/usr/local/bin/git-credential-focx') push('credentialBroker.gitCredentialHelperPath must be /usr/local/bin/git-credential-focx')
+  if (broker.socketPath !== '/var/run/focx-credential-broker.sock') push('credentialBroker.socketPath must be /var/run/focx-credential-broker.sock')
+  if (broker.githubRepository !== 'ryanphillipthomas/focx') push('credentialBroker.githubRepository must scope GitHub auth to ryanphillipthomas/focx')
+  if (broker.requestBodyLimitBytes !== 65536 || broker.responseBodyLimitBytes !== 2097152) push('credentialBroker body limits must remain 65536 request / 2097152 response bytes')
+  for (const [block, vars] of Object.entries(roster.env ?? {})) {
+    if ('GH_TOKEN' in (vars ?? {})) push(`env.${block}.GH_TOKEN is forbidden — GitHub auth belongs in the host broker Keychain`)
+  }
+  const gitWrite = roster.env?.gitWrite ?? {}
+  if (gitWrite.GIT_CONFIG_VALUE_0 !== `!${broker.gitCredentialHelperPath}` ||
+      gitWrite.GIT_CONFIG_KEY_1 !== 'credential.useHttpPath' || gitWrite.GIT_CONFIG_VALUE_1 !== 'true') {
+    push('env.gitWrite must select the absolute broker helper and enable credential.useHttpPath')
+  }
   // Every agent's rendered adapterConfig, against the adapter's documented keys.
   for (const a of agents) {
     if (!a.adapter?.type || !REASONING[a.adapter.type]) continue
@@ -432,7 +455,8 @@ export function topoOrder(agents) {
 
 // ---------------------------------------------------------------------------
 // Env composition. Deterministic, so the renderer derives it rather than each
-// agent hand-listing it — and so a missing GH_TOKEN is a structural fact.
+// agent hand-listing it — and so the absence of GH_TOKEN plus the presence of
+// only the root-owned credential helper are structural facts.
 // ---------------------------------------------------------------------------
 
 // Paperclip's env value union is { type: "plain", value } | { type: "secret_ref",
@@ -451,6 +475,59 @@ export function composeEnv(roster, agent, opts = {}) {
   // the adapter supplies CODEX_HOME itself. Do not invent a token here.
   if (agent.git === 'write') Object.assign(env, roster.env?.gitWrite ?? {})
   return env
+}
+
+function normalizedOrigin(value) {
+  try {
+    const url = new URL(value)
+    const port = url.port || (url.protocol === 'https:' ? '443' : url.protocol === 'http:' ? '80' : '')
+    return `${url.protocol}//${url.hostname.toLowerCase()}:${port}`
+  } catch { return null }
+}
+
+export function inspectCredentialBrokerInstall(broker, deps = {}) {
+  const stat = deps.stat ?? statSync
+  const lstat = deps.lstat ?? lstatSync
+  const realpath = deps.realpath ?? realpathSync
+  const run = deps.execFile ?? execFileSync
+  const problems = []
+  const checkRootPath = (path, kind) => {
+    let info
+    try { info = kind === 'link' ? lstat(path) : stat(path) } catch { problems.push(`${path} is missing`); return }
+    if (info.uid !== 0) problems.push(`${path} is not root-owned`)
+    if (kind !== 'link' && (info.mode & 0o022)) problems.push(`${path} is group/other-writable`)
+    if (kind === 'file' && !info.isFile()) problems.push(`${path} is not a file`)
+    if (kind === 'file' && !(info.mode & 0o111)) problems.push(`${path} is not executable`)
+    let current = dirname(path)
+    while (current !== '/') {
+      let parent
+      try { parent = stat(current) } catch { problems.push(`${current} is missing`); break }
+      if (parent.uid !== 0 || (parent.mode & 0o022)) problems.push(`${current} is not a root-owned, non-writable path component`)
+      current = dirname(current)
+    }
+  }
+  checkRootPath(broker.binaryPath, 'file')
+  for (const client of [broker.paperclipClientPath, broker.gitCredentialHelperPath]) {
+    checkRootPath(client, 'link')
+    try {
+      if (realpath(client) !== realpath(broker.binaryPath)) problems.push(`${client} does not resolve to the installed broker binary`)
+    } catch { /* missing already reported */ }
+  }
+  if (problems.length) return { ready: false, problems }
+  try {
+    const output = run(broker.paperclipClientPath, ['doctor'], {
+      encoding: 'utf8', timeout: 3000,
+      env: { PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
+    })
+    const doctor = JSON.parse(String(output))
+    if (doctor.ok !== true) problems.push('broker doctor did not return ok')
+    if (String(doctor.version) !== String(broker.version)) problems.push(`broker doctor reported version ${doctor.version ?? 'missing'}`)
+    if (normalizedOrigin(doctor.origin) !== normalizedOrigin(broker.paperclipOrigin)) problems.push('broker doctor origin does not match the roster')
+    if (doctor.githubCredentialAvailable !== true) problems.push('broker doctor reports no GitHub credential in the system Keychain')
+  } catch (err) {
+    problems.push(`broker doctor failed: ${err.message}`)
+  }
+  return { ready: problems.length === 0, problems }
 }
 
 export function resolveEnv(env, secretIds) {
@@ -1052,13 +1129,19 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     const wantsClaude = w.adapter.type === 'claude_local'
     if (wantsClaude !== ('CLAUDE_CODE_OAUTH_TOKEN' in env)) envBad.push(`${slug} claude token mismatch`)
     const wantsGit = w.git === 'write'
-    if (wantsGit !== ('GH_TOKEN' in env)) envBad.push(`${slug} GH_TOKEN mismatch`)
+    if ('GH_TOKEN' in env) envBad.push(`${slug} exposes forbidden GH_TOKEN`)
+    for (const [key, value] of Object.entries(roster.env?.gitWrite ?? {})) {
+      const liveValue = env[key]
+      const plain = liveValue && typeof liveValue === 'object' ? liveValue.value : liveValue
+      if (wantsGit && String(plain ?? '') !== String(value)) envBad.push(`${slug} brokered Git config mismatch at ${key}`)
+      if (!wantsGit && key in env) envBad.push(`${slug} has Git write broker config despite git:${w.git}`)
+    }
     const wantsWorktree = Boolean(roster.workspaces?.[w.workspace]?.workspaceStrategy)
     const hasWorktree = Boolean((cfg.get(a.id)?.adapterConfig ?? {}).workspaceStrategy)
     if (wantsWorktree !== hasWorktree) envBad.push(`${slug} workspaceStrategy mismatch`)
     // Presence is not enough: a bare string is stored as { type: "plain" }, which
     // is how every agent once ended up with a literal "[secret: name]" for a token.
-    for (const key of ['CLAUDE_CODE_OAUTH_TOKEN', 'GH_TOKEN']) {
+    for (const key of ['CLAUDE_CODE_OAUTH_TOKEN']) {
       const v = env[key]
       if (v && v.type !== 'secret_ref') envBad.push(`${slug} ${key} is type '${v.type ?? typeof v}', not secret_ref`)
     }
@@ -1289,6 +1372,16 @@ async function main(argv) {
     console.error('    paperclipai token board create --name "focx-org-reconciler"')
     console.error('  then export PAPERCLIP_API_KEY. Never attempt the login from an agent.')
     return 3
+  }
+
+  if ((flags.apply || flags.verifyOnly) && normalizedOrigin(baseUrl) === normalizedOrigin(roster.credentialBroker.paperclipOrigin)) {
+    const broker = inspectCredentialBrokerInstall(roster.credentialBroker)
+    if (!broker.ready) {
+      console.error(bad('P0B credential broker is not ready; refusing to remove agent GitHub credentials'))
+      for (const problem of broker.problems) console.error(`    ${problem}`)
+      return 3
+    }
+    console.log(ok('P0B root-owned credential broker and Keychain credential are ready'))
   }
 
   const api = new PaperclipClient({ baseUrl, apiKey })
