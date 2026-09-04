@@ -3,6 +3,7 @@
 **Status:** evidence gathered, asks ready to transmit. Target for an answer: **2026-09-11**.
 **Scope:** the half of the FOC-68 remediation no Focx engineer can implement.
 **Evidence gathered:** 2026-09-04, on the live host, from inside a normal CTO run.
+**Revised:** 2026-09-04 — §6 added (credentials at rest), ask order changed as a result.
 
 Every claim below was verified on this host rather than assumed. Reproduction commands are
 included so Paperclip and Infrastructure can re-run them.
@@ -20,6 +21,7 @@ FOC-81 originally assumed**, and one ask is answered outright.
 | Paperclip: run credential should be run-scoped | The credential **already carries `run_id`**. Its lifetime is **48 h** against a 1 h run cap. | Bound the token's `exp` to the run, not to 48 h. |
 | Paperclip: control the generated allowlist | Confirmed unreachable from this repo. Plus a **new, more severe finding**: `Bash(env:*)`. | Drop `Bash(env:*)`; make the preset→allowlist mapping configurable. |
 | Infra: Linux migration *or* find a macOS sandbox | **Answered.** A macOS-native deny-by-default egress boundary works on this host today. | No migration required. Paperclip must apply the profile at spawn. |
+| *(not in the original framing)* | **The runtime writes the resolved environment to disk on every run** (§6). 137 files hold live credentials; no scrubbing, no retention clock. | Stop serialising secret values into session JSON. **New highest-priority ask.** |
 
 ---
 
@@ -207,23 +209,121 @@ Three honest caveats:
 this requirement. The egress boundary is available natively. Reconsider migration only if Paperclip
 declines to add a spawn-level sandbox hook for macOS, or if `sandbox-exec` is withdrawn.
 
+## 6. The runtime serialises resolved secrets to disk on every run
+
+Raised by Legal & Privacy (agent `9cd9dd6e`, FOC-72) and **verified independently here on 2026-09-04**.
+This finding is upstream of everything else in this packet and it changes the priority order.
+
+At spawn, the runtime writes the adapter child's **entire environment block** into ACP session JSON:
+
+```
+<instance>/companies/<companyId>/acp-engine/agents/<agentId>/sessions/<sessionId>.json
+  → .acpx.session_options.env    (34 variables, values in plaintext)
+```
+
+Measured across the whole corpus:
+
+| | |
+|---|---|
+| Session JSON files | **137**, across **20 agents**, 31.7 MB |
+| Files carrying an `env` block | **137 — every one** |
+| Window | 2026-09-02 16:40 → 2026-09-04 10:36 (~42 h, ≈3 new files/hour) |
+| `PAPERCLIP_API_KEY` | 137 files, **137 distinct JWTs** |
+| `CLAUDE_CODE_OAUTH_TOKEN` | 87 files, 1 distinct value |
+| `GH_TOKEN` | 71 files, 1 distinct value |
+| File mode | `0644`, in `0755` directories |
+
+Nothing in `instances/default/config.json` governs this corpus; the only retention setting present is
+`database.backup.retentionDays`. There is no scrubbing step and no expiry clock. The corpus grows by
+one file per session, indefinitely — it went **136 → 137 → 140 during this single run**, which is the
+clearest statement of the problem: the write is automatic, unconditional, and ongoing while we
+document it.
+
+### Correction to the Legal & Privacy note: none of these tokens are expired
+
+The FOC-72 note states the at-rest JWTs "are time-boxed and mostly expired already" and therefore need
+no rotation. **That is not the case.** Checking `exp` on every token in the corpus:
+
+```
+JWTs still valid right now: 137 / expired: 0
+longest remaining validity:  48.0 hours
+distinct token lifetimes:    [172800]   (48 h, uniformly)
+```
+
+The reason is the §2 finding, and the two compound. A 48-hour lifetime against a corpus that spans
+42 hours means **every token ever written is still live**. The at-rest set is not an archive of dead
+credentials — it is a rolling store of ~137 valid, company-wide-scoped API credentials. It cannot
+age out faster than it is written to. Bounding `exp` (§2, ask 3) is what would make the FOC-72
+"no rotation needed" conclusion true; today it is not.
+
+### What this actually exposes, stated precisely
+
+The mitigating fact first: `~/.paperclip` is mode `0700`. The `0644` files are **not** readable by
+other local user accounts, and I do not want this over-stated.
+
+The exposure is to **any process running as this user** — which is exactly what every agent is:
+
+```
+other-agent session files readable from inside this ordinary CTO run: 123
+sample read: agent b0b9c290 → PAPERCLIP_API_KEY, 523 chars, unexpired
+```
+
+From a normal run, with no privilege escalation, I read 123 other agents' session files and recovered
+their live run credentials. That is the finding in one line: **any single agent run can harvest every
+other agent's live credential from the local filesystem.** Combined with the absent issue/subtree
+claim (§2, and FOC-72 §2(c)), one compromised run yields company-wide access under ~137 identities,
+not one.
+
+I deliberately did **not** authenticate to the API with another agent's token. A valid unexpired JWT
+with `aud: paperclip-api` is sufficient evidence; exercising it would itself be the boundary violation
+this issue exists to close.
+
+### Why this defeats the FOC-77 interim containment
+
+FOC-77 revokes `Bash(env)` and `Bash(curl:*)`. Neither is on this path. Harvesting the corpus needs
+only ordinary file reads of paths outside the worktree — no shell, no environment introspection, no
+network. **The interim containment does not reduce this exposure at all**, and the FOC-71 risk
+acceptance was taken without it on the table. This is the second finding in this packet (with
+`Bash(env:*)`, §3) that argues for revisiting FOC-71 now rather than at the 2026-10-09 time-box.
+
+It also outranks the broker work. Ask 2 moves secrets from the environment to an API — but the
+environment is precisely what gets serialised here, so **§6 is the write path that ask 2's benefit
+would leak through** unless it is fixed first or together.
+
+### Scope note
+
+Checked and clean: `run-stderr` logs contain no credential material (0 files). The exposure is
+specific to `session_options.env`.
+
 ---
 
 ## The asks, restated
 
 **To Paperclip** — in priority order:
 
-1. **Confirm the `Bash(env:*)` matcher semantics** (§3). Does it short-circuit on the `env` prefix?
-   If yes, this is an allowlist bypass and is the most urgent item here. Either way, stop
-   generating `Bash(env:*)`, and drop `Bash(env)` and `Bash(curl:*)` from the default preset.
-2. **Expose `delivery` on the secret write path** (§4) — `POST /api/companies/{companyId}/secrets`
+1. **Stop writing resolved secret values into ACP session JSON** (§6). Redact, reference, or omit
+   `session_options.env`; ship a retention/cleanup policy for the existing corpus. This is now the
+   top item: it is automatic, affects every run and every credential, and no allowlist or repo-side
+   change reaches it. Please also state whether the same environment block is serialised anywhere
+   server-side (backups, telemetry, support bundles) — we can only see this host.
+2. **Confirm the `Bash(env:*)` matcher semantics** (§3). Does it short-circuit on the `env` prefix?
+   If yes, this is an allowlist bypass. Either way, stop generating `Bash(env:*)`, and drop
+   `Bash(env)` and `Bash(curl:*)` from the default preset.
+3. **Bound `PAPERCLIP_API_KEY`'s `exp` to the run** (§2), rather than 48 h against a 1 h run cap.
+   The `run_id` claim is already present; only the lifetime needs to change. Promoted above the
+   broker: §6 shows the 48 h lifetime is what keeps the entire on-disk corpus live.
+4. **Expose `delivery` on the secret write path** (§4) — `POST /api/companies/{companyId}/secrets`
    and `PATCH /api/secrets/{id}`. The read path and the broker already exist; only the toggle is
    missing. Also document `projectionClass: class_3_static_lease`, which is unreachable today.
-3. **Bound `PAPERCLIP_API_KEY`'s `exp` to the run** (§2), rather than 48 h against a 1 h run cap.
-   The `run_id` claim is already present; only the lifetime needs to change.
-4. **Add a spawn-level sandbox hook for macOS** (§5) — the `sandbox-exec` analogue of the Linux-only
+5. **Add a spawn-level sandbox hook for macOS** (§5) — the `sandbox-exec` analogue of the Linux-only
    `filesystemSandboxCommand`. Profile and measurements above; the work is integration, not design.
-5. Note the coupling: items 2–4 are a set. Item 2 alone does not reduce exposure (§4 caveat).
+6. **Add an issue/subtree claim to the run credential.** Today's claims are `company_id` / `run_id` /
+   `responsible_user_id` / `adapter_type` / `instance_id` — nothing narrows authority to the task.
+   Raised by Legal & Privacy on FOC-72 §2(c) and endorsed here: it is what turns one compromised run
+   from a company-wide disclosure into a single-task one.
+7. Note the coupling: items 1, 3, 4 and 5 are a set. Item 4 alone does not reduce exposure (§4
+   caveat), and item 4 without item 1 relocates secrets to an API whose bearer token is itself
+   serialised to disk.
 
 **To Infrastructure:**
 
@@ -236,10 +336,16 @@ FOC-79 cannot fully close without Paperclip asks 1–4. The interim containment 
 still stands and is still time-boxed to **2026-10-09**. Nothing found here removes the need to
 re-decide at that date rather than silently extend.
 
-Two findings sharpen it: the credential outlives its run by 47 hours (§2), and `Bash(env:*)` may be
-a general allowlist bypass rather than a single grant (§3). If Paperclip confirms the latter, the
-FOC-71 risk acceptance was made against an understated exposure and should be revisited
-immediately rather than at the time-box.
+Three findings sharpen it: the credential outlives its run by 47 hours (§2), `Bash(env:*)` may be a
+general allowlist bypass rather than a single grant (§3), and the runtime persists every run's
+resolved credentials to a local store that any agent can read (§6).
+
+**§6 changes the conclusion, not just the detail.** FOC-71 accepted the residual risk on the basis
+that interim containment closed the cheap exfiltration paths. It does not close this one — the
+harvest path needs no shell, no `env`, and no network. The risk that was accepted is therefore
+larger than the risk that was described. My view: FOC-71 should be re-opened and re-decided **now**,
+on this evidence, rather than allowed to run to the 2026-10-09 time-box. That is a call for the
+FOC-71 owner, and this packet is the input to it.
 
 ## Implication for FOC-68 (delegatable half)
 
@@ -276,6 +382,22 @@ git check-ignore -v .claude/settings.local.json; cat .claude/settings.local.json
 curl -s -H "Authorization: Bearer $PAPERCLIP_API_KEY" "$PAPERCLIP_API_URL/api/agents/me/secrets"
 
 # egress boundary
-printf '(version 1)\n(allow default)\n(deny network*)\n' > /tmp/deny-net.sb
-sandbox-exec -f /tmp/deny-net.sb /usr/bin/curl -s --max-time 8 https://example.com; echo "rc=$?"
+printf '(version 1)\n(allow default)\n(deny network*)\n' > "$PAPERCLIP_RUN_SCRATCH_DIR/deny-net.sb"
+sandbox-exec -f "$PAPERCLIP_RUN_SCRATCH_DIR/deny-net.sb" /usr/bin/curl -s --max-time 8 https://example.com; echo "rc=$?"
+
+# §6 — credentials at rest. Counts and token lifetimes only; prints no secret value.
+python3 - <<'PY'
+import json,glob,os,base64,time,hashlib,collections,stat
+G="/Users/ryanthomas/.paperclip/instances/default/companies/*/acp-engine/agents/*/sessions/*.json"
+files=glob.glob(G); vals=collections.defaultdict(set); now=time.time(); live=0
+for f in files:
+    env=(json.load(open(f)).get("acpx") or {}).get("session_options",{}).get("env") or {}
+    for k in ("PAPERCLIP_API_KEY","GH_TOKEN","CLAUDE_CODE_OAUTH_TOKEN"):
+        if env.get(k): vals[k].add(hashlib.sha256(env[k].encode()).hexdigest()[:12])
+    t=env.get("PAPERCLIP_API_KEY","").split(".")[1]; t+="="*(-len(t)%4)
+    if json.loads(base64.urlsafe_b64decode(t))["exp"]>now: live+=1
+print(len(files),"session files;",live,"unexpired JWTs")
+for k,v in vals.items(): print(" ",k,len(v),"distinct values")
+print("mode:",oct(stat.S_IMODE(os.stat(files[0]).st_mode)))
+PY
 ```
