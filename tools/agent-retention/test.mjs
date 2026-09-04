@@ -205,6 +205,20 @@ test('envSecretPatterns catches a credential by exact value and names only the v
   assert.match(text, /\[redacted:env:PAPERCLIP_API_KEY\]/);
 });
 
+test('envSecretPatterns covers runtime credential names without classifying benign config names', () => {
+  const env = {
+    PAPERCLIP_AGENT_JWT_SECRET: 'agent-jwt-secret-value-long-enough',
+    CLAUDE_CODE_MESSAGING_TOKEN: 'messaging-token-value-long-enough',
+    GIT_CONFIG_VALUE_0: 'credential.helper',
+    ANTHROPIC_CUSTOM_HEADERS: 'X-Anthropic-Agent-Id',
+  };
+
+  assert.deepEqual(
+    envSecretPatterns(env).map((pattern) => pattern.kind),
+    ['env:PAPERCLIP_AGENT_JWT_SECRET', 'env:CLAUDE_CODE_MESSAGING_TOKEN'],
+  );
+});
+
 test('scrubFile rewrites in place without resetting the retention clock', () => {
   const root = transcriptStore({
     'agent-1/.claude/projects/proj/a.jsonl': { content: '{"out":"ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}\n', ageDays: 10 },

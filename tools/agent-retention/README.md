@@ -30,9 +30,9 @@ Every held-back item prints its reason. `sweep` exits non-zero if a deletion it 
 
 - **Scrubbing preserves mtime.** The retention clock is the file's mtime; a scrubber that touched it would keep transcripts alive forever.
 - **ACP sessions are structurally scrubbed.** The JSON is parsed and only `acpx.session_options.env` values are replaced; malformed JSON is never partially rewritten.
-- **Redaction is by kind, not by hash.** `[redacted:github-token]`, never a truncated prefix and never a digest — a digest of a token is a verification oracle for that token.
+- **Redaction is by kind, not by hash.** `[redacted:github-token]`, never a truncated prefix and never a digest — a digest of a token is a verification oracle for that token. The `[redacted:<kind>]` shape is also an interface with `tools/acp-session-guard`; changing it requires updating the guard's `REDACTION_SENTINEL` in the same change.
 - **The deletion log records metadata only** and expires on its own 400-day clock, pruned on every append so it cannot outlive its clock just because nobody ran a prune.
-- **Environment-derived patterns name the variable, never the value.** `envSecretPatterns` builds exact-match rules from the sweeper's own env so a credential with no recognisable format — `PAPERCLIP_API_KEY` — still gets caught.
+- **Environment-derived patterns name the variable, never the value.** `envSecretPatterns` builds exact-match rules from the sweeper's own env so credentials with no recognisable format — including `PAPERCLIP_API_KEY`, `PAPERCLIP_AGENT_JWT_SECRET`, and `CLAUDE_CODE_MESSAGING_TOKEN` — still get caught. Names alone are not sufficient evidence: benign variables such as `GIT_CONFIG_VALUE_0` and `ANTHROPIC_CUSTOM_HEADERS` are intentionally not classified as secrets; their contents are redacted only when they contain a credential value matched by another rule.
 - **Repo-relative worktree roots resolve against the primary checkout**, because the tool normally runs from inside one of the worktrees it is scanning.
 
 ## Scope this tool does not cover
