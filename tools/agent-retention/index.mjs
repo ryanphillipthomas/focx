@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // agent-retention — the retention clock and secret scrubber for the local agent
 // data store: Claude transcripts under
-// `<workspaces>/<agentId>/.claude/projects/**` and the git worktrees under
-// `.paperclip/worktrees/`.
+// `<workspaces>/<agentId>/.claude/projects/**`, ACP session residue under
+// `<companies>/<companyId>/acp-engine/agents/<agentId>/sessions/*.json`, and
+// git worktrees under `.paperclip/worktrees/`.
 //
 // Dependency-free. The standard it enforces is docs/data-retention.md; the
 // numbers it enforces come from retention.config.json at the repository root.
@@ -56,6 +57,14 @@ export const DEFAULT_CONFIG = {
     // A transcript is only rewritten once its session has been quiet this long.
     scrubQuietMinutes: 15,
   },
+  acpSessions: {
+    roots: ['~/.paperclip/instances/default/companies'],
+    extensions: ['.json'],
+    scrubQuietMinutes: 15,
+    // Binding safety invariant: ACP session files hold resumable state. They
+    // are scrubbed in place but are never fed into the retention deletion plan.
+    scrubOnly: true,
+  },
   worktrees: {
     roots: ['.paperclip/worktrees'],
     retentionDays: 14,
@@ -89,6 +98,7 @@ export function loadConfig({ repoRoot = REPO_ROOT, configPath, overrides = {} } 
     repoRoot,
     configPath: existsSync(path) ? path : null,
     transcripts: merge('transcripts'),
+    acpSessions: merge('acpSessions'),
     worktrees: merge('worktrees'),
     log: merge('log'),
   };
@@ -182,6 +192,36 @@ export function scrubFile(path, { apply = false, patterns = SECRET_PATTERNS } = 
   return { path, changed, counts, applied: changed && apply };
 }
 
+// ACP session JSON is different from a transcript: only the spawn-time
+// `acpx.session_options.env` residue is in scope. Keeping the key set makes the
+// adapter shape diagnosable without retaining any value. The whole JSON value
+// is parsed before any write, so malformed or unexpected files fail closed.
+export function scrubAcpSessionFile(path, { apply = false } = {}) {
+  const before = statSync(path);
+  const original = readFileSync(path, 'utf8');
+  const document = JSON.parse(original);
+  const env = document?.acpx?.session_options?.env;
+  const counts = {};
+  let changed = false;
+  if (env && typeof env === 'object' && !Array.isArray(env)) {
+    for (const key of Object.keys(env)) {
+      const redaction = REDACTION('session-env');
+      if (env[key] === redaction) continue;
+      env[key] = redaction;
+      counts['session-env'] = (counts['session-env'] ?? 0) + 1;
+      changed = true;
+    }
+  }
+  if (changed && apply) {
+    const tmp = `${path}.retention-tmp`;
+    const trailingNewline = original.endsWith('\n') ? '\n' : '';
+    writeFileSync(tmp, `${JSON.stringify(document, null, 2)}${trailingNewline}`, { mode: before.mode });
+    renameSync(tmp, path);
+    utimesSync(path, before.atime, before.mtime);
+  }
+  return { kind: 'acp-session', path, changed, counts, applied: changed && apply };
+}
+
 // ---------------------------------------------------------------------------
 // Walking the store
 // ---------------------------------------------------------------------------
@@ -218,6 +258,47 @@ export function listTranscripts(config) {
       const projects = join(base, agent.name, '.claude', 'projects');
       if (!existsSync(projects)) continue;
       walkFiles(projects, config.transcripts.extensions, files);
+    }
+  }
+  return files.sort();
+}
+
+// `<companies>/<companyId>/acp-engine/agents/<agentId>/sessions/*.json` only.
+// In particular, this does not recursively absorb the rest of a company tree.
+export function listAcpSessions(config) {
+  const files = [];
+  for (const root of config.acpSessions.roots) {
+    const companies = expandPath(root, config.repoRoot);
+    let companyEntries;
+    try {
+      companyEntries = readdirSync(companies, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const company of companyEntries) {
+      if (!company.isDirectory()) continue;
+      const agents = join(companies, company.name, 'acp-engine', 'agents');
+      let agentEntries;
+      try {
+        agentEntries = readdirSync(agents, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const agent of agentEntries) {
+        if (!agent.isDirectory()) continue;
+        const sessions = join(agents, agent.name, 'sessions');
+        let sessionEntries;
+        try {
+          sessionEntries = readdirSync(sessions, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+        for (const entry of sessionEntries) {
+          if (entry.isFile() && config.acpSessions.extensions.some((ext) => entry.name.endsWith(ext))) {
+            files.push(join(sessions, entry.name));
+          }
+        }
+      }
     }
   }
   return files.sort();
@@ -547,6 +628,14 @@ export function scrub(config, { apply = false, env = process.env, now = Date.now
     if (apply && !result.applied) skipped.push(result.path);
     results.push(result);
   }
+  const acpQuietMs = (config.acpSessions.scrubQuietMinutes ?? 15) * 60_000;
+  for (const path of listAcpSessions(config)) {
+    const isQuiet = now - statSync(path).mtimeMs >= acpQuietMs;
+    const result = scrubAcpSessionFile(path, { apply: apply && isQuiet });
+    if (!result.changed) continue;
+    if (apply && !result.applied) skipped.push(result.path);
+    results.push(result);
+  }
   const counts = {};
   for (const result of results) {
     for (const [kind, n] of Object.entries(result.counts)) counts[kind] = (counts[kind] ?? 0) + n;
@@ -680,7 +769,8 @@ function main(argv) {
 
   if (command === 'status') {
     const plan = [...planTranscripts(config), ...planWorktrees(config)];
-    if (json) return void console.log(JSON.stringify({ config, plan }, null, 2));
+    const acpSessions = listAcpSessions(config).map((path) => ({ kind: 'acp-session', path, bytes: statSync(path).size }));
+    if (json) return void console.log(JSON.stringify({ config, plan, acpSessions }, null, 2));
     const transcripts = plan.filter((entry) => entry.kind === 'transcript');
     const worktrees = plan.filter((entry) => entry.kind === 'worktree');
     const sum = (entries) => entries.reduce((total, entry) => total + entry.bytes, 0);
@@ -693,6 +783,7 @@ function main(argv) {
       `  worktrees    ${worktrees.length} trees, ${human(sum(worktrees))}, retention ${config.worktrees.retentionDays}d` +
         ` — ${worktrees.filter((e) => e.verdict === 'expire').length} reclaimable`,
     );
+    console.log(`  acp sessions ${acpSessions.length} files, ${human(sum(acpSessions))}, scrub-only — never deleted`);
     for (const entry of plan.filter((e) => e.verdict === 'expire')) {
       console.log(`    expire  ${short(entry.path, config)}  ${human(entry.bytes)}  ${entry.ageDays}d  ${entry.reason}`);
     }

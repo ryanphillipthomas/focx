@@ -9,6 +9,7 @@ Every agent run leaves two on-host records, both unencrypted, both holding whate
 | Store | Path | What it holds |
 |---|---|---|
 | **Transcripts** | `~/.paperclip/instances/default/workspaces/<agentId>/.claude/projects/**` | The full session log: every prompt, every tool call, every tool result — including cloned third-party source and any secret value an agent ever printed |
+| **ACP sessions** | `~/.paperclip/instances/default/companies/<companyId>/acp-engine/agents/<agentId>/sessions/*.json` | Resumable ACP session state, including spawn-time `acpx.session_options.env` residue |
 | **Worktrees** | `<checkout>/.paperclip/worktrees/` | A full working copy of the repository per issue, plus whatever the run wrote into it |
 
 Out of scope, deliberately: agent memory under `.claude/memory/`, the primary checkout, and Paperclip's own database. Memory is durable state an agent is meant to keep, not a byproduct of a run.
@@ -18,6 +19,7 @@ Out of scope, deliberately: agent memory under `.claude/memory/`, the primary ch
 | Store | Retention | Clock starts at |
 |---|---|---|
 | Transcripts | **30 days** | last write to the transcript file |
+| ACP sessions | **Scrub-only; never deleted** | 15-minute quiet window before in-place env redaction |
 | Worktrees | **14 days** | last write anywhere in the tree |
 | Deletion log | **400 days** | the deletion it records |
 
@@ -42,11 +44,13 @@ The scrubber redacts secret-shaped strings out of transcripts in place, replacin
 
 It matches by shape (Anthropic, OpenAI, GitHub, AWS, Google, Slack, Stripe keys, JWTs, `Bearer` headers, PEM private-key blocks, and `*_TOKEN=`/`"apiSecret":` style assignments) **and** by exact value for any credential visible in the sweeper's own environment — which is what catches a token whose format we have no rule for, `PAPERCLIP_API_KEY` included.
 
+ACP sessions use a narrower structural rule: parse the JSON, retain the complete `acpx.session_options.env` key set, and replace every value with `[redacted:session-env]`. No other session field is modified semantically. ACP session files never enter `planTranscripts()` or `sweep()`; deleting one can destroy message history and resume capability.
+
 ### The honest limit
 
 This is periodic scrubbing, not on-write scrubbing. A transcript is only rewritten once its session has been quiet for 15 minutes, because rewriting a file a live session still holds open can drop that session's later lines. So a secret printed at 10:00 is on disk unredacted until the scrub pass that follows the session going quiet.
 
-Closing that window needs a write-time hook in the Claude Code settings that Paperclip generates for each agent — **the harness owns those settings, this repository does not**. Until that lands, the guarantee is "a printed token does not become a *permanent* on-disk record", not "a printed token never touches disk".
+Closing that window needs write-time changes in Paperclip — **the harness owns those writes, this repository does not**. Until Paperclip ask 1 from FOC-81 lands, a freshly spawned ACP session remains plaintext for up to one scrub interval after becoming quiet. The guarantee is "a token does not become a *48-hour plaintext record*", not "a token never touches disk".
 
 ## Making it run
 

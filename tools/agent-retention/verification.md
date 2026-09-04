@@ -19,10 +19,16 @@ The suite builds a real transcript store and a real git repository with real wor
 | Dry run deletes nothing | `scrub is dry-run by default`, and the dry-run half of the sweep test |
 | The deletion log expires on its own clock | `the deletion log expires on its own clock` |
 | Scrubbing does not extend a file's retention | `scrubFile rewrites in place without resetting the retention clock` |
+| ACP discovery reaches the separate company/session tree | `ACP discovery reaches only the exact company session corpus` |
+| ACP env values are redacted while keys, other state, and mtime survive | `ACP scrubbing redacts every env value, keeps keys and other session state, and preserves mtime` |
+| A live ACP session is deferred for the quiet window | `ACP sessions respect the quiet window and are scrubbed on a later pass` |
+| No ACP session can enter the deletion plan | `sweep never plans or deletes ACP sessions, regardless of age` |
 | The redacted value is gone, including any prefix of it | `scrubText leaves the secret value out of the output entirely` |
 | The deletion log records metadata, never content | asserted inside the sweep test |
 
 A reviewer who does not trust the assertions can invert one — change `retentionDays` in a fixture, or delete the `mergedInto` check — and watch the suite fail.
+
+The ACP unit tests establish the file-safety invariants, but they do not establish runtime resume compatibility. Before enabling `scrub --apply` against the real company tree, Security must resume a closed session whose copied fixture was scrubbed and complete one live-session soak. That operational gate exists because a runtime could read `session_options.env` back even though the current corpus suggests it is write-once residue.
 
 ## 2. Prove it is scheduled on the host
 

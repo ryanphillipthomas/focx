@@ -15,6 +15,7 @@ import {
   appendDeletionLog,
   classifyWorktree,
   envSecretPatterns,
+  listAcpSessions,
   listTranscripts,
   loadConfig,
   logPath,
@@ -24,6 +25,7 @@ import {
   scheduledScript,
   pruneDeletionLog,
   scrub,
+  scrubAcpSessionFile,
   scrubFile,
   scrubText,
   sweep,
@@ -64,6 +66,16 @@ function transcriptStore(files) {
   return root;
 }
 
+function acpSessionStore(files) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'retention-companies-')));
+  for (const [relPath, { content, ageDays = 0 }] of Object.entries(files)) {
+    const full = join(root, relPath);
+    write(full, content);
+    if (ageDays) age(full, ageDays);
+  }
+  return root;
+}
+
 function git(cwd, args) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim();
 }
@@ -97,12 +109,13 @@ function addWorktree(root, name, { unmerged = false, dirty = false, ageDays = 0 
   return path;
 }
 
-function configFor({ transcriptRoot, repoRoot, logDir, ...rest } = {}) {
+function configFor({ transcriptRoot, acpSessionRoot, repoRoot, logDir, ...rest } = {}) {
   const root = repoRoot ?? mkdtempSync(join(tmpdir(), 'retention-root-'));
   return {
     repoRoot: root,
     configPath: null,
     transcripts: { ...DEFAULT_CONFIG.transcripts, roots: transcriptRoot ? [transcriptRoot] : [], ...(rest.transcripts ?? {}) },
+    acpSessions: { ...DEFAULT_CONFIG.acpSessions, roots: acpSessionRoot ? [acpSessionRoot] : [], ...(rest.acpSessions ?? {}) },
     worktrees: { ...DEFAULT_CONFIG.worktrees, mergedInto: ['develop'], ...(rest.worktrees ?? {}) },
     log: { ...DEFAULT_CONFIG.log, dir: logDir ?? mkdtempSync(join(tmpdir(), 'retention-log-')), ...(rest.log ?? {}) },
   };
@@ -248,6 +261,68 @@ test('scrub covers .claude/projects only, never agent memory', () => {
   });
   const found = listTranscripts(configFor({ transcriptRoot: root }));
   assert.deepEqual(found.map((p) => p.replace(root, '')), ['/agent-1/.claude/projects/proj/a.jsonl']);
+});
+
+test('ACP discovery reaches only the exact company session corpus', () => {
+  const root = acpSessionStore({
+    'company-1/acp-engine/agents/agent-1/sessions/yes.json': { content: '{}' },
+    'company-1/acp-engine/agents/agent-1/sessions/nested/no.json': { content: '{}' },
+    'company-1/acp-engine/agents/agent-1/other/no.json': { content: '{}' },
+    'company-1/acp-engine/agents/agent-1/sessions/no.txt': { content: '{}' },
+  });
+  const found = listAcpSessions(configFor({ acpSessionRoot: root }));
+  assert.deepEqual(found.map((p) => p.replace(root, '')), ['/company-1/acp-engine/agents/agent-1/sessions/yes.json']);
+});
+
+test('ACP scrubbing redacts every env value, keeps keys and other session state, and preserves mtime', () => {
+  const root = acpSessionStore({
+    'company-1/acp-engine/agents/agent-1/sessions/closed.json': {
+      content: `${JSON.stringify({ acpx: { session_options: { env: { PAPERCLIP_API_KEY: 'opaque', EMPTY: '', COUNT: 7 } } }, message: 'ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }, null, 2)}\n`,
+      ageDays: 1,
+    },
+  });
+  const path = join(root, 'company-1/acp-engine/agents/agent-1/sessions/closed.json');
+  const before = statSync(path).mtimeMs;
+  const result = scrubAcpSessionFile(path, { apply: true });
+  const after = JSON.parse(readFileSync(path, 'utf8'));
+  assert.equal(result.counts['session-env'], 3);
+  assert.deepEqual(Object.keys(after.acpx.session_options.env), ['PAPERCLIP_API_KEY', 'EMPTY', 'COUNT']);
+  assert.deepEqual(Object.values(after.acpx.session_options.env), Array(3).fill('[redacted:session-env]'));
+  assert.match(after.message, /^ghp_/, 'content outside acpx.session_options.env stays untouched');
+  assert.equal(statSync(path).mtimeMs, before);
+});
+
+test('ACP sessions respect the quiet window and are scrubbed on a later pass', () => {
+  const secret = 'unexpired-credential';
+  const session = (ageDays = 0) => ({
+    content: JSON.stringify({ acpx: { session_options: { env: { PAPERCLIP_API_KEY: secret } } } }),
+    ageDays,
+  });
+  const root = acpSessionStore({
+    'company-1/acp-engine/agents/agent-1/sessions/live.json': session(),
+    'company-1/acp-engine/agents/agent-1/sessions/quiet.json': session(1),
+  });
+  const config = configFor({ acpSessionRoot: root });
+  const first = scrub(config, { apply: true, env: {} });
+  assert.deepEqual(first.skipped.map((p) => p.split('/').pop()), ['live.json']);
+  assert.equal(readFileSync(join(root, 'company-1/acp-engine/agents/agent-1/sessions/live.json'), 'utf8').includes(secret), true);
+  assert.equal(readFileSync(join(root, 'company-1/acp-engine/agents/agent-1/sessions/quiet.json'), 'utf8').includes(secret), false);
+  age(join(root, 'company-1/acp-engine/agents/agent-1/sessions/live.json'), 1);
+  scrub(config, { apply: true, env: {} });
+  assert.equal(readFileSync(join(root, 'company-1/acp-engine/agents/agent-1/sessions/live.json'), 'utf8').includes(secret), false);
+});
+
+test('sweep never plans or deletes ACP sessions, regardless of age', () => {
+  const root = acpSessionStore({
+    'company-1/acp-engine/agents/agent-1/sessions/ancient.json': {
+      content: JSON.stringify({ acpx: { session_options: { env: { TOKEN: 'still-session-state' } } } }),
+      ageDays: 365,
+    },
+  });
+  const path = join(root, 'company-1/acp-engine/agents/agent-1/sessions/ancient.json');
+  const result = sweep(configFor({ acpSessionRoot: root, repoRoot: gitRepo() }), { apply: true });
+  assert.equal(result.plan.some((entry) => entry.kind === 'acp-session'), false);
+  assert.equal(existsSync(path), true, 'ACP session state must never enter the deletion path');
 });
 
 // --- transcript expiry -----------------------------------------------------

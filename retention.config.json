@@ -7,6 +7,13 @@
     "activeGraceMinutes": 120,
     "scrubQuietMinutes": 15
   },
+  "acpSessions": {
+    "roots": ["~/.paperclip/instances/default/companies"],
+    "extensions": [".json"],
+    "scrubQuietMinutes": 15,
+    "scrubOnly": true,
+    "comment": "ACP session state is never eligible for retention deletion. Only acpx.session_options.env values are redacted."
+  },
   "worktrees": {
     "roots": [".paperclip/worktrees"],
     "retentionDays": 14,
