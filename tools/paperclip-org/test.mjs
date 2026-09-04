@@ -804,6 +804,39 @@ test('an open worktree-agent issue with no project is drift', () => {
     'an agent with no worktree needs no project — that is the point of workspace none')
 })
 
+// POST /issues dedupes on (title, description) and returns the existing issue,
+// discarding the fields sent with the retry. An agent retrying a handoff gets
+// its first attempt back with the assignee dropped, and the response looks like
+// success. The child issue is then work handed to nobody.
+test('an open child issue with no assignee is drift', () => {
+  const { roster, fragments } = load()
+  const rendered = renderAll(roster, fragments)
+  const pre = linkRoot()
+  const agents = asLive(roster, rendered, pre.opts)
+  const cfgs = new Map(agents.map((a) => [a.id, { adapterType: a.adapterType, adapterConfig: a.adapterConfig, runtimeConfig: a.runtimeConfig, permissions: a.permissions }]))
+  const bundles = new Map(agents.map((a) => [a.id, a.instructionsBundle.files['AGENTS.md']]))
+  const links = satisfiedLocalSkills(roster, agents, pre)
+  const base = { agents, routines: [], triggers: new Map(), configurations: cfgs, bundles, company: { budgetMonthlyCents: 6000 } }
+  const row = (issues) => verify(roster, { ...base, issues }, rendered, { localSkills: links.opts })
+    .find((r) => /someone to do it/.test(r.condition))
+  const who = agents[0].id
+
+  assert.ok(row([]).pass, 'no issues is not drift')
+  assert.ok(row([{ id: 'i1', status: 'todo', parentId: 'p1', assigneeAgentId: who, title: 'ok' }]).pass,
+    'a child issue with an assignee is a complete handoff')
+  assert.ok(!row([{ id: 'i2', status: 'todo', parentId: 'p1', assigneeAgentId: null, title: 'nobody will do this' }]).pass,
+    'a child issue with no assignee is work handed to nobody')
+  assert.ok(row([{ id: 'i3', status: 'done', parentId: 'p1', assigneeAgentId: null, title: 'closed' }]).pass,
+    'a closed issue is history')
+  assert.ok(row([{ id: 'i4', status: 'todo', parentId: null, assigneeAgentId: null, title: 'top-level backlog' }]).pass,
+    'a top-level issue is not a handoff — a human may file one unassigned')
+
+  const rows = verify(roster, { ...base, issues: null }, rendered, { localSkills: links.opts })
+  const unread = rows.find((r) => /someone to do it/.test(r.condition))
+  assert.equal(unread.pass, false, 'an unread list must not verify as a clean one')
+  rmSync(links.root, { recursive: true, force: true })
+})
+
 test('verify refuses to vouch for issues it could not read', () => {
   const { roster, fragments } = load()
   const rendered = renderAll(roster, fragments)

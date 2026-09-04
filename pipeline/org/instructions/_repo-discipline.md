@@ -40,6 +40,18 @@ When you hand work to another agent by creating a child issue, **carry the proje
 
 It fails at the very start of their run, before they can report anything useful, so the cause looks like their agent being broken rather than your handoff being incomplete.
 
+**Read the issue back after you create it.** `POST /issues` deduplicates on
+title and description: an identical create returns the issue that already
+exists and silently discards the fields you sent with it. So if a handoff looks
+like it failed and you retry it verbatim, you get your first attempt back —
+assignee dropped, project dropped — and the response looks like a success. It
+reads as the assignee vanishing; it is the create never happening.
+
+After creating a child issue, fetch it by id and confirm three things: the id is
+not one you already created, the assignee is who you meant, and the project came
+across. If you must retry, change the title — a distinct title is what makes it
+a new issue rather than a lookup of the old one.
+
 ### Searching your memory
 
 Your memory lives under `$AGENT_HOME`, and you search it with `qmd`. The

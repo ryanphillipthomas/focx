@@ -1069,6 +1069,27 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     detail: linkMissing.slice(0, 3).join('; '),
   })
 
+  // POST /issues deduplicates on (title, description): an identical create
+  // returns the EXISTING issue and silently discards the fields you sent with
+  // it. An agent that retries a handoff — the natural response to any hiccup —
+  // gets back its first attempt, assignee and all dropped, and reports the
+  // assignee as having vanished. Reproduced 2026-09-03: create without an
+  // assignee, retry the same title and body with one, and the stored issue
+  // still has none.
+  //
+  // The cost lands on the child issue: work handed to nobody, which no agent
+  // will ever pick up and no other check notices. A parented issue with no
+  // assignee is that, and is never legitimate — a handoff names its recipient.
+  const orphanWork = !issuesReadable ? [] : live.issues
+    .filter((i) => OPEN_STATUSES.has(i.status) && i.parentId && !i.assigneeAgentId)
+    .map((i) => String(i.title ?? i.id).slice(0, 44))
+  rows.push({
+    n: '—',
+    condition: 'Every open child issue has someone to do it',
+    pass: issuesReadable && orphanWork.length === 0,
+    detail: !issuesReadable ? 'could not read issues — this check could not run' : orphanWork.slice(0, 3).join('; '),
+  })
+
   rows.push({
     n: '—',
     condition: 'Open worktree-agent issues all carry a project',
