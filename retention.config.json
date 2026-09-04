@@ -1,0 +1,20 @@
+{
+  "comment": "The retention clock for the local agent data store. The standard behind these numbers is docs/data-retention.md; the mechanism that enforces them is tools/agent-retention/. Changing a retentionDays value here changes what is deleted on the next sweep — it is a Legal & Privacy decision, not a config tidy-up.",
+  "transcripts": {
+    "roots": ["~/.paperclip/instances/default/workspaces"],
+    "extensions": [".jsonl", ".json"],
+    "retentionDays": 30,
+    "activeGraceMinutes": 120,
+    "scrubQuietMinutes": 15
+  },
+  "worktrees": {
+    "roots": [".paperclip/worktrees"],
+    "retentionDays": 14,
+    "activeGraceMinutes": 120,
+    "mergedInto": ["origin/develop", "develop"]
+  },
+  "log": {
+    "dir": "~/.paperclip/retention",
+    "retentionDays": 400
+  }
+}

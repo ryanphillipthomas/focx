@@ -10,6 +10,8 @@
   },
   "scripts": {
     "drift-check": "node tools/drift-check/index.mjs",
-    "test:drift-check": "node --test tools/drift-check/test.mjs"
+    "test:drift-check": "node --test tools/drift-check/test.mjs",
+    "agent-retention": "node tools/agent-retention/index.mjs",
+    "test:agent-retention": "node --test tools/agent-retention/test.mjs"
   }
 }
