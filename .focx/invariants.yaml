@@ -23,5 +23,12 @@
     "maxActiveImplementationPRs": 1,
     "legacyApplyAllowed": false,
     "agentDeletionAllowed": false
+  },
+  "companyPurpose": "Focx.ai is an AI product and experience company encompassing end-to-end technology-company operations.",
+  "agentAssignment": {
+    "ownership": "company-wide",
+    "projectScope": "Any explicitly assigned Focx.ai project appropriate to the role",
+    "context": "Project, repository or workspace, acceptance criteria, and source revision are task-specific",
+    "access": "Assignment does not itself grant credentials or broaden permissions"
   }
 }

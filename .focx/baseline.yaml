@@ -16,6 +16,11 @@
     },
     {
       "status": "active",
+      "statement": "Agents work for Focx.ai across assigned projects. The company covers AI products, experiences and end-to-end technology-company operations; Connect is its only currently active product, not a permanent limit on company scope.",
+      "source": "Ryan: company-wide agent assignment clarification, 2026-09-04"
+    },
+    {
+      "status": "active",
       "statement": "Three pilot roles staged; all 26 existing agent identities retained and paused.",
       "source": ".focx/agents.json"
     },

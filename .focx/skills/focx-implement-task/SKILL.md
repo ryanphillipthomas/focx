@@ -1,13 +1,13 @@
 ---
 name: focx-implement-task
-description: Implement one approved Connect task in an isolated worktree, with a single reviewable PR and independent QA handoff.
+description: Implement one approved task for an assigned Focx.ai project in an isolated worktree, with a single reviewable PR and independent QA handoff.
 metadata:
   version: "0.1.0"
 ---
 
 # focx-implement-task
 
-Check the task's approval, criteria, base revision, and linked PR before editing. Search the open queue for the same issue; use its implementation branch when appropriate. If another implementation task is active, report the conflict to Ryan before starting a second.
+Check the task's approval, assigned project and repository, criteria, base revision, and linked PR before editing. Use that project's instructions and design/deployment constraints; do not infer them from Connect. Search the open queue for the same issue; use its implementation branch when appropriate. If another implementation task is active, report the conflict to Ryan before starting a second.
 
 Confirm an isolated worktree and record its base and working branch. Change only what satisfies the task, using existing design tokens and interfaces. Do not import a legacy feature merely because it exists; adoption must appear in the approved criteria.
 

@@ -4,7 +4,7 @@ The `.focx` control layer establishes the current pilot. Historical records are 
 
 | Concern | Canonical authority | Consumers and limits |
 |---|---|---|
-| Locked identity and role separation | [invariants](../.focx/invariants.yaml) | Focx company/platform/brand; Connect only active product; Ryan approves; QA independently verifies |
+| Locked identity and role separation | [invariants](../.focx/invariants.yaml) | Focx company/platform/brand; Connect only active product; Ryan approves; QA independently verifies; agents serve assigned projects company-wide |
 | Active state and legacy adoption | [baseline](../.focx/baseline.yaml) | Distinguishes active, superseded, retired and unknown claims at source revisions |
 | Agent desired state | [agent manifest](../.focx/agents.json) | All 26 identities retained, three paused pilot roles, 23 disabled candidates |
 | Agent behavior and methods | [roles](../.focx/roles/) and [versioned skills](../.focx/skills/) | Visible Paperclip instruction files; old prompts are not inherited |

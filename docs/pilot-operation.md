@@ -1,5 +1,7 @@
 # Focx v0.1 pilot
 
+Focx.ai is an AI product and experience company covering end-to-end technology-company operations. Agents belong to Focx.ai and may serve any explicitly assigned project within their role. Connect is the only currently active product, not the permanent scope of the company. Project context, repository/workspace and revision belong to each task; assignment alone does not expand access.
+
 Ryan owns priorities, approval and deliberate starts. The Steward reconciles architecture/documentation, the Implementation Engineer executes one approved task, and QA verifies independently. All three remain paused during migration. The other 23 identities remain disabled retirement candidates, with their historical configurations retained for comparison.
 
 `.focx/agents.json` is the current desired-state manifest. `pipeline/org/roster.json` is historical and must not be applied. The old CLI refuses `--apply` before contacting Paperclip, including all former override flags. This guard exists only in this revision and later: do not execute an older checkout's reconciler.
