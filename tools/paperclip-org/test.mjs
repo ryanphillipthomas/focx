@@ -787,8 +787,19 @@ test('verify passes against a live org built from the roster, and catches drift'
   c.adapterConfig = { ...c.adapterConfig, env: { ...c.adapterConfig.env, GH_TOKEN: 'x' } }
   withToken.set(stewardId, c)
   const after2 = verify(roster, { ...live, configurations: withToken }, rendered, { localSkills: links.opts })
-  rmSync(links.root, { recursive: true, force: true })
   assert.ok(after2.find((r) => r.n === 11 && !r.pass), 'check 11 catches Design Steward gaining GH_TOKEN')
+
+  // FOC-69: unapplied state leaves every desk-owned routine unpinned, but the
+  // row used to print only the first three. A status report quoting it said
+  // three routines were unset when five were. A truncated detail has to say so.
+  const unpinned = live.routines.map((r) => ({ ...r, executionWorkspaceSettings: null }))
+  const after3 = verify(roster, { ...live, routines: unpinned }, rendered, { localSkills: links.opts })
+  rmSync(links.root, { recursive: true, force: true })
+  const row8 = after3.find((r) => r.n === 8)
+  const desk = roster.routines.filter((r) => deskWorkspaceSettings(roster, r.owner))
+  assert.equal(desk.length, 5, 'five routines are desk-owned')
+  assert.ok(!row8.pass, 'check 8 fails when the desk routines are unpinned')
+  assert.match(row8.detail, /\+2 more/, 'the row says how many failures it elided')
 })
 
 // Paperclip writes its own keys into adapterConfig — the managed instructions

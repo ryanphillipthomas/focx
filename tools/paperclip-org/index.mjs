@@ -978,6 +978,12 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   const rows = []
   const check = (n, condition, pass, detail = '') => rows.push({ n, condition, pass, detail })
 
+  // A truncated failure detail reads as the whole failure. FOC-69's routine row
+  // elided two of the five desk-owned routines, and the status report it fed
+  // back said three were unset. Say how many were left out.
+  const some = (list, sep = '; ', n = 3) =>
+    list.slice(0, n).join(sep) + (list.length > n ? `${sep}… +${list.length - n} more` : '')
+
   const all = live.agents ?? []
   const active = all.filter((a) => a.status !== 'terminated')
   const bySlug = new Map(active.map((a) => [liveSlug(a), a]).filter(([s]) => s))
@@ -1013,7 +1019,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   const teams = managers.map((m) => `${m}:${teamSize(m)}`).sort().join(' ')
   check(4, `Reporting lines match the roster (${teams})`,
     treeBad.length === 0 && active.length === roster.expectedAgentCount,
-    treeBad.slice(0, 3).join('; '))
+    some(treeBad))
 
   const modelBad = []
   for (const [slug, a] of bySlug) {
@@ -1027,10 +1033,10 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   const designModels = ['product-designer', 'design-steward']
     .every((s) => (cfg.get(bySlug.get(s)?.id)?.adapterConfig ?? {}).model === 'claude-opus-5')
   check(5, 'Models and reasoning assigned per role; both design agents on Opus 5',
-    modelBad.length === 0 && designModels, modelBad.slice(0, 3).join('; '))
+    modelBad.length === 0 && designModels, some(modelBad))
 
   const budgetBad = active.filter((a) => a.budgetMonthlyCents !== 200).map((a) => a.name)
-  check(6, 'Every agent has a $2.00/month ceiling', budgetBad.length === 0, budgetBad.slice(0, 3).join(', '))
+  check(6, 'Every agent has a $2.00/month ceiling', budgetBad.length === 0, some(budgetBad, ', '))
 
   const totalWant = roster.agents.length * 200
   check(7, 'Company ceiling is $60.00 and agent budgets fit inside it',
@@ -1056,7 +1062,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   }
   const deskRoutines = roster.routines.filter((r) => deskWorkspaceSettings(roster, r.owner))
   check(8, `${roster.routines.length} routines active, one enabled schedule trigger each; ${deskRoutines.length} desk-owned pinned to agent_default`,
-    routineBad.length === 0, routineBad.slice(0, 3).join('; '))
+    routineBad.length === 0, some(routineBad))
 
   const wakeBad = []
   for (const [slug, a] of bySlug) {
@@ -1071,7 +1077,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   }
   const hbOn = roster.agents.filter((a) => a.run.heartbeat).map((a) => a.slug)
   check(9, `Waking matches the roster: wakeOnDemand everywhere, heartbeat on ${hbOn.length} (${hbOn.join(', ') || 'none'})`,
-    wakeBad.length === 0, wakeBad.slice(0, 3).join('; '))
+    wakeBad.length === 0, some(wakeBad))
 
   const bundleBad = []
   for (const [slug, a] of bySlug) {
@@ -1086,7 +1092,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   const deptOk = roster.agents.every((a) =>
     a.slug === rootSlug || a.reportsTo === rootSlug || deptHeads.includes(a.reportsTo))
   check(10, 'Departments separated; live bundles match a fresh local render',
-    bundleBad.length === 0 && deptOk, bundleBad.length ? `drifted: ${bundleBad.slice(0, 3).join(', ')}` : '')
+    bundleBad.length === 0 && deptOk, bundleBad.length ? `drifted: ${some(bundleBad, ', ')}` : '')
 
   const dc = roster.designChain
   // Independence moved from "QA has a unique cwd" to git enforcing it: QA works
@@ -1108,13 +1114,13 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
   check(11, 'Implementation and verification independent, in both chains',
     qaUnique && stewardNoToken && hireBad.length === 0 && assignBad.length === 0 && dc.proposer !== dc.approver,
     [!qaUnique && `${verifier} is not on a per-issue worktree`, !stewardNoToken && 'Design Steward has GH_TOKEN',
-      hireBad.length && 'canCreateAgents true somewhere', assignBad.length && `canAssignTasks wrong: ${assignBad.slice(0, 2)}`]
+      hireBad.length && 'canCreateAgents true somewhere', assignBad.length && `canAssignTasks wrong: ${some(assignBad, ', ', 2)}`]
       .filter(Boolean).join('; '))
 
   const goalMissing = [...(renderedBySlug ?? new Map())].filter(([, t]) => !t.includes(roster.goal)).map(([s]) => s)
   check(12, 'The whole org is pointed at the 2,000-user goal',
     goalMissing.length === 0 && active.length === roster.expectedAgentCount,
-    goalMissing.length ? `missing goal: ${goalMissing.slice(0, 3).join(', ')}` : `${active.length} agents`)
+    goalMissing.length ? `missing goal: ${some(goalMissing, ', ')}` : `${active.length} agents`)
 
   // Env and secrets, checked alongside the twelve.
   const envBad = []
@@ -1141,7 +1147,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     }
     for (const problem of checkAdapterConfig(w.adapter.type, cfg.get(a.id)?.adapterConfig ?? {})) envBad.push(`${slug} ${problem}`)
   }
-  rows.push({ n: '—', condition: 'env and secrets composed correctly', pass: envBad.length === 0, detail: envBad.slice(0, 3).join('; ') })
+  rows.push({ n: '—', condition: 'env and secrets composed correctly', pass: envBad.length === 0, detail: some(envBad) })
 
   // Worktrees are cut from the PROJECT's checkout, so an issue with no project
   // leaves its agent no source repo: the run dies inside workspace provisioning
@@ -1170,7 +1176,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     n: '—',
     condition: `Claude Code skills the roster claims are installed (${cc.wanted})`,
     pass: cc.unresolved.length === 0,
-    detail: cc.unresolved.slice(0, 3).join('; '),
+    detail: some(cc.unresolved),
   })
 
   // Without this every claude agent shares ~/.claude: one memory store for the
@@ -1188,7 +1194,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     n: '—',
     condition: 'Claude agents have their own config dir, so memory is per-agent',
     pass: cfgDirBad.length === 0,
-    detail: cfgDirBad.slice(0, 3).join('; '),
+    detail: some(cfgDirBad),
   })
 
   // A skill the roster assigns but the runtime never loads is worse than one it
@@ -1203,7 +1209,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     n: '—',
     condition: `Workspace-none agents have their skills attached locally (${linkExpect.length} link(s))`,
     pass: linkMissing.length === 0,
-    detail: linkMissing.slice(0, 3).join('; '),
+    detail: some(linkMissing),
   })
 
   // POST /issues deduplicates on (title, description): an identical create
@@ -1224,14 +1230,14 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     n: '—',
     condition: 'Every open child issue has someone to do it',
     pass: issuesReadable && orphanWork.length === 0,
-    detail: !issuesReadable ? 'could not read issues — this check could not run' : orphanWork.slice(0, 3).join('; '),
+    detail: !issuesReadable ? 'could not read issues — this check could not run' : some(orphanWork),
   })
 
   rows.push({
     n: '—',
     condition: 'Open worktree-agent issues all carry a project',
     pass: issuesReadable && projectless.length === 0,
-    detail: !issuesReadable ? 'could not read issues — this check could not run' : projectless.slice(0, 3).join('; '),
+    detail: !issuesReadable ? 'could not read issues — this check could not run' : some(projectless),
   })
 
   // FOC-69. The mirror of the check above: worktree agents must carry the
@@ -1246,7 +1252,7 @@ export function verify(roster, live, renderedBySlug, opts = {}) {
     n: '—',
     condition: 'Open desk-agent issues are pinned to agent_default, and no worktree-agent issue is',
     pass: issuesReadable && pinDrift.length === 0,
-    detail: !issuesReadable ? 'could not read issues — this check could not run' : pinDrift.slice(0, 3).join('; '),
+    detail: !issuesReadable ? 'could not read issues — this check could not run' : some(pinDrift),
   })
 
   return rows
