@@ -44,6 +44,11 @@
       "status": "unknown",
       "statement": "Pilot runtime enforcement and isolated QA session behavior are independently verified.",
       "source": "Configuration readback only; first-run verification pending."
+    },
+    {
+      "status": "active",
+      "statement": "Daily run caps are removed for the three development pilot roles. Per-run bounds, pauses and manual starts remain.",
+      "source": "Ryan: remove the daily cap during development, 2026-09-04"
     }
   ],
   "recoveryCandidate": {

@@ -22,7 +22,9 @@
     "maxActiveImplementationTasks": 1,
     "maxActiveImplementationPRs": 1,
     "legacyApplyAllowed": false,
-    "agentDeletionAllowed": false
+    "agentDeletionAllowed": false,
+    "environment": "development",
+    "dailyRunCapPolicy": "uncapped-during-development"
   },
   "companyPurpose": "Focx.ai is an AI product and experience company encompassing end-to-end technology-company operations.",
   "agentAssignment": {
