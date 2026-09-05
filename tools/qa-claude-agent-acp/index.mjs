@@ -13,9 +13,11 @@ export const COMMAND = 'node tools/qa-claude-agent-acp/index.mjs'
 export const entrypoint = () => join(homedir(), '.paperclip/cli/current/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js')
 const requireThat = (ok, message) => { if (!ok) throw Error(message) }
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
-export function mergeSettings(existing, rules, cwd) {
+export function mergeSettings(existing, rules, cwd, denyRules) {
   requireThat(object(existing) && object(existing.permissions), 'Expected Paperclip local settings before QA launch')
+  requireThat(Array.isArray(denyRules) && denyRules.length > 0, 'Declared QA tool denials are required')
   const p = existing.permissions
+  requireThat(p.deny === undefined || (Array.isArray(p.deny) && p.deny.every(x => typeof x === 'string')), 'Malformed local deny-list')
   requireThat(p.defaultMode === 'default', 'Unexpected permission mode; refusing to override it')
   requireThat(Array.isArray(p.allow) && p.allow.every(x => typeof x === 'string'), 'Malformed local allow-list')
   // These are the installed Paperclip writer's five rules, not agent authority.
@@ -24,7 +26,7 @@ export function mergeSettings(existing, rules, cwd) {
   const vendor = ['Bash(curl:*)', 'Bash(env:*)', 'Bash(env)', `Bash(${cwd}/scripts/paperclip-issue-update.sh:*)`, `Bash(${cwd}/scripts/paperclip:*)`]
   requireThat(vendor.every(x => p.allow.includes(x)), 'Paperclip local settings are incomplete')
   requireThat(p.allow.every(x => vendor.includes(x) || rules.includes(x)), 'Unknown or stale local permission rule; review required')
-  return {...existing, permissions:{...p, allow:[...new Set([...vendor, ...rules])].sort()}}
+  return {...existing, permissions:{...p, allow:[...new Set([...vendor, ...rules])].sort(), deny:[...new Set([...(p.deny ?? []), ...denyRules])].sort()}}
 }
 export function validateContext({source, env, cwd, root, branch, commonDir}) {
   const qa = source.manifest.agents.find(a => a.roleKey === 'qa-engineer')
@@ -44,7 +46,7 @@ export function prepare({env=process.env, cwd=realpathSync(process.cwd()), root=
   requireThat(!lstatSync(join(cwd,'.claude')).isSymbolicLink(), 'Refusing symlinked .claude directory')
   const settingsPath = join(cwd,'.claude/settings.local.json')
   requireThat(lstatSync(settingsPath).isFile() && !lstatSync(settingsPath).isSymbolicLink(), 'Local settings must be a regular file')
-  const next = mergeSettings(JSON.parse(readFileSync(settingsPath,'utf8')), rules, cwd)
+  const next = mergeSettings(JSON.parse(readFileSync(settingsPath,'utf8')), rules, cwd, source.manifest.agents.find(a => a.roleKey === 'qa-engineer').adapterLocal.permissionsDeny)
   const temp = `${settingsPath}.qa-${process.pid}`
   try {
     writeFileSync(temp, JSON.stringify(next,null,2)+'\n', {flag:'wx', mode:0o600})
@@ -52,7 +54,7 @@ export function prepare({env=process.env, cwd=realpathSync(process.cwd()), root=
   } finally { try { unlinkSync(temp) } catch (e) { if(e.code !== 'ENOENT') throw e } }
   const readback = JSON.parse(readFileSync(settingsPath,'utf8'))
   requireThat(JSON.stringify(readback) === JSON.stringify(next), 'Local settings readback differs')
-  return {rules:rules.length, digest:createHash('sha256').update(JSON.stringify(rules)).digest('hex')}
+  return {rules:rules.length, digest:createHash('sha256').update(JSON.stringify({allow:next.permissions.allow,deny:next.permissions.deny})).digest('hex')}
 }
 async function main() {
   const target = realpathSync(entrypoint()) // No installs, PATH fallback, or vendor edits.

@@ -1,0 +1,26 @@
+{
+  "baseRevision": "edd0aae0bfdf190eef3ee77ab8a0e95bc4df803b",
+  "paperclipTask": "FOC-93",
+  "exactCommandRunId": "de42db21-d47e-48ab-8bd9-3f10964a1c36",
+  "observations": {
+    "standaloneMkdir": "succeeded",
+    "evidenceWriteWithHistoricalRule": "denied",
+    "directReportingHeredoc": "succeeded; script confirmed FOC-93 done with comment",
+    "postRun": "QA paused; timer/manual wakeups disabled; pilot verify clean"
+  },
+  "limitations": [
+    "Diagnostic report body was a template sentence, so it proves script execution and delivery, not complete report content. The final agent output separately recorded actual outcomes.",
+    "Full review/evidence/report smoke remains required after human merge and procedure synchronization."
+  ],
+  "causes": [
+    "Earlier shell commands included pipes and variable expansions instead of the exact approved invocations. No broader Bash grant is needed.",
+    "Write(path) is parsed but not used for file-permission matching; the runtime checks Edit(path).",
+    "The differential-review slash command invokes a second skill, and both declare broad allowed-tools; read their methodology without invoking Skill."
+  ],
+  "sources": [
+    "https://code.claude.com/docs/en/permissions#read-and-edit",
+    "https://code.claude.com/docs/en/skills#pre-approve-tools-for-a-skill",
+    "Installed Claude Code 2.1.232; Agent SDK 0.3.232; differential-review plugin 1.1.2"
+  ],
+  "independentQaVerdict": false
+}

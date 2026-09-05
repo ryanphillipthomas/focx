@@ -1,0 +1,20 @@
+✔ native runtime: historical Write(path) rule does not authorize evidence creation (464.412125ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 1 unmatched permission prompt(s)
+✔ native runtime: anchored Edit(path) authorizes real Write inside evidence (393.684834ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 0 unmatched permission prompt(s)
+✔ native runtime: anchored evidence grant denies a Write outside evidence (374.197333ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 1 unmatched permission prompt(s)
+✔ native runtime: bare Edit and NotebookEdit denials preserve scoped Write (382.850875ms)
+ℹ Installed Claude Code 2.1.232; 3 real tool result(s), 0 unmatched permission prompt(s)
+✔ native runtime: exact evidence mkdir command is approved (438.136334ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 0 unmatched permission prompt(s)
+✔ native runtime: direct reporting command with quoted heredoc matches the narrow rule (512.475291ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 0 unmatched permission prompt(s)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2638.209084
