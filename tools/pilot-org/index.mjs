@@ -55,11 +55,14 @@ function validateAdapterLocal(a) {
   requireThat(l.permissionDelivery === 'qa-worktree-local' && a.roleKey === 'qa-engineer', 'QA permissions require the worktree-local launcher')
   const rules = l.permissionsAllow ?? []
   requireThat(Array.isArray(rules) && rules.every(r => typeof r === 'string' && PERMISSION_RULE.test(r)) && new Set(rules).size === rules.length, `${a.name}: permissionsAllow must be unique Claude Code permission rules`)
+  requireThat(same(l.permissionsDeny, ['Edit','NotebookEdit','Skill']), `${a.name}: deny actual Edit, NotebookEdit and Skill tools while allowing scoped Write via the Edit path rule`)
   for (const r of rules) {
     const tool = r.split('(')[0]
-    requireThat(tool !== 'Edit', `${a.name}: Edit is never allowed for a report-only role`)
-    requireThat(r !== 'Write' && r !== 'Bash', `${a.name}: bare ${r} would allow any path or command; scope it`)
-    if (tool === 'Task' || tool === 'Skill') {
+    requireThat(tool !== 'Edit' || r === 'Edit(/pipeline/runs/**)', `${a.name}: file modifications must be anchored to pipeline/runs`)
+    requireThat(tool !== 'Write', `${a.name}: Write(path) rules are ineffective; use the scoped Edit path rule`)
+    requireThat(tool !== 'Skill', `${a.name}: skill invocation may pre-approve broad tools; read the methodology instead`)
+    requireThat(r !== 'Bash', `${a.name}: bare Bash would allow any command; scope it`)
+    if (tool === 'Task') {
       const name = r.slice(r.indexOf('(') + 1, -1)
       requireThat(pluginNames.has(name.split(':')[0]), `${a.name}: ${tool}(${name}) names tooling outside the declared plugins`)
     }

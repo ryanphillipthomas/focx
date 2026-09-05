@@ -2,7 +2,7 @@
 name: focx-verify-change
 description: Verify a Ryan-approved Focx change against its exact revision and acceptance criteria, independently from implementation.
 metadata:
-  version: "0.1.2"
+  version: "0.1.3"
 ---
 
 # focx-verify-change
@@ -15,9 +15,13 @@ For an existing pipeline run, use its current QA artifact schema and evidence lo
 
 ## Evidence tooling
 
-Before mapping criteria, write the change under test to a diff file (`git diff <base>...<revision>` into the evidence location as `run.diff`) and run the assigned `differential-review` procedure on it: `/differential-review:diff-review <evidence>/run.diff` if that command resolves, otherwise by reading the plugin's SKILL.md. Save its report under the evidence location. Then run `pr-review-toolkit:silent-failure-hunter` via Task on the same diff and record its findings. Both are evidence; the per-criterion verdict against the deployed preview remains yours.
+Before mapping criteria, create the assigned evidence directory with a standalone `mkdir -p pipeline/runs/<run-id>/evidence/` call. Read the change with a standalone `git diff <base>...<revision>` call, then use Write to save that exact diff as `run.diff` in the evidence directory. Do not append `echo`, exit-code checks, pipes, redirects, variable expansions, or additional commands to these calls. The tool result already contains the status. `Write(path)` is not a working Claude file-permission rule: the launcher uses the anchored `Edit(/pipeline/runs/**)` path rule for Write, while denying the actual Edit and NotebookEdit tools. Only run artifacts may be written.
 
-Invoke no other review agent unless the task explicitly requests a full sweep. A full sweep adds `pr-review-toolkit:pr-test-analyzer`, `pr-review-toolkit:code-reviewer` (pointed at `AGENTS.md`), and `/spec-to-code-compliance:spec-compliance <worktree>` with the acceptance criteria first rendered to `<evidence>/spec.md` and `limit` set to the criterion count; map `implemented` to pass and every other verdict to fail.
+Perform the installed `differential-review` methodology by reading its `skills/differential-review/SKILL.md` as a file and following its applicable referenced methodology, adversarial and reporting documents. Use the installed plugin path supplied by the task/session; if it is missing, report the missing path instead of searching unrelated host directories. Save the review under the assigned evidence directory. Do not invoke the slash command or Skill tool: this plugin's `allowed-tools` frontmatter pre-approves broad Bash/Write access. Reading the methodology as data does not grant those permissions. The task's scoped permissions and output paths continue to govern the review.
+
+Then invoke `pr-review-toolkit:silent-failure-hunter` via Task/Agent on the same diff, pass the task's exact scope and output constraints, and save its findings in the evidence directory. These two reviews are evidence; the per-criterion verdict against any required deployed preview remains yours. Never count tool discovery, successful dispatch, or a process success status as a completed review or workflow pass.
+
+Invoke no other review agent unless the task explicitly requests a full sweep. A full sweep adds `pr-review-toolkit:pr-test-analyzer`, `pr-review-toolkit:code-reviewer` (pointed at `AGENTS.md`), and the installed spec-to-code-compliance methodology read as files, with acceptance criteria first rendered to `<evidence>/spec.md` and the review limit set to the criterion count; map `implemented` to pass and every other verdict to fail. Do not invoke Skill to obtain broader permissions. Missing authorization or tooling is recorded, never improvised.
 
 If an assigned tool does not resolve, or a call is denied by permission policy, record that as a material limit and continue by hand. Never block a verdict on tooling, and never widen your own permissions. Do not probe for the cause of a denial: no filesystem-wide searches, no requests to hosts the task did not name, and no writes attempted outside your evidence location to tell a denial apart from an error. One denial, recorded once, is the finding.
 
@@ -30,5 +34,7 @@ scripts/paperclip-issue-update.sh --status <done|blocked> <<'MD'
 ...your report...
 MD
 ```
+
+The Bash call must begin with `scripts/paperclip-issue-update.sh` and use the direct single-quoted heredoc above. Put the actual observed results in its body; never send placeholder instructions. Do not wrap it in `cat`, pipe into it, append `echo`, inspect `$?`, or combine it with other commands. Record the returned exit status from the tool result.
 
 Do not hand-roll `curl` against the control plane: a command containing `$PAPERCLIP_API_URL` or `$PAPERCLIP_API_KEY` matches no permission rule and is denied unattended, which loses the report. A nonzero exit from the script means the write did not apply; say so plainly in your final response rather than reporting the update as sent.

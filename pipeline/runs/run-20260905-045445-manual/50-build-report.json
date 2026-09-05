@@ -1,0 +1,28 @@
+{
+  "runId": "run-20260905-045445-manual",
+  "storiesImplemented": [
+    "Diagnose exact QA commands and make the smallest scoped permission/procedure correction for evidence, both reviews, and self-reporting."
+  ],
+  "filesChanged": [
+    ".focx/agents.json",
+    ".focx/skills/focx-verify-change/SKILL.md",
+    "docs/pilot-operation.md",
+    "tools/pilot-org/index.mjs",
+    "tools/pilot-org/test.mjs",
+    "tools/pilot-org/qa-launcher.test.mjs",
+    "tools/pilot-org/runtime-permissions.test.mjs",
+    "tools/qa-claude-agent-acp/index.mjs",
+    "pipeline/runs/run-20260905-045445-manual/00-run.json",
+    "pipeline/runs/run-20260905-045445-manual/50-build-report.json",
+    "pipeline/runs/run-20260905-045445-manual/evidence/native-permissions.txt",
+    "pipeline/runs/run-20260905-045445-manual/evidence/validation.txt",
+    "pipeline/runs/run-20260905-045445-manual/evidence/diagnosis.json"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "Clean: 23 published values from 2 token files. 76 pilot/launcher/reporting tests pass; 6 real-runtime loopback cases separately pass on Claude 2.1.232; 118 historical reconciler tests pass. Exact live commands prove mkdir and direct reporting work without more Bash permissions; Write(path) alone failed. Proposed correction permits evidence Write and blocks outside Write plus actual Edit/NotebookEdit tools; Skill disabled to avoid plugin broad grants. Details in evidence/. No independent QA verdict; human merge, reviewed QA procedure synchronization and one fresh-worktree full smoke remain required. No unmerged source applied; QA remains paused. Render preview pending existing PR integration."
+  }
+}

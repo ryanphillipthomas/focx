@@ -1,3 +1,4 @@
+import './runtime-permissions.test.mjs'
 import './qa-launcher.test.mjs'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
@@ -59,7 +60,7 @@ test('stricter ACP aliases are preserved when canonical fields are absent',async
 const readRepo=p=>readFileSync(resolve(ROOT,p),'utf8')
 const rebuilt=(mutate,read=readRepo)=>{const manifest=clone(source.manifest),invariants=clone(source.invariants);mutate?.(manifest,invariants);return buildSource({manifest,invariants,baseline:source.baseline,read})}
 const qaOf=m=>m.agents.find(a=>a.roleKey==='qa-engineer')
-test('the committed QA entry records a reviewed Claude migration and its adapter-local tooling',()=>{const qa=qaOf(source.manifest);assert.equal(qa.adapterType,'claude_local');assert.equal(qa.maxTurnsPerRun,20);assert.deepEqual(qa.adapterMigration,{from:'codex_local',to:'claude_local',approvedBy:'Ryan Thomas',date:'2026-09-04'});assert.deepEqual(qa.adapterLocal.claudeCodePlugins,['differential-review@trailofbits','pr-review-toolkit@claude-plugins-official','spec-to-code-compliance@trailofbits']);assert(qa.adapterLocal.permissionsAllow.includes('Task(pr-review-toolkit:silent-failure-hunter)'));assert(!qa.adapterLocal.permissionsAllow.some(r=>/^Edit/.test(r)||r==='Write'||r==='Bash'));assert.deepEqual(qa.executionPermissions,{permissionMode:'approve-reads',nonInteractivePermissions:'deny'})})
+test('the committed QA entry records a reviewed Claude migration and its adapter-local tooling',()=>{const qa=qaOf(source.manifest);assert.equal(qa.adapterType,'claude_local');assert.equal(qa.maxTurnsPerRun,20);assert.deepEqual(qa.adapterMigration,{from:'codex_local',to:'claude_local',approvedBy:'Ryan Thomas',date:'2026-09-04'});assert.deepEqual(qa.adapterLocal.claudeCodePlugins,['differential-review@trailofbits','pr-review-toolkit@claude-plugins-official','spec-to-code-compliance@trailofbits']);assert(qa.adapterLocal.permissionsAllow.includes('Task(pr-review-toolkit:silent-failure-hunter)'));assert(qa.adapterLocal.permissionsAllow.includes('Edit(/pipeline/runs/**)'));assert(!qa.adapterLocal.permissionsAllow.some(r=>r==='Edit'||r.startsWith('Write')||r==='Bash'||r.startsWith('Skill')));assert.deepEqual(qa.adapterLocal.permissionsDeny,['Edit','NotebookEdit','Skill']);assert.deepEqual(qa.executionPermissions,{permissionMode:'approve-reads',nonInteractivePermissions:'deny'})})
 // A pilot that cannot write to its task reports nothing. The rule and the file
 // it names have to travel together: Paperclip allow-lists this path in every
 // worktree but ships no script, and a rule pointing at a missing file is the
@@ -73,7 +74,7 @@ test('QA can report through the committed script, and the script is really there
   // Reading these from the environment is the whole point: a call site that
   // needs `$` matches no permission rule and is denied unattended.
   for(const key of ['PAPERCLIP_API_URL','PAPERCLIP_API_KEY','PAPERCLIP_TASK_ID']) assert(body.includes(key),`the script does not read ${key} from the environment`)})
-test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.2"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.2"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.2"','version: "0.1"'):readRepo(p)),/versioned/)})
+test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.3"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.3"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.3"','version: "0.1"'):readRepo(p)),/versioned/)})
 for(const [label,mutate] of Object.entries({
   'a migration between the same adapter':m=>{qaOf(m).adapterMigration.to='codex_local';qaOf(m).adapterMigration.from='codex_local'},
   'a migration whose target differs from adapterType':m=>{qaOf(m).adapterMigration.to='codex_local'},
@@ -86,8 +87,11 @@ for(const [label,mutate] of Object.entries({
   'a duplicate plugin':m=>{qaOf(m).adapterLocal.claudeCodePlugins.push('differential-review@trailofbits')},
   'a bare Bash rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Bash')},
   'a bare Write rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Write')},
-  'any Edit rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Edit(pipeline/runs/**)')},
+  'an unanchored Edit path rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Edit(pipeline/runs/**)')},
   'a Task for an undeclared plugin':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Task(feature-dev:code-reviewer)')},
+  'a file rule outside evidence':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Edit(/src/**)')},
+  'a missing Edit tool denial':m=>{qaOf(m).adapterLocal.permissionsDeny=['NotebookEdit','Skill']},
+  'a skill invocation grant':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Skill(differential-review:diff-review)')},
   'a malformed rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('bash(ls)')},
 }))test(`source refuses ${label}`,()=>{assert.throws(()=>rebuilt(mutate))})
 test('a migration is accepted only once the live adapter already matches it',async()=>{const f=fake();assert.deepEqual((await synchronize(f,source)).changes,[]);const qa=qaOf(source.manifest);f.configs[qa.id].adapterType='codex_local';await assert.rejects(synchronize(f,source),/declared but not yet performed/);assert.deepEqual(writes(f),[])})
