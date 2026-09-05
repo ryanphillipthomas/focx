@@ -1,0 +1,132 @@
+[
+  {
+    "id": "f46f5b5a-dd63-4b37-8e3e-12748bb6b02f",
+    "name": "CTO",
+    "status": "paused"
+  },
+  {
+    "id": "0d15f598-8d34-405e-9131-3e769fb87489",
+    "name": "Focx CEO",
+    "status": "paused"
+  },
+  {
+    "id": "8f97a6a9-8411-4af9-9470-20aed47c0d42",
+    "name": "Backend & AI Engineer",
+    "status": "paused"
+  },
+  {
+    "id": "12c2df43-aedb-4df0-8a83-e5fa313fbb92",
+    "name": "Design Research",
+    "status": "paused"
+  },
+  {
+    "id": "46128246-ece6-42a3-9272-b8b32619a696",
+    "name": "Lifecycle & Referral",
+    "status": "paused"
+  },
+  {
+    "id": "ed2c450f-5d8a-4b82-8a5b-ec570decbfb4",
+    "name": "Customer Success",
+    "status": "paused"
+  },
+  {
+    "id": "525c6fb5-cc69-415e-bc5d-96b70debdf3b",
+    "name": "Chief of Staff",
+    "status": "paused"
+  },
+  {
+    "id": "ccd6620d-1277-402d-86cf-acbbcd5b5ae0",
+    "name": "Brand & Content",
+    "status": "paused"
+  },
+  {
+    "id": "998bd7d6-77b5-4e25-9867-d42af6acb68a",
+    "name": "Product Analytics",
+    "status": "paused"
+  },
+  {
+    "id": "3fa7896a-64da-4bd1-8c79-9eac14b6ac8b",
+    "name": "Head of Growth",
+    "status": "paused"
+  },
+  {
+    "id": "9b93a2ee-dd97-42a4-ae74-147197b3a97b",
+    "name": "Community & Creators",
+    "status": "paused"
+  },
+  {
+    "id": "9cd9dd6e-845a-4709-8622-af95783edaf5",
+    "name": "Legal & Privacy",
+    "status": "paused"
+  },
+  {
+    "id": "37c6b040-ca23-453e-9402-c2fc5318364f",
+    "name": "Growth Engineer",
+    "status": "paused"
+  },
+  {
+    "id": "d0f578ab-2535-486f-8179-87da26d7f109",
+    "name": "Product Research",
+    "status": "paused"
+  },
+  {
+    "id": "e6649061-9db2-4467-9ab9-bdd091ccf4d1",
+    "name": "Finance",
+    "status": "paused"
+  },
+  {
+    "id": "34f730a9-0fa0-426b-a8b6-5cb7c163311b",
+    "name": "Implementation Engineer (on demand)",
+    "status": "paused"
+  },
+  {
+    "id": "5721a90d-bf46-42ec-90da-41bec0cd4a29",
+    "name": "Product Designer",
+    "status": "paused"
+  },
+  {
+    "id": "f06f143f-1c65-40fd-a960-974f945f83d1",
+    "name": "AI Experience",
+    "status": "paused"
+  },
+  {
+    "id": "9f4b2c71-66fb-4f55-b4f7-300b4e2ba3d9",
+    "name": "Business Operations",
+    "status": "paused"
+  },
+  {
+    "id": "50373b51-509c-4472-aa03-3c792a69c207",
+    "name": "Architecture & Documentation Steward",
+    "status": "paused"
+  },
+  {
+    "id": "f399b4f4-44a9-4f23-942a-3495af19aac8",
+    "name": "Security Engineer",
+    "status": "paused"
+  },
+  {
+    "id": "5e162710-3768-4823-bfd7-aa22cf58100c",
+    "name": "Head of Product",
+    "status": "paused"
+  },
+  {
+    "id": "f64bcc77-ab12-4569-9125-517007e44ba1",
+    "name": "Apple Engineer",
+    "status": "paused"
+  },
+  {
+    "id": "f287395a-15d0-461f-bb08-a4cea22bf9c7",
+    "name": "Release Engineer",
+    "status": "paused"
+  },
+  {
+    "id": "1c345057-aa00-4b75-a34a-68c8ef492e09",
+    "name": "AI Evals Engineer",
+    "status": "paused"
+  },
+  {
+    "id": "96fccef1-efa8-49db-8751-d2dc6b843566",
+    "name": "QA Engineer",
+    "status": "paused"
+  }
+]

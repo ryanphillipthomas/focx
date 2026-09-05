@@ -1,0 +1,45 @@
+{
+  "runId": "run-20260905-114928-manual",
+  "storiesImplemented": [
+    "Preserve the post-merge QA smoke evidence in a dedicated branch and PR, with historical-result qualifications."
+  ],
+  "filesChanged": [
+    "pipeline/runs/run-20260905-041451-manual/evidence/plugin-mtimes-after.json",
+    "pipeline/runs/run-20260905-041451-manual/evidence/plugin-mtimes-before.json",
+    "pipeline/runs/run-20260905-041451-manual/evidence/post-smoke-verify.txt",
+    "pipeline/runs/run-20260905-041451-manual/evidence/smoke-report.md",
+    "pipeline/runs/run-20260905-041451-manual/evidence/smoke-state.json",
+    "pipeline/runs/run-20260905-043119-manual/evidence/exact-commands/agent-result.txt",
+    "pipeline/runs/run-20260905-043119-manual/evidence/exact-commands/plugin-mtimes-after.json",
+    "pipeline/runs/run-20260905-043119-manual/evidence/exact-commands/plugin-mtimes-before.json",
+    "pipeline/runs/run-20260905-043119-manual/evidence/exact-commands/post-smoke-verify.txt",
+    "pipeline/runs/run-20260905-043119-manual/evidence/exact-commands/smoke-state.json",
+    "pipeline/runs/run-20260905-043119-manual/evidence/plugin-mtimes-after.json",
+    "pipeline/runs/run-20260905-043119-manual/evidence/plugin-mtimes-before.json",
+    "pipeline/runs/run-20260905-043119-manual/evidence/post-smoke-verify.txt",
+    "pipeline/runs/run-20260905-043119-manual/evidence/smoke-report.md",
+    "pipeline/runs/run-20260905-043119-manual/evidence/smoke-state.json",
+    "pipeline/runs/run-20260905-045445-manual/evidence/plugin-mtimes-after.json",
+    "pipeline/runs/run-20260905-045445-manual/evidence/plugin-mtimes-before.json",
+    "pipeline/runs/run-20260905-045445-manual/evidence/post-smoke-verify.txt",
+    "pipeline/runs/run-20260905-045445-manual/evidence/smoke-state.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/board-verification-receipt.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/independent-smoke-verification.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/live-smoke-result.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/plugin-mtimes-after.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/plugin-mtimes-before.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/post-smoke-agent-statuses.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/post-smoke-verify.txt",
+    "pipeline/runs/run-20260905-051255-manual/evidence/smoke-state.json",
+    "pipeline/runs/run-20260905-114928-manual/00-run.json",
+    "pipeline/runs/run-20260905-114928-manual/50-build-report.json",
+    "pipeline/runs/run-20260905-114928-manual/evidence/README.md"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean \u2014 no design drift detected (23 published values from 2 token files)."
+  }
+}
