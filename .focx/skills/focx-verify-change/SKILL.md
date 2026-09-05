@@ -2,7 +2,7 @@
 name: focx-verify-change
 description: Verify a Ryan-approved Focx change against its exact revision and acceptance criteria, independently from implementation.
 metadata:
-  version: "0.1.3"
+  version: "0.1.4"
 ---
 
 # focx-verify-change
@@ -15,7 +15,9 @@ For an existing pipeline run, use its current QA artifact schema and evidence lo
 
 ## Evidence tooling
 
-Before mapping criteria, create the assigned evidence directory with a standalone `mkdir -p pipeline/runs/<run-id>/evidence/` call. Read the change with a standalone `git diff <base>...<revision>` call, then use Write to save that exact diff as `run.diff` in the evidence directory. Do not append `echo`, exit-code checks, pipes, redirects, variable expansions, or additional commands to these calls. The tool result already contains the status. `Write(path)` is not a working Claude file-permission rule: the launcher uses the anchored `Edit(/pipeline/runs/**)` path rule for Write, while denying the actual Edit and NotebookEdit tools. Only run artifacts may be written.
+Before mapping criteria, create the assigned evidence directory with a standalone `mkdir -p pipeline/runs/<run-id>/evidence/` call. Capture the diff directly with one Bash call: `git diff <base>...<revision> > pipeline/runs/<run-id>/evidence/run.diff`. Substitute the literal reviewed revisions and assigned path; no variables, pipes, wrappers, extra redirections, or appended commands. This single redirect inside the evidence directory is intentional: it preserves Git's exact bytes and is covered by the existing `Bash(git diff:*)` and `Edit(/pipeline/runs/**)` rules. Never reconstruct the diff with Write, copy line-numbered tool output, or use `/tmp` as an intermediate. Read the saved diff for the reviews.
+
+Use Write for the reports you author in the evidence directory. `Write(path)` is not a working Claude file-permission rule: the launcher uses the anchored `Edit(/pipeline/runs/**)` path rule for Write while denying the actual Edit and NotebookEdit tools. Only run artifacts may be written. Do not append `echo`, exit-code checks, pipes, variable expansions, or additional commands to operational calls. The tool result already contains the status. Line counts are not proof of byte equality; do not claim an exact match from them.
 
 Perform the installed `differential-review` methodology by reading its `skills/differential-review/SKILL.md` as a file and following its applicable referenced methodology, adversarial and reporting documents. Use the installed plugin path supplied by the task/session; if it is missing, report the missing path instead of searching unrelated host directories. Save the review under the assigned evidence directory. Do not invoke the slash command or Skill tool: this plugin's `allowed-tools` frontmatter pre-approves broad Bash/Write access. Reading the methodology as data does not grant those permissions. The task's scoped permissions and output paths continue to govern the review.
 

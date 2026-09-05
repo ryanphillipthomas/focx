@@ -1,6 +1,8 @@
 // Optional integration: exercise the installed Claude CLI, never a real model.
 // FOCX_TEST_CLAUDE_SDK_ROOT=/path/to/@anthropic-ai/claude-agent-sdk node --test tools/pilot-org/runtime-permissions.test.mjs
 import {test} from 'node:test'
+import {execFileSync} from 'node:child_process'
+import {createHash} from 'node:crypto'
 import assert from 'node:assert/strict'
 import {createServer} from 'node:http'
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,realpathSync,rmSync} from 'node:fs'
@@ -145,4 +147,43 @@ test('native runtime: direct reporting command with quoted heredoc matches the n
  prepare:cwd=>{mkdirSync(join(cwd,'scripts'));writeFileSync(join(cwd,'scripts/paperclip-issue-update.sh'),'#!/bin/bash\nset -eu\n[ "$1" = --status ]\n[ "$2" = blocked ]\ncat > pipeline/runs/runtime/report.txt\n',{mode:0o755})},
  calls:()=>[tool('Bash',{command:`scripts/paperclip-issue-update.sh --status blocked <<'QA_REPORT'\n${reportBody}QA_REPORT`,description:'Run the harmless local report fixture'})],
  verify:({cwd,prompts,results})=>{assert.deepEqual(prompts,[]);assert(!results[0].is_error);assert.equal(readFileSync(join(cwd,'pipeline/runs/runtime/report.txt'),'utf8'),reportBody)},
+}))
+
+const fixtures=new Map()
+function prepareDiff(cwd){
+ const env={PATH:'/usr/bin:/bin',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'}
+ const git=(...args)=>execFileSync('git',args,{cwd,env,stdio:['ignore','pipe','pipe']})
+ git('init')
+ git('config','user.name','Offline Fixture')
+ git('config','user.email','fixture@example.invalid')
+ git('config','commit.gpgsign','false')
+ const body=Array.from({length:600},(_,i)=>String(i)+': original text: `code` $VALUE \\n tab\t unicode é 漢字 '+ 'abcdefghij'.repeat(4)+'\n').join('')
+ writeFileSync(join(cwd,'fixture.txt'),body)
+ git('add','fixture.txt');git('commit','-m','fixture base')
+ const base=git('rev-parse','HEAD').toString().trim()
+ writeFileSync(join(cwd,'fixture.txt'),body.replaceAll('original text','changed text'))
+ git('add','fixture.txt');git('commit','-m','fixture changed')
+ const expected=git('diff',`${base}..HEAD`)
+ assert(expected.length>45000)
+ fixtures.set(cwd,{base,expected})
+}
+const allow=['Bash(git diff:*)','Edit(/pipeline/runs/**)']
+const deny=['Edit','NotebookEdit','Skill']
+test('native runtime: exact git diff redirect writes byte-exact evidence without new grants',options,t=>runCase(t,{
+ allow,deny,prepare:prepareDiff,
+ calls:cwd=>[tool('Bash',{command:`git diff ${fixtures.get(cwd).base}..HEAD > pipeline/runs/runtime/run.diff`,description:'Capture byte-exact fixture diff evidence'})],
+ verify:({cwd,prompts,results})=>{
+  assert.deepEqual(prompts,[]);assert(!results[0].is_error,JSON.stringify(results[0]))
+  const actual=readFileSync(join(cwd,'pipeline/runs/runtime/run.diff'))
+  assert.deepEqual(actual,fixtures.get(cwd).expected)
+  t.diagnostic(`Byte-exact git diff: ${actual.length} bytes; SHA-256 ${createHash('sha256').update(actual).digest('hex')}`)
+ },
+}))
+test('native runtime: git diff redirect outside evidence is denied',options,t=>runCase(t,{
+ allow,deny,prepare:prepareDiff,
+ calls:cwd=>[tool('Bash',{command:`git diff ${fixtures.get(cwd).base}..HEAD > outside.diff`,description:'Negative fixture for out-of-evidence redirect'})],
+ verify:({cwd,prompts,results})=>{
+  assert.equal(prompts[0]?.name,'Bash');assert.equal(results[0].is_error,true)
+  assert(!existsSync(join(cwd,'outside.diff')))
+ },
 }))

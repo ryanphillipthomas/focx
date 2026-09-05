@@ -74,7 +74,7 @@ test('QA can report through the committed script, and the script is really there
   // Reading these from the environment is the whole point: a call site that
   // needs `$` matches no permission rule and is denied unattended.
   for(const key of ['PAPERCLIP_API_URL','PAPERCLIP_API_KEY','PAPERCLIP_TASK_ID']) assert(body.includes(key),`the script does not read ${key} from the environment`)})
-test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.3"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.3"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.3"','version: "0.1"'):readRepo(p)),/versioned/)})
+test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.4"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.4"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.4"','version: "0.1"'):readRepo(p)),/versioned/)})
 for(const [label,mutate] of Object.entries({
   'a migration between the same adapter':m=>{qaOf(m).adapterMigration.to='codex_local';qaOf(m).adapterMigration.from='codex_local'},
   'a migration whose target differs from adapterType':m=>{qaOf(m).adapterMigration.to='codex_local'},

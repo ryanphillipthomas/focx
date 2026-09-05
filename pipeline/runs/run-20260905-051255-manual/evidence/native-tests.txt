@@ -1,0 +1,25 @@
+✔ native runtime: historical Write(path) rule does not authorize evidence creation (512.522791ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 1 unmatched permission prompt(s)
+✔ native runtime: anchored Edit(path) authorizes real Write inside evidence (426.548041ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 0 unmatched permission prompt(s)
+✔ native runtime: anchored evidence grant denies a Write outside evidence (400.911917ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 1 unmatched permission prompt(s)
+✔ native runtime: bare Edit and NotebookEdit denials preserve scoped Write (413.085583ms)
+ℹ Installed Claude Code 2.1.232; 3 real tool result(s), 0 unmatched permission prompt(s)
+✔ native runtime: exact evidence mkdir command is approved (553.937875ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 0 unmatched permission prompt(s)
+✔ native runtime: direct reporting command with quoted heredoc matches the narrow rule (674.430667ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 0 unmatched permission prompt(s)
+✔ native runtime: exact git diff redirect writes byte-exact evidence without new grants (724.102125ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 0 unmatched permission prompt(s)
+ℹ Byte-exact git diff: 121705 bytes; SHA-256 d66bc89c7ba4a139dfd22dc7f4e9070da972369fd9d3c4062aa2bb6b60884359
+✔ native runtime: git diff redirect outside evidence is denied (610.413958ms)
+ℹ Installed Claude Code 2.1.232; 1 real tool result(s), 1 unmatched permission prompt(s)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4395.019833
