@@ -1,0 +1,19 @@
+{
+  "runId": "run-20260905-041451-manual",
+  "storiesImplemented": [
+    "Ryan-approved handoff section 2 option 2: repository enabledPlugins only; QA permissions explicitly unresolved."
+  ],
+  "filesChanged": [
+    ".claude/settings.json",
+    "docs/pilot-operation.md",
+    "pipeline/runs/run-20260905-041451-manual/00-run.json",
+    "pipeline/runs/run-20260905-041451-manual/50-build-report.json"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean \u2014 no design drift detected (23 published values from 2 token files). Base: 819fd283b21e41434023eca275d50b2eb14bb020. Pilot source check passed. Project settings contain only the three manifest plugin keys, all true. Live QA smoke, effective permissions, reporting script execution and independent QA remain unverified; agents and service were not changed. Render preview pending PR integration."
+  }
+}
