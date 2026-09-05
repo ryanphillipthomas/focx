@@ -6,9 +6,11 @@ import { homedir } from 'node:os'
 import { requireThat } from './invariants.mjs'
 import { catalogEntries } from './skills.mjs'
 
-// Protocol shapes are generated from the installed 0.152.1 native binary in
-// native-schema/v2/{PluginReadParams,PluginInstallParams,PluginReadResponse,
-// PluginInstallResponse}. No thread, turn, process, OAuth or model API is used.
+// Protocol shapes were generated from the installed 0.152.1 native binary
+// (`codex app-server generate-json-schema`, FB4 build log); the files the four
+// calls below rely on are kept in native-schema/ (ClientRequest method names;
+// v2 PluginRead/PluginInstall/AppsInstalled params and responses). No thread,
+// turn, process, OAuth or model API is used.
 export function nativePluginPlan(contract,companyHome) {
   return catalogEntries(contract.skills).filter(e=>e.adapter==='codex_local' && e.pinned).map(entry=>{
     const [name,marketplace]=entry.key.split('@'),market=contract.skills.codexPlugins.marketplaces[marketplace]
