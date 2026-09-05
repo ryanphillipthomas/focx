@@ -80,21 +80,25 @@ export const PLATFORM_OWNED_KEYS = Object.freeze([
   'bootstrapPromptTemplate', 'paperclipSkillSync',
 ])
 
-// The adapterConfig keys each adapter actually documents. adapterConfig is a
-// z.record of unknown server-side, so an unknown key is ACCEPTED at create time
+// Documented adapterConfig keys plus the verified runtime exception below.
+// adapterConfig is a z.record of unknown server-side, so an unknown key is ACCEPTED at create time
 // and simply ignored — or worse, a known-but-unsupported one fails at first run.
-// Lifted from the adapters' own self-documentation.
+// Based on the adapters' own self-documentation, deliberately adding permissionMode:
+// installed Paperclip 2026.831.1 omits it from both getConfigSchema() results, but
+// @paperclipai/adapter-{claude,codex}-local/dist/server/acp.js reads it (lines 70/86).
+// @paperclipai/adapter-utils/dist/acpx-engine/execute.js:671 defaults it via
+// DEFAULT_ACP_ENGINE_PERMISSION_MODE = "approve-all" (constants.js:3).
 export const ADAPTER_KEYS = Object.freeze({
   claude_local: Object.freeze([...PLATFORM_OWNED_KEYS, 'engine', 'cwd', 'instructionsFilePath', 'model', 'effort', 'chrome',
     'promptTemplate', 'maxTurnsPerRun', 'dangerouslySkipPermissions', 'command', 'extraArgs', 'env',
     'workspaceStrategy', 'workspaceRuntime', 'filesystemScope', 'filesystemExtraPaths',
     'filesystemSandboxCommand', 'networkScope', 'networkAllowlist', 'agentCommand', 'mode', 'stateDir',
-    'nonInteractivePermissions', 'warmHandleIdleMs', 'timeoutSec', 'graceSec']),
+    'permissionMode', 'nonInteractivePermissions', 'warmHandleIdleMs', 'timeoutSec', 'graceSec']),
   codex_local: Object.freeze([...PLATFORM_OWNED_KEYS, 'engine', 'cwd', 'instructionsFilePath', 'model', 'modelReasoningEffort',
     'promptTemplate', 'search', 'fastMode', 'dangerouslyBypassApprovalsAndSandbox', 'command', 'extraArgs',
     'env', 'workspaceStrategy', 'workspaceRuntime', 'filesystemScope', 'filesystemExtraPaths',
     'filesystemSandboxCommand', 'networkScope', 'networkAllowlist', 'timeoutSec', 'graceSec',
-    'outputInactivityTimeoutMs', 'agentCommand', 'mode', 'nonInteractivePermissions', 'stateDir',
+    'outputInactivityTimeoutMs', 'agentCommand', 'mode', 'permissionMode', 'nonInteractivePermissions', 'stateDir',
     'warmHandleIdleMs']),
 })
 

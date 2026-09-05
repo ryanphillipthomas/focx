@@ -185,8 +185,11 @@ export function plan(source, live) {
       if (a.maxTurnsPerRun) body.adapterConfig.maxTurnsPerRun = tighter(c.adapterConfig.maxTurnsPerRun,a.maxTurnsPerRun) || a.maxTurnsPerRun
       delete body.adapterConfig.promptTemplate
       delete body.adapterConfig.bootstrapPromptTemplate
+      // Require ACP for every pilot: installed Paperclip 2026.831.1's
+      // adapter-codex-local/dist/server/execute.js:364-365 rethrows ACP startup
+      // failures when explicit, preventing fallback to CLI's different permissions.
+      body.adapterConfig.engine = 'acp'
       if (a.adapterLocal?.permissionDelivery === 'qa-worktree-local') {
-        body.adapterConfig.engine = 'acp'
         body.adapterConfig.agentCommand = 'node tools/qa-claude-agent-acp/index.mjs'
       }
       body.replaceAdapterConfig = true
@@ -205,7 +208,7 @@ export function plan(source, live) {
 }
 export const publicPlan = p => ({digest:p.digest,changes:p.operations.map(o => ({method:o.method,path:o.path,fields:o.fields})),deletions:0,activations:0})
 
-// Host state the manifest describes but Paperclip does not hold: the plugins a
+// Verify live pilot lane/permission declarations and host state: the plugins a
 // human installed on this machine and the agent's own Claude settings file.
 // Read-only, and outside the plan digest on purpose: the digest binds what the
 // tool writes; these are what the operator must already have done by hand.
@@ -213,8 +216,12 @@ const envValue = (env, key) => { const v = env?.[key]; return typeof v === 'stri
 export function checkHost(source, live, host = defaultHost()) {
   const findings = []
   for (const a of source.manifest.agents) {
+    if (a.disposition !== 'pilot') continue
+    const adapter = live.configs[a.id]?.adapterConfig
+    if (adapter?.engine !== 'acp') findings.push(`${a.name}: live engine must be explicitly acp; CLI fallback does not enforce the declared ACP permissions`)
+    if (adapter?.permissionMode !== a.executionPermissions.permissionMode) findings.push(`${a.name}: live permissionMode is missing or does not match declared executionPermissions.permissionMode (${a.executionPermissions.permissionMode})`)
     const l = a.adapterLocal
-    if (a.disposition !== 'pilot' || !l) continue
+    if (!l) continue
     const env = live.configs[a.id]?.adapterConfig?.env ?? {}
     const cacheDir = envValue(env, 'CLAUDE_CODE_PLUGIN_CACHE_DIR')
     const configDir = envValue(env, 'CLAUDE_CONFIG_DIR')
@@ -233,7 +240,6 @@ export function checkHost(source, live, host = defaultHost()) {
     // User settings are ignored by ACP. Verify the selected delivery mechanism,
     // never claim that an unused file establishes effective permissions.
     if (!host.exists(resolve(homedir(), '.paperclip/cli/current/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js'))) findings.push(`${a.name}: managed Claude ACP entrypoint is missing; launcher will stop`)
-    const adapter = live.configs[a.id]?.adapterConfig
     if (adapter?.engine !== 'acp' || adapter?.agentCommand !== 'node tools/qa-claude-agent-acp/index.mjs') findings.push(`${a.name}: QA worktree permission launcher is not selected; user settings permissions are ineffective`)
   }
   return findings

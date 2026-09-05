@@ -5,12 +5,13 @@ import assert from 'node:assert/strict'
 import {readFileSync,existsSync,statSync} from 'node:fs'
 import {resolve} from 'node:path'
 import {loadSource,buildSource,snapshot,plan,synchronize,publicPlan,checkHost,ROOT} from './index.mjs'
+import {checkAdapterConfig} from '../paperclip-org/index.mjs'
 const source=loadSource()
 const clone=structuredClone
 function fake({drift=false}={}) {
   const configs={}, files={}, permissions={canCreateAgents:false,canCreateSkills:false,canAssignTasks:false}
   for (const a of source.manifest.agents) {
-    configs[a.id]={id:a.id,companyId:source.manifest.companyId,name:a.name,title:a.title,status:'paused',reportsTo:null,adapterType:a.adapterType??'codex_local',permissions:clone(permissions),runtimeConfig:{heartbeat:{enabled:false,wakeOnDemand:false,maxConcurrentRuns:1,maxDailyRuns:a.maxDailyRuns??null,maxTurnContinuation:{enabled:false}}},adapterConfig:{...(a.disposition==='pilot'?{...a.executionPermissions,...(a.adapterType==='claude_local'?{dangerouslySkipPermissions:false}:{dangerouslyBypassApprovalsAndSandbox:false})}:{}),...(a.adapterLocal?.permissionDelivery?{engine:'acp',agentCommand:'node tools/qa-claude-agent-acp/index.mjs'}:{}),model:'preserve-model',env:{SECRET:{type:'secret_ref',secretId:'preserve-reference'}},workspaceStrategy:{type:'git_worktree'},timeoutSec:900,...(a.maxTurnsPerRun?{maxTurnsPerRun:a.maxTurnsPerRun}:{})}}
+    configs[a.id]={id:a.id,companyId:source.manifest.companyId,name:a.name,title:a.title,status:'paused',reportsTo:null,adapterType:a.adapterType??'codex_local',permissions:clone(permissions),runtimeConfig:{heartbeat:{enabled:false,wakeOnDemand:false,maxConcurrentRuns:1,maxDailyRuns:a.maxDailyRuns??null,maxTurnContinuation:{enabled:false}}},adapterConfig:{...(a.disposition==='pilot'?{engine:'acp',...a.executionPermissions,...(a.adapterType==='claude_local'?{dangerouslySkipPermissions:false}:{dangerouslyBypassApprovalsAndSandbox:false})}:{}),...(a.adapterLocal?.permissionDelivery?{agentCommand:'node tools/qa-claude-agent-acp/index.mjs'}:{}),model:'preserve-model',env:{SECRET:{type:'secret_ref',secretId:'preserve-reference'}},workspaceStrategy:{type:'git_worktree'},timeoutSec:900,...(a.maxTurnsPerRun?{maxTurnsPerRun:a.maxTurnsPerRun}:{})}}
     if(a.disposition==='pilot') files[a.id]=clone(source.files[a.id])
   }
   const qa=source.manifest.agents.find(a=>a.roleKey==='qa-engineer')
@@ -114,3 +115,56 @@ test('verify reports a live env that cannot find plugins at all',async()=>{const
 test('host checks never enter the plan digest or the apply path',async()=>{const f=fake({drift:true});const qa=qaOf(source.manifest);const p1=await synchronize(f,source);const p2=await synchronize(f,source,{host:hostFor(qa).host});assert.equal(p1.digest,p2.digest);const applied=await synchronize(f,source,{apply:true,approvedDigest:p1.digest});assert(applied.verified);assert.equal(applied.hostFindings,undefined)})
 
 test('verify rejects the old ignored-user-settings delivery even with a matching allow-list',async()=>{const f=fake();const qa=qaOf(source.manifest);delete f.configs[qa.id].adapterConfig.agentCommand;const h=hostFor(qa);const r=await synchronize(f,source,{host:h.host});assert(r.hostFindings.some(x=>/launcher is not selected/.test(x)));assert(r.changes.some(x=>x.fields.includes('adapterConfig')));assert.deepEqual(writes(f),[])})
+
+// H1: exercise the public checker and the same read-only path as --verify-only.
+for (const type of ['claude_local','codex_local']) test(`adapter checker recognizes permissionMode for ${type}`,()=>{
+  assert.deepEqual(checkAdapterConfig(type,{permissionMode:'approve-reads'}),[])
+  assert.equal(checkAdapterConfig(type,{permissionModeTypo:'approve-reads'}).length,1)
+})
+for (const a of source.manifest.agents.filter(a=>a.disposition==='pilot')) {
+  test(`plan pins ACP without inventing a launcher for ${a.roleKey}`,async()=>{
+    for (const engine of [undefined,'cli']) {
+      const f=fake(),adapter=f.configs[a.id].adapterConfig
+      if (engine===undefined) delete adapter.engine
+      else adapter.engine=engine
+      const p=plan(source,await snapshot(f,source))
+      const op=p.operations.find(o=>o.path===`/api/agents/${a.id}`)
+      assert(op, 'Lane drift must produce a reviewed desired-state change')
+      assert.equal(op.body.adapterConfig.engine,'acp')
+      assert.equal(op.body.adapterConfig.agentCommand,adapter.agentCommand)
+      assert.deepEqual(writes(f),[])
+    }
+  })
+  for (const engine of [undefined,'cli']) test(`verify reports ${engine===undefined?'missing':'CLI'} engine for ${a.roleKey}`,async()=>{
+    const f=fake()
+    if (engine===undefined) delete f.configs[a.id].adapterConfig.engine
+    else f.configs[a.id].adapterConfig.engine=engine
+    const r=await synchronize(f,source,{host:hostFor(qaOf(source.manifest)).host})
+    assert(r.hostFindings.includes(`${a.name}: live engine must be explicitly acp; CLI fallback does not enforce the declared ACP permissions`))
+    assert.deepEqual(writes(f),[])
+  })
+  for (const mode of [undefined,'default']) test(`verify reports ${mode===undefined?'missing':'mismatched'} permissionMode for ${a.roleKey}`,async()=>{
+    const f=fake()
+    if (mode===undefined) {
+      delete f.configs[a.id].adapterConfig.permissionMode
+      // An alias must not hide a missing canonical declaration.
+      f.configs[a.id].adapterConfig.acpPermissionMode=a.executionPermissions.permissionMode
+    } else f.configs[a.id].adapterConfig.permissionMode=mode
+    const r=await synchronize(f,source,{host:hostFor(qaOf(source.manifest)).host})
+    assert(r.hostFindings.includes(`${a.name}: live permissionMode is missing or does not match declared executionPermissions.permissionMode (${a.executionPermissions.permissionMode})`))
+    assert.deepEqual(writes(f),[])
+  })
+}
+test('verify reports the missing managed QA ACP entrypoint',async()=>{
+  const f=fake(),qa=qaOf(source.manifest),h=hostFor(qa)
+  const r=await synchronize(f,source,{host:{...h.host,exists:p=>!p.endsWith('/@agentclientprotocol/claude-agent-acp/dist/index.js')&&h.host.exists(p)}})
+  assert(r.hostFindings.includes(`${qa.name}: managed Claude ACP entrypoint is missing; launcher will stop`))
+  assert.deepEqual(writes(f),[])
+})
+test('verify retains the QA launcher finding when its engine is missing',async()=>{
+  const f=fake(),qa=qaOf(source.manifest)
+  delete f.configs[qa.id].adapterConfig.engine
+  const r=await synchronize(f,source,{host:hostFor(qa).host})
+  assert(r.hostFindings.includes(`${qa.name}: QA worktree permission launcher is not selected; user settings permissions are ineffective`))
+  assert.deepEqual(writes(f),[])
+})
