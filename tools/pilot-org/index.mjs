@@ -4,6 +4,7 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { homedir } from 'node:os'
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -51,15 +52,16 @@ function validateAdapterLocal(a) {
   const plugins = l.claudeCodePlugins ?? []
   requireThat(Array.isArray(plugins) && plugins.every(k => typeof k === 'string' && PLUGIN_KEY.test(k)) && new Set(plugins).size === plugins.length, `${a.name}: claudeCodePlugins must be unique '<plugin>@<marketplace>' keys`)
   const pluginNames = new Set(plugins.map(k => k.split('@')[0]))
+  requireThat(l.permissionDelivery === 'qa-worktree-local' && a.roleKey === 'qa-engineer', 'QA permissions require the worktree-local launcher')
   const rules = l.permissionsAllow ?? []
   requireThat(Array.isArray(rules) && rules.every(r => typeof r === 'string' && PERMISSION_RULE.test(r)) && new Set(rules).size === rules.length, `${a.name}: permissionsAllow must be unique Claude Code permission rules`)
   for (const r of rules) {
     const tool = r.split('(')[0]
     requireThat(tool !== 'Edit', `${a.name}: Edit is never allowed for a report-only role`)
     requireThat(r !== 'Write' && r !== 'Bash', `${a.name}: bare ${r} would allow any path or command; scope it`)
-    if (tool === 'Task') {
-      const name = r.slice(5, -1)
-      requireThat(pluginNames.has(name.split(':')[0]), `${a.name}: Task(${name}) names a subagent outside the declared plugins`)
+    if (tool === 'Task' || tool === 'Skill') {
+      const name = r.slice(r.indexOf('(') + 1, -1)
+      requireThat(pluginNames.has(name.split(':')[0]), `${a.name}: ${tool}(${name}) names tooling outside the declared plugins`)
     }
   }
 }
@@ -93,7 +95,12 @@ export function buildSource({manifest, invariants, baseline, read}) {
     }
     requireThat(files[a.id]['AGENTS.md'].trim(), 'Empty role instructions')
   }
-  return {manifest,invariants,baseline,files}
+  const qa = manifest.agents.find(a => a.roleKey === 'qa-engineer')
+  const projectSettings = JSON.parse(read('.claude/settings.json'))
+  requireThat(same(projectSettings, {enabledPlugins:Object.fromEntries(qa.adapterLocal.claudeCodePlugins.map(k=>[k,true]))}), 'Project settings must mirror only the declared plugins')
+  const runtimeFiles = {'tools/qa-claude-agent-acp/index.mjs':read('tools/qa-claude-agent-acp/index.mjs')}
+  requireThat(runtimeFiles['tools/qa-claude-agent-acp/index.mjs'].trim(), 'Missing QA permission launcher')
+  return {manifest,invariants,baseline,files,runtimeFiles}
 }
 
 export class Client {
@@ -175,6 +182,10 @@ export function plan(source, live) {
       if (a.maxTurnsPerRun) body.adapterConfig.maxTurnsPerRun = tighter(c.adapterConfig.maxTurnsPerRun,a.maxTurnsPerRun) || a.maxTurnsPerRun
       delete body.adapterConfig.promptTemplate
       delete body.adapterConfig.bootstrapPromptTemplate
+      if (a.adapterLocal?.permissionDelivery === 'qa-worktree-local') {
+        body.adapterConfig.engine = 'acp'
+        body.adapterConfig.agentCommand = 'node tools/qa-claude-agent-acp/index.mjs'
+      }
       body.replaceAdapterConfig = true
     }
     const changed = Object.keys(body).filter(k => k !== 'replaceAdapterConfig' && !same(body[k],c[k]))
@@ -216,7 +227,11 @@ export function checkHost(source, live, host = defaultHost()) {
       if (!(market in marketplaces)) findings.push(`${a.name}: marketplace ${market} is unknown to this host; Claude Code would drop ${key}`)
       if (settings.enabledPlugins?.[key] !== true) findings.push(`${a.name}: ${key} is not enabled in ${configDir ?? '<CLAUDE_CONFIG_DIR>'}/settings.json`)
     }
-    if (!same(settings.permissions?.allow ?? [], l.permissionsAllow ?? [])) findings.push(`${a.name}: settings.json permissions.allow differs from the manifest`)
+    // User settings are ignored by ACP. Verify the selected delivery mechanism,
+    // never claim that an unused file establishes effective permissions.
+    if (!host.exists(resolve(homedir(), '.paperclip/cli/current/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js'))) findings.push(`${a.name}: managed Claude ACP entrypoint is missing; launcher will stop`)
+    const adapter = live.configs[a.id]?.adapterConfig
+    if (adapter?.engine !== 'acp' || adapter?.agentCommand !== 'node tools/qa-claude-agent-acp/index.mjs') findings.push(`${a.name}: QA worktree permission launcher is not selected; user settings permissions are ineffective`)
   }
   return findings
 }
