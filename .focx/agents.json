@@ -270,9 +270,8 @@
           "Bash(curl:*)",
           "Bash(node tools/drift-check:*)",
           "Bash(node tools/contracts:*)",
-          "Bash(mkdir:*)",
+          "Bash(mkdir -p pipeline/runs/*)",
           "Write(pipeline/runs/**)",
-          "Write(/tmp/**)",
           "Bash(git fetch:*)",
           "Bash(git checkout:*)",
           "Bash(git config user.:*)",
@@ -281,8 +280,10 @@
           "Bash(git push origin run/:*)",
           "Bash(scripts/paperclip-issue-update.sh:*)",
           "Task(pr-review-toolkit:silent-failure-hunter)",
-          "Task(differential-review:adversarial-modeler)"
-        ]
+          "Task(differential-review:adversarial-modeler)",
+          "Skill(differential-review:diff-review)"
+        ],
+        "permissionDelivery": "qa-worktree-local"
       }
     }
   ]

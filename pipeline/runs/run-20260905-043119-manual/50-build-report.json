@@ -1,0 +1,23 @@
+{
+  "runId": "run-20260905-043119-manual",
+  "storiesImplemented": [
+    "Ryan-approved QA scoped permission delivery after the FOC-92 smoke test."
+  ],
+  "filesChanged": [
+    ".focx/agents.json",
+    "docs/pilot-operation.md",
+    "tools/pilot-org/index.mjs",
+    "tools/pilot-org/test.mjs",
+    "tools/pilot-org/qa-launcher.test.mjs",
+    "tools/qa-claude-agent-acp/index.mjs",
+    "pipeline/runs/run-20260905-043119-manual/00-run.json",
+    "pipeline/runs/run-20260905-043119-manual/50-build-report.json"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "No design drift: 23 published values from 2 token files. Base 5e2fb9bea11aac885e887f7effacbecb9dfaba9c. 73 pilot/launcher/reporting tests pass; historical reconciler suite passes. Launcher integration test uses a real temporary Git worktree and verifies confined local-settings writes, readback, idempotence and symlink refusal. Read-only live plan proposes only QA adapterConfig (engine=acp, agentCommand=node tools/qa-claude-agent-acp/index.mjs), with zero activations/deletions; verify correctly exits 1 because the launcher is not yet selected. No live writes or model runs performed. Human merge, fresh reviewed plan/apply, independent QA and live smoke remain required; no claim yet that skill/write/reporting permissions execute successfully. Render preview pending PR integration."
+  }
+}

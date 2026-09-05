@@ -1,3 +1,4 @@
+import './qa-launcher.test.mjs'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync,existsSync,statSync} from 'node:fs'
@@ -8,7 +9,7 @@ const clone=structuredClone
 function fake({drift=false}={}) {
   const configs={}, files={}, permissions={canCreateAgents:false,canCreateSkills:false,canAssignTasks:false}
   for (const a of source.manifest.agents) {
-    configs[a.id]={id:a.id,companyId:source.manifest.companyId,name:a.name,title:a.title,status:'paused',reportsTo:null,adapterType:a.adapterType??'codex_local',permissions:clone(permissions),runtimeConfig:{heartbeat:{enabled:false,wakeOnDemand:false,maxConcurrentRuns:1,maxDailyRuns:a.maxDailyRuns??null,maxTurnContinuation:{enabled:false}}},adapterConfig:{...(a.disposition==='pilot'?{...a.executionPermissions,...(a.adapterType==='claude_local'?{dangerouslySkipPermissions:false}:{dangerouslyBypassApprovalsAndSandbox:false})}:{}),model:'preserve-model',env:{SECRET:{type:'secret_ref',secretId:'preserve-reference'}},workspaceStrategy:{type:'git_worktree'},timeoutSec:900,...(a.maxTurnsPerRun?{maxTurnsPerRun:a.maxTurnsPerRun}:{})}}
+    configs[a.id]={id:a.id,companyId:source.manifest.companyId,name:a.name,title:a.title,status:'paused',reportsTo:null,adapterType:a.adapterType??'codex_local',permissions:clone(permissions),runtimeConfig:{heartbeat:{enabled:false,wakeOnDemand:false,maxConcurrentRuns:1,maxDailyRuns:a.maxDailyRuns??null,maxTurnContinuation:{enabled:false}}},adapterConfig:{...(a.disposition==='pilot'?{...a.executionPermissions,...(a.adapterType==='claude_local'?{dangerouslySkipPermissions:false}:{dangerouslyBypassApprovalsAndSandbox:false})}:{}),...(a.adapterLocal?.permissionDelivery?{engine:'acp',agentCommand:'node tools/qa-claude-agent-acp/index.mjs'}:{}),model:'preserve-model',env:{SECRET:{type:'secret_ref',secretId:'preserve-reference'}},workspaceStrategy:{type:'git_worktree'},timeoutSec:900,...(a.maxTurnsPerRun?{maxTurnsPerRun:a.maxTurnsPerRun}:{})}}
     if(a.disposition==='pilot') files[a.id]=clone(source.files[a.id])
   }
   const qa=source.manifest.agents.find(a=>a.roleKey==='qa-engineer')
@@ -97,14 +98,15 @@ function hostFor(qa,{missingPlugin,unknownMarket,disabled,driftAllow}={}){
   const markets={};for(const k of qa.adapterLocal.claudeCodePlugins){const m=k.split('@')[1];if(m!==unknownMarket)markets[m]={}}
   const enabled={};for(const k of qa.adapterLocal.claudeCodePlugins)enabled[k]=k!==disabled
   const files={[`${cache}/installed_plugins.json`]:{version:2,plugins:installed},[`${cache}/known_marketplaces.json`]:markets,[`${cfg}/settings.json`]:{enabledPlugins:enabled,permissions:{allow:driftAllow?['Read']:qa.adapterLocal.permissionsAllow}}}
-  return {cache,cfg,host:{readJson:p=>files[p]??null,exists:p=>/\/\.claude-plugin\/plugin\.json$/.test(p)&&Object.values(installed).some(r=>p.startsWith(r[0].installPath))}}
+  return {cache,cfg,host:{readJson:p=>files[p]??null,exists:p=>p.endsWith('/@agentclientprotocol/claude-agent-acp/dist/index.js')||/\/\.claude-plugin\/plugin\.json$/.test(p)&&Object.values(installed).some(r=>p.startsWith(r[0].installPath))}}
 }
 test('verify passes when the host carries exactly what the manifest declares, and writes nothing',async()=>{const f=fake();const qa=qaOf(source.manifest);const h=hostFor(qa);f.configs[qa.id].adapterConfig.env.CLAUDE_CODE_PLUGIN_CACHE_DIR={type:'plain',value:h.cache};f.configs[qa.id].adapterConfig.env.CLAUDE_CONFIG_DIR=h.cfg;const r=await synchronize(f,source,{host:h.host});assert.deepEqual(r.hostFindings,[]);assert.deepEqual(r.changes,[]);assert.deepEqual(writes(f),[])})
 for(const [label,opts,pattern] of [
   ['a plugin missing from the host',{missingPlugin:'differential-review@trailofbits'},/not installed/],
   ['a marketplace Claude Code does not know',{unknownMarket:'trailofbits'},/unknown to this host/],
   ['a plugin not enabled in the agent settings',{disabled:'pr-review-toolkit@claude-plugins-official'},/not enabled/],
-  ['an allow-list that drifted from the manifest',{driftAllow:true},/permissions.allow differs/],
 ])test(`verify reports ${label}`,async()=>{const f=fake();const qa=qaOf(source.manifest);const h=hostFor(qa,opts);f.configs[qa.id].adapterConfig.env.CLAUDE_CODE_PLUGIN_CACHE_DIR=h.cache;f.configs[qa.id].adapterConfig.env.CLAUDE_CONFIG_DIR=h.cfg;const r=await synchronize(f,source,{host:h.host});assert(r.hostFindings.some(x=>pattern.test(x)),r.hostFindings.join('\n'))})
 test('verify reports a live env that cannot find plugins at all',async()=>{const f=fake();const qa=qaOf(source.manifest);const r=await synchronize(f,source,{host:hostFor(qa).host});assert(r.hostFindings.some(x=>/CLAUDE_CODE_PLUGIN_CACHE_DIR is not set/.test(x)))})
 test('host checks never enter the plan digest or the apply path',async()=>{const f=fake({drift:true});const qa=qaOf(source.manifest);const p1=await synchronize(f,source);const p2=await synchronize(f,source,{host:hostFor(qa).host});assert.equal(p1.digest,p2.digest);const applied=await synchronize(f,source,{apply:true,approvedDigest:p1.digest});assert(applied.verified);assert.equal(applied.hostFindings,undefined)})
+
+test('verify rejects the old ignored-user-settings delivery even with a matching allow-list',async()=>{const f=fake();const qa=qaOf(source.manifest);delete f.configs[qa.id].adapterConfig.agentCommand;const h=hostFor(qa);const r=await synchronize(f,source,{host:h.host});assert(r.hostFindings.some(x=>/launcher is not selected/.test(x)));assert(r.changes.some(x=>x.fields.includes('adapterConfig')));assert.deepEqual(writes(f),[])})
