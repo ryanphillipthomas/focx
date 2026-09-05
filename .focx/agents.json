@@ -279,6 +279,7 @@
           "Bash(git add pipeline/runs:*)",
           "Bash(git commit:*)",
           "Bash(git push origin run/:*)",
+          "Bash(scripts/paperclip-issue-update.sh:*)",
           "Task(pr-review-toolkit:silent-failure-hunter)",
           "Task(differential-review:adversarial-modeler)"
         ]

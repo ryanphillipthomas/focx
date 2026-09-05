@@ -42,3 +42,19 @@ The tool never changes an agent's adapter, model, or credentials: binding the Cl
 Claude Code plugins a pilot relies on are installed on this host by a human (`/plugin marketplace add`, `/plugin install`) and reach the agent through two settings the tool preserves but never writes: `CLAUDE_CODE_PLUGIN_CACHE_DIR` in the agent's environment, pointing at the host plugin root, and `enabledPlugins` in the agent's own `settings.json` under its `CLAUDE_CONFIG_DIR`. The manifest records them as `adapterLocal.claudeCodePlugins`, using Claude Code's own `<plugin>@<marketplace>` keys. `pnpm pilot:verify` reads the host's `installed_plugins.json` and `known_marketplaces.json`, the live environment, and that `settings.json`, and fails on any drift. It writes none of them.
 
 `approve-reads` remains the policy for every pilot. QA must write run artifacts, run the drift and contract checks, commit and push evidence on the standalone path, and call exactly two review subagents. That is its scoped write workflow, declared as `adapterLocal.permissionsAllow` and mirrored into `permissions.allow` in the same `settings.json`. Rules are Claude Code permission rules, honoured before the ACP callback. `Edit` is never allowed, `Write` and `Bash` are always scoped, `Task(...)` may name only subagents of declared plugins, and pushes may target only `run/*` branches. Anything outside the list is denied unattended and stops the run; the fix is one narrower rule in the source, reviewed — never a wider policy.
+
+## Reporting from inside a run
+
+A pilot that cannot write to its task has no voice: it finishes the work and the board sees a `blocked` issue with no explanation. Under `approve-reads` that is the default outcome, because Claude Code does not prefix-match a Bash command containing a variable expansion against a permission rule, and Paperclip's built-in coordination skill teaches exactly such a command — `curl` with `$PAPERCLIP_API_URL` and `$PAPERCLIP_API_KEY`. The 2026-09-04 QA smoke test isolated this in a single run: under one `Bash(curl:*)` rule, a curl to a literal URL completed and `curl -s "$PAPERCLIP_API_URL"` was refused.
+
+Paperclip already allow-lists `<worktree>/scripts/paperclip-issue-update.sh` in every run's `.claude/settings.local.json` but ships no such file, and every worktree is a checkout of this repository. So the script lives here, at `scripts/paperclip-issue-update.sh`. It reads `PAPERCLIP_API_URL`, `PAPERCLIP_API_KEY`, `PAPERCLIP_TASK_ID` and `PAPERCLIP_RUN_ID` from the environment, leaving the call site free of expansion:
+
+```
+scripts/paperclip-issue-update.sh --status done <<'MD'
+report body, blank lines intact
+MD
+```
+
+QA's manifest carries the matching rule `Bash(scripts/paperclip-issue-update.sh:*)`, because Paperclip's own rule names an absolute path while the documented call is relative. The script verifies rather than infers, as Paperclip's skill requires: a successful update echoes the issue, so an empty body, an unparseable body, a different issue id, or a status the server did not apply are all reported as FAILED with a nonzero exit. One connection-level failure is retried once; an HTTP error is never retried, because a PATCH that may already have applied must not be sent twice. The bearer token is passed to curl through `--config` on stdin so it never appears in this host's process list. `node --test scripts/paperclip-issue-update.test.mjs` covers these paths and runs in the drift gate.
+
+Two limits remain open from the same smoke test, and neither is fixed here. `Write(/tmp/**)` did not short-circuit the ACP callback, so writes outside the evidence location are still denied; the rule stays in the manifest only until a run proves what replaces it. And the review plugins were absent for that run despite being installed and enabled, which points at the shared `~/.claude/plugins` root the agent and this host both use.
