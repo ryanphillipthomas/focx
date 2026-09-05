@@ -1,0 +1,24 @@
+{
+  "sourceRevision": "e4c92ab5c2cc5c2a49dd033e643a6a2942902e4a",
+  "smokeTask": "FOC-94",
+  "smokeRun": "29164c9c-3282-42b0-a528-26c4ee47d765",
+  "observation": "QA Write succeeded, but reconstructing the Git diff through generated text altered it. The second saved file was 45536 bytes vs Git output 45545 bytes; matching 519-line counts did not prove equality. Initial attempt also omitted a file diff.",
+  "correction": "One literal git diff <base>...<revision> > pipeline/runs/<run-id>/evidence/run.diff call. No new permission grants, launcher change, or helper.",
+  "proof": "Installed Claude 2.1.232 permitted direct capture of 121705 byte-identical bytes and denied outside.diff using existing Bash(git diff:*) and Edit(/pipeline/runs/**), with Edit/NotebookEdit/Skill denied.",
+  "independentQaVerdict": false,
+  "liveWorkflowResult": {
+    "mkdir": "succeeded",
+    "write": "succeeded",
+    "differentialReview": "substantive report saved (15207 bytes)",
+    "silentFailureReview": "substantive report saved (6201 bytes)",
+    "qaReporting": "QA-authored substantive 3764-byte comment confirmed; script set FOC-94 done",
+    "overall": "Qualified: workflow operations succeed, but diff is not byte-exact; agent PASS is not accepted for exact evidence criterion",
+    "shutdown": "QA paused; timer/manual wakeups off; verify clean",
+    "otherFindings": [
+      "Denied prohibited /tmp attempt",
+      "Diff/report contain literal trailing </content>",
+      "Differential report 9/9 coverage claim aggregates 13 Git file diffs",
+      "Shared plugin metadata mtimes changed again; writer not identified"
+    ]
+  }
+}
