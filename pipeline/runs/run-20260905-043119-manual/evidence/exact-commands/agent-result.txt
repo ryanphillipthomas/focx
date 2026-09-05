@@ -1,0 +1,64 @@
+I
+'ll foll
+ow the exact 4-step
+ diagnostic from
+ the issue description,
+ starting with chec
+king HEAD.
+git rev-parse HEAD
+git rev-parse HEAD
+tool call (completed): ```console
+edd0aae0bfdf190eef3ee77ab8a0e95bc4df803b
+```
+H
+EAD matches the required
+ rev
+ision. Proceeding to
+ step
+ 2.
+mkdir -p pipeline/runs/smoke-exact-pr83/evidence/
+mkdir -p pipeline/runs/smoke-exact-pr83/evidence/
+tool call (completed): (Bash completed with no output)
+m
+kdir succeeded.
+ Now step
+ 3,
+ writing the prob
+e file with the Write tool
+.
+Preparing file…
+Write pipeline/runs/smoke-exact-pr83/evidence/probe.txt
+Write pipeline/runs/smoke-exact-pr83/evidence/probe.txt
+tool call (failed): ```
+User refused permission to run tool
+```
+Write was denied by the permission system. Recording that and proceeding to step 
+4, the reporting script call.
+scripts/paperclip-issue-update.sh --status done <<'MD'
+QA exact-command diagnostic: report observed HEAD, mkdir and Write outcomes here.
+MD
+scripts/paperclip-issue-update.sh --status done <<'MD'
+QA exact-command diagnostic: report observed HEAD, mkdir and Write outcomes here.
+MD
+tool call (completed): ```console
+paperclip-issue-update: FOC-93 updated — status done, comment attached
+```
+All
+ four operations from
+ the diagnostic completed as specified.
+
+## QA Exact-Command Permission Probe — Result
+
+**Tested revision:** `edd0aae0bfdf190eef3ee77ab8a0e95bc4df803b` (mat
+ches required HEAD)
+
+1. `git rev-parse HEAD` → **`edd0aae0bfdf190eef3ee77ab8a0e95bc4df803b`** — matches required HEAD, proceeded.
+2. `mkdir -p pip
+eline/runs/smoke-exact-pr83/evidence/` → **succeeded**, no output.
+3. `Write` of `pipeline/runs/smoke-exact-pr83/evidence/probe.txt` → **DENIED** by
+ the permission system (user refused the tool call). Not retried, not investigated further per instructions.
+4. `scripts/paperclip-issue-update.sh --status done <<'MD' ... MD` → **succeeded**:
+ `paperclip-issue-update: FOC-93 updated — status done, comment attached`.
+
+Issue status has been set to `done` via the script itself, per the exact procedure. No other
+ files were touched, no commits/pushes/installs made, no subagents or review skills invoked.
