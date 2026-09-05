@@ -35,3 +35,8 @@ jobs:
         run: |
           node tools/pilot-org/index.mjs --check
           node --test tools/pilot-org/test.mjs
+      # The reporting script is a pilot's only way to write back to its task
+      # under approve-reads. A regression here is silent: the run still
+      # succeeds, and the report is simply lost.
+      - name: agent reporting path
+        run: node --test scripts/paperclip-issue-update.test.mjs

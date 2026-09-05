@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {readFileSync} from 'node:fs'
+import {readFileSync,existsSync,statSync} from 'node:fs'
 import {resolve} from 'node:path'
 import {loadSource,buildSource,snapshot,plan,synchronize,publicPlan,checkHost,ROOT} from './index.mjs'
 const source=loadSource()
@@ -59,7 +59,20 @@ const readRepo=p=>readFileSync(resolve(ROOT,p),'utf8')
 const rebuilt=(mutate,read=readRepo)=>{const manifest=clone(source.manifest),invariants=clone(source.invariants);mutate?.(manifest,invariants);return buildSource({manifest,invariants,baseline:source.baseline,read})}
 const qaOf=m=>m.agents.find(a=>a.roleKey==='qa-engineer')
 test('the committed QA entry records a reviewed Claude migration and its adapter-local tooling',()=>{const qa=qaOf(source.manifest);assert.equal(qa.adapterType,'claude_local');assert.equal(qa.maxTurnsPerRun,20);assert.deepEqual(qa.adapterMigration,{from:'codex_local',to:'claude_local',approvedBy:'Ryan Thomas',date:'2026-09-04'});assert.deepEqual(qa.adapterLocal.claudeCodePlugins,['differential-review@trailofbits','pr-review-toolkit@claude-plugins-official','spec-to-code-compliance@trailofbits']);assert(qa.adapterLocal.permissionsAllow.includes('Task(pr-review-toolkit:silent-failure-hunter)'));assert(!qa.adapterLocal.permissionsAllow.some(r=>/^Edit/.test(r)||r==='Write'||r==='Bash'));assert.deepEqual(qa.executionPermissions,{permissionMode:'approve-reads',nonInteractivePermissions:'deny'})})
-test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.1"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.1"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.1"','version: "0.1"'):readRepo(p)),/versioned/)})
+// A pilot that cannot write to its task reports nothing. The rule and the file
+// it names have to travel together: Paperclip allow-lists this path in every
+// worktree but ships no script, and a rule pointing at a missing file is the
+// same silence as no rule at all.
+test('QA can report through the committed script, and the script is really there',()=>{const qa=qaOf(source.manifest)
+  assert(qa.adapterLocal.permissionsAllow.includes('Bash(scripts/paperclip-issue-update.sh:*)'),'QA has no rule permitting the reporting script')
+  const path=resolve(ROOT,'scripts/paperclip-issue-update.sh')
+  assert(existsSync(path),'the allow-listed reporting script is not committed')
+  assert(statSync(path).mode & 0o111,'the reporting script is not executable')
+  const body=readFileSync(path,'utf8')
+  // Reading these from the environment is the whole point: a call site that
+  // needs `$` matches no permission rule and is denied unattended.
+  for(const key of ['PAPERCLIP_API_URL','PAPERCLIP_API_KEY','PAPERCLIP_TASK_ID']) assert(body.includes(key),`the script does not read ${key} from the environment`)})
+test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.2"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.2"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.2"','version: "0.1"'):readRepo(p)),/versioned/)})
 for(const [label,mutate] of Object.entries({
   'a migration between the same adapter':m=>{qaOf(m).adapterMigration.to='codex_local';qaOf(m).adapterMigration.from='codex_local'},
   'a migration whose target differs from adapterType':m=>{qaOf(m).adapterMigration.to='codex_local'},

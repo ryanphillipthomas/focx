@@ -2,7 +2,7 @@
   "name": "focx",
   "private": true,
   "version": "0.1.0",
-  "description": "focx.ai umbrella organization \u2014 autonomous development monorepo",
+  "description": "focx.ai umbrella organization — autonomous development monorepo",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "engines": {
@@ -14,6 +14,7 @@
     "pilot:check": "node tools/pilot-org/index.mjs --check",
     "pilot:plan": "node tools/pilot-org/index.mjs",
     "pilot:verify": "node tools/pilot-org/index.mjs --verify-only",
-    "test:pilot": "node --test tools/pilot-org/test.mjs"
+    "test:pilot": "node --test tools/pilot-org/test.mjs",
+    "test:scripts": "node --test scripts/paperclip-issue-update.test.mjs"
   }
 }
