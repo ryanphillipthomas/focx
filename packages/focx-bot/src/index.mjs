@@ -143,6 +143,7 @@ export async function main(argv=process.argv.slice(2),runtime={}) {
     }})
   }
   emit(result)
+  if(flags.verb==='bind-secrets')result.pluginSummary?.forEach(line=>console.log(line))
   if(flags.verb==='verify'){
     if(result.scope==='restored-configuration') {
       requireThat(!result.changes.length && !result.invariants.length && result.permissionsRevoked && result.catalog.every(m=>m.present), 'Restored configuration verification failed')
