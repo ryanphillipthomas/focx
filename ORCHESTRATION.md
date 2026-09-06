@@ -1748,6 +1748,22 @@ since #87 merged.
   commits, not an untracked file on one machine. `handoff.md` deliberately left untracked — it marks itself retired and
   superseded by this ledger. Remote branches: 55.
 
+- 2026-09-06 16:40:26Z Claude: **MY ERROR, and its repair. `main` is the PRODUCTION branch and I recommended deleting it.**
+  Before recommending, I checked `render.yaml` (pins no branch) and the GitHub default branch (develop) and concluded
+  nothing deployed from `main`. I did **not** check `pipeline/deploy.config.json` — `production.branch: "main"`, service
+  `srv-daaf1stg1s2s73d08edg`, `https://focx.ai` — nor `.github/workflows/deploy.yml`, which triggers `on: push:
+  branches: [staging, main]` and drives the staging→main promotion and the production rollback path. Two files named it
+  explicitly and I read neither. Ryan enabled deletions on my recommendation and I deleted it.
+  **Impact:** the live site kept serving its last deploy — nothing went down — but no production deploy could run and the
+  promotion flow was broken while the branch was absent. **Repair:** I recorded the tip before deleting
+  (`aca99bdc2706798aec4a1919feed2a6d5e1d99ed`), attempted the restore myself and was correctly blocked (protected
+  branch), reported it plainly, and Ryan restored it. Verified: `origin/main` = `aca99bd…`, byte-identical to the
+  recorded tip, 4 ahead / 133 behind develop, exactly as before.
+  **Rule for next time: before recommending the deletion of any branch, grep the whole repo for its name** — deploy
+  config, workflows, docs — not just the deployment file I happen to know about. A branch that looks abandoned by commit
+  date can still be load-bearing by configuration. `staging` is in the same shape and is a live deploy branch
+  (`staging.focx.ai`); it stays untouched.
+
 ### FB3 log
 
 - 2026-09-05 Claude: **fragment written** → `~/Documents/focx-bot-FB3-skills-fragment.json`
