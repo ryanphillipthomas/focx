@@ -1764,6 +1764,24 @@ since #87 merged.
   date can still be load-bearing by configuration. `staging` is in the same shape and is a live deploy branch
   (`staging.focx.ai`); it stays untouched.
 
+- 2026-09-06 Ryan: **"lets roll develop out"**, then **"ok, merged"** (PR #100, develop → staging).
+- 2026-09-06 16:47:23Z Claude: **Staging merged (`61bce8e`); the DEPLOY GATE is broken, and has been since before today.** PR #100
+  carried 61 merged PRs (#28–#99), 188 files, +36,676/−203, of which the served site is five files under `apps`
+  (+109/−30). The `deploy.yml` `verify` job failed on staging at **`actions/checkout`**, before any verification logic:
+  `fatal: could not read Username for 'https://github.com': terminal prompts disabled`, three retries, exit 128. The
+  cause is `token: ${{ secrets.PIPELINE_TOKEN || github.token }}` (`deploy.yml:58`): the secret **exists but is no longer
+  valid**, so checkout uses it and fails — were it unset, the `||` fallback to `github.token` would have worked. **Not
+  caused by this rollout:** the `main` run of 2026-09-01 failed identically, as did the run triggered by Ryan's restore
+  push at 16:39:53Z. That restore run also failed at checkout, i.e. **before** the rollback/issue logic, so nothing was
+  rolled back and no issue was opened (`gh issue list` empty).
+  **Consequences:** Render deploys independently of this gate, and `https://staging.focx.ai/` answers **200 over valid
+  TLS with `<title>Focx</title>` and the `skills/connect` mount present** — so the site is up. But there is **no release
+  record and no `staging → main` promotion PR**, because the code that writes them never ran. Promoting to production
+  right now would mean promoting **without the evidence the deploy role requires** (`live` status, evidence-backed
+  checks, empty `infraDrift`).
+  **Fix is Ryan's:** rotate `PIPELINE_TOKEN` in repository secrets (Claude never handles tokens), then re-run the
+  workflow. Raised rather than worked around.
+
 ### FB3 log
 
 - 2026-09-05 Claude: **fragment written** → `~/Documents/focx-bot-FB3-skills-fragment.json`
