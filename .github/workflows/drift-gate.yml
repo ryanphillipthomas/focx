@@ -40,3 +40,11 @@ jobs:
       # succeeds, and the report is simply lost.
       - name: agent reporting path
         run: node --test scripts/paperclip-issue-update.test.mjs
+      - name: focx-bot Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: focx-bot contract schema
+        run: node packages/focx-bot/src/index.mjs --validate-contract
+      - name: focx-bot provisioning safeguards
+        run: node --test packages/focx-bot/test.mjs
