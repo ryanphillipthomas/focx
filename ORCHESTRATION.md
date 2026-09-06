@@ -1782,6 +1782,26 @@ since #87 merged.
   **Fix is Ryan's:** rotate `PIPELINE_TOKEN` in repository secrets (Claude never handles tokens), then re-run the
   workflow. Raised rather than worked around.
 
+- 2026-09-06 Ryan: **"i rotated"** — `PIPELINE_TOKEN` updated 16:51:38Z.
+- 2026-09-06 16:54:03Z Claude: **Re-ran the staging verification (attempt 2). The token fix worked; the gate now runs.** Verified
+  output: `contracts: 49 artifact(s) valid` and
+  `deploy-verify: staging dep-daephbrbc2fs73ciu04g → degraded (serving 61bce8e, expected 61bce8e)`. So **the right
+  commit is live on staging**, health and content marker pass, and the record plus four evidence files
+  (`deploy.json`, `health.json`, `service.json`, `custom-domains.json`) were generated.
+  **Two things still stop a clean promotion.**
+  1. **The gate cannot write its own record.** `git push origin staging` was rejected: `GH006: Protected branch update
+     failed … Changes must be made through a pull request. Required status check "drift" is expected.` The workflow is
+     designed to commit the release record back to the deployed branch (its `paths-ignore` exists precisely to stop the
+     resulting loop), so branch protection and the workflow now contradict each other. Fixing it means letting the
+     pipeline identity bypass protection on `staging`/`main` — a **weakening of branch protection, which the guardrails
+     forbid Claude from touching**. Ryan's call.
+  2. **The release is `degraded`, and the reason is inside the record that could not be pushed.** By
+     `tools/deploy-verify/index.mjs:181`, `degraded` means live + correct SHA + healthy, but with non-empty `infraDrift`,
+     an unverified/uncertified custom domain, or unverified items. Declared values to compare against the live Render
+     service `srv-daatu9fqj5pc73b9ap0g`: name `focx-staging`, branch `staging`, autoDeploy `yes`, buildCommand
+     `node tools/site-compose/index.mjs`, publishPath `dist`.
+  No promotion PR was opened, and per the deploy role a human accepts one only on a `live` record with empty drift.
+
 ### FB3 log
 
 - 2026-09-05 Claude: **fragment written** → `~/Documents/focx-bot-FB3-skills-fragment.json`
