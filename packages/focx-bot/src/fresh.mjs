@@ -153,7 +153,7 @@ export async function bindSecrets(api, source, options={}) {
   requireThat(io, 'bind-secrets requires the instance-local import state')
   const state=await io.readState()
   const save=stateWriter(io,emit,state)
-  requireThat(['awaiting-secret-entry','awaiting-plugin-auth'].includes(state?.phase) && state.contractSha===source.sha && state.baseUrl===api.baseUrl, 'Secret binding requires the matching awaiting-secret-entry state; failed jobs are not retried')
+  requireThat(['awaiting-secret-entry','awaiting-plugin-auth'].includes(state?.phase) && state.contractSha===source.sha && state.baseUrl===api.baseUrl, 'Secret binding requires matching awaiting-secret-entry or awaiting-plugin-auth state; failed jobs are not retried')
   const contract={...source.contract,company:{name:state.expectedName}}
   const live=await readSnapshot(api,state.companyId)
   assertInvariants(contract,live)
@@ -180,12 +180,23 @@ export async function bindSecrets(api, source, options={}) {
     assertInvariants(contract,{...after,previous:live})
     requireThat(secretLinkFindings(contract,after).length===0, 'Post-binding secret-link check failed')
     let plugins={needsAuth:[]}
-    if(options.provisionPlugins){failedStep='host-plugins';plugins=await options.provisionPlugins();state.pluginAuth=plugins.needsAuth}
+    if(options.provisionPlugins){
+      try{plugins=await options.provisionPlugins()}
+      catch{
+        // Only this boundary follows a fully verified env stage. Never persist
+        // exception text or runtime output: either can contain credentials.
+        failedStep='host-plugins'
+        state.pluginFailure={key:'host-plugins',message:'Host plugin provisioning failed; runtime output withheld; inspect the runtime manager by hand before resuming bind-secrets'}
+        throw new Error(state.pluginFailure.message)
+      }
+      state.pluginAuth=plugins.needsAuth
+    }
+    delete state.pluginFailure;delete state.failedStep
     state.phase=plugins.needsAuth.length?'awaiting-plugin-auth':'configured';state.step=3
     await save()
     return {digest,complete:!plugins.needsAuth.length,plugins,access:accessReport(after)}
   } catch(error) {
-    state.phase='failed';state.failedStep=failedStep
+    state.phase=failedStep==='host-plugins'?'awaiting-plugin-auth':'failed';state.failedStep=failedStep
     try{await save()}catch(persistenceError){emit({statePersistenceError:persistenceError.message})}
     throw describeFailure(failedStep,error,state)
   } finally {announce(emit,{method:'UNLOCK',path:io.lockPath});await release()}

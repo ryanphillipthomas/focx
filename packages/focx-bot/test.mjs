@@ -845,3 +845,197 @@ test('role source preserves malformed JSON and missing source file refusals',()=
     assert.throws(()=>rebuilt(null,p=>{if(p===path)throw Error('missing source file');return readRepo(p)}),/missing source file/)
   }
 })
+
+// F18 witnesses also run against source knock-outs below.
+async function bindingFixture() {
+  const f=await fixture({bound:false})
+  f.api.state.secrets=source.contract.secrets.map((s,i)=>({id:`secret-${i}`,name:s.name,companyId:f.companyId}))
+  f.api.state.calls.length=0;f.io.writes.length=0
+  return f
+}
+async function resumeWitness(bind) {
+  const f=await bindingFixture(),emitted=[],opts={io:f.io,emit:e=>emitted.push(e)}
+  const p=await bind(f.api,source,opts)
+  await assert.rejects(bind(f.api,source,{...opts,apply:true,approvedDigest:p.digest,provisionPlugins:async()=>{throw new Error('synthetic install failure')}}),e=>e.step==='host-plugins')
+  const failed=await f.io.readState()
+  assert.equal(failed.phase,'awaiting-plugin-auth')
+  assert.deepEqual(failed.pluginFailure,{key:'host-plugins',message:'Host plugin provisioning failed; runtime output withheld; inspect the runtime manager by hand before resuming bind-secrets'})
+  assert.equal(secretLinkFindings(source.contract,await readSnapshot(f.api,f.companyId)).length,0)
+  const before=structuredClone(f.api.state.agents)
+  f.api.state.calls.length=0;f.io.writes.length=0
+  const next=await bind(f.api,source,opts)
+  assert.equal(f.io.writes.length,0);assert.equal(writes(f.api).length,0)
+  let pluginCalls=0
+  const result=await bind(f.api,source,{...opts,apply:true,approvedDigest:next.digest,provisionPlugins:async()=>{
+    pluginCalls++
+    assert(f.io.locked)
+    const calls=f.api.state.calls,patches=calls.filter(c=>c.method==='PATCH')
+    assert.equal(patches.length,2)
+    assert.deepEqual(patches,p.changes)
+    // Snapshot reads occur between PATCHes and after the final PATCH.
+    const positions=calls.flatMap((c,i)=>c.method==='PATCH'?[i]:[])
+    for(const [i,start] of positions.entries())assert(calls.slice(start+1,positions[i+1]).some(c=>c.method==='GET'&&c.path.endsWith('/secrets/catalog')))
+    assert.equal(secretLinkFindings(source.contract,await readSnapshot(f.api,f.companyId)).length,0)
+    return {needsAuth:[]}
+  }})
+  assert.equal(result.complete,true);assert.equal(pluginCalls,1)
+  assert.deepEqual(f.api.state.agents,before)
+  const done=await f.io.readState();assert.equal(done.phase,'configured')
+  assert(!Object.hasOwn(done,'pluginFailure'));assert(!Object.hasOwn(done,'failedStep'));assert.equal(f.io.locked,false)
+}
+async function envFailureWitness(bind) {
+  const f=await bindingFixture(),opts={io:f.io},p=await bind(f.api,source,opts)
+  f.api.state.fail=({method})=>method==='PATCH'
+  let pluginCalls=0
+  await assert.rejects(bind(f.api,source,{...opts,apply:true,approvedDigest:p.digest,provisionPlugins:async()=>{pluginCalls++;return {needsAuth:[]}}}),e=>e.step===3)
+  const state=await f.io.readState();assert.equal(state.phase,'failed');assert.equal(state.failedStep,3)
+  assert.equal(pluginCalls,0);assert(!state.pluginFailure)
+  f.api.state.fail=null;f.api.state.calls.length=0;f.io.writes.length=0
+  await assert.rejects(bind(f.api,source,opts),/failed jobs are not retried/)
+  await assert.rejects(bind(f.api,source,{...opts,apply:true,approvedDigest:p.digest}),/failed jobs are not retried/)
+  assert.equal(writes(f.api).length,0);assert.equal(f.io.writes.length,0)
+}
+async function credentialFailureWitness(bind) {
+  // Deliberately synthetic token shapes; no credential is loaded or printed.
+  for(const marker of ['sk-'+ 'x'.repeat(48),'ghp_'+ 'x'.repeat(36),'Bearer '+ 'x'.repeat(40),'eyJfake.eyJfake.signature','arbitrary private diagnostic']) {
+    const f=await bindingFixture(),emitted=[],opts={io:f.io,emit:e=>emitted.push(e)},p=await bind(f.api,source,opts)
+    const error=Object.assign(new Error(marker),{key:marker,stdout:marker,stderr:marker})
+    let failure
+    try{await bind(f.api,source,{...opts,apply:true,approvedDigest:p.digest,provisionPlugins:async()=>{throw error}})}catch(e){failure=e}
+    assert(failure)
+    const state=await f.io.readState();assert.equal(state.phase,'awaiting-plugin-auth')
+    assert.deepEqual(Object.keys(state.pluginFailure).sort(),['key','message'])
+    const evidence=JSON.stringify({state,writes:f.io.writes,emitted,error:failure.message,errorState:failure.state})
+    assert.equal(evidence.includes(marker),false,'private diagnostic must be withheld')
+    assert.doesNotMatch(JSON.stringify(state.pluginFailure),/sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{20,}|Bearer\s+\S+|eyJ[^ ]*\./)
+  }
+}
+async function authWitness(run,{race=false}={}) {
+  const f=await bindingFixture(),seen=[],emitted=[],original=console.log
+  let present=race,pluginCalls=0
+  const host={exists:path=>{seen.push(path);return present}}
+  const pluginInventory=catalogEntries(source.contract.skills).filter(e=>e.pinned&&e.adapter==='claude_local').map(e=>({...e,sourceSha:e.source?.sha,installed:true}))
+  const runtime={...f,host,pluginInventory,provisionPlugins:async()=>{pluginCalls++;return {needsAuth:[]}}}
+  console.log=(...args)=>emitted.push(args)
+  try{
+    if(!race){
+      for(const flags of [[],['--apply','--approved-digest','unused']]) {
+        await assert.rejects(run(['bind-secrets','--fake',...flags],runtime),e=>e.message.includes(`CODEX_HOME=/fake-instance/companies/${f.companyId}/codex-home`))
+        assert.equal(f.api.state.calls.filter(c=>c.method==='PATCH').length,0)
+        assert.equal(writes(f.api).length,0);assert.equal(f.io.writes.length,0)
+        assert(!emitted.some(args=>args.some(s=>typeof s==='string'&&s.includes('"LOCK"'))))
+      }
+    }else{
+      await run(['bind-secrets','--fake'],runtime)
+      const p=JSON.parse(emitted.at(-1)[0])
+      const acquire=f.io.acquire;f.io.acquire=async()=>{const release=await acquire();present=false;return release}
+      await assert.rejects(run(['bind-secrets','--fake','--apply','--approved-digest',p.digest],runtime),e=>e.step==='host-plugins')
+      assert.equal(f.api.state.calls.filter(c=>c.method==='PATCH').length,2)
+      assert.equal((await f.io.readState()).phase,'awaiting-plugin-auth')
+    }
+    assert.equal(pluginCalls,0);assert(seen.every(p=>p===`/fake-instance/companies/${f.companyId}/codex-home/auth.json`))
+  }finally{console.log=original}
+}
+test('F18 host-plugin failure resumes, reissues and re-verifies env, then clears failure',()=>resumeWitness(bindSecrets))
+test('F18 env failure remains terminal and the next binding is refused',()=>envFailureWitness(bindSecrets))
+test('F18 pluginFailure and emitted errors withhold all private runtime diagnostics',()=>credentialFailureWitness(bindSecrets))
+test('F18 CLI missing auth refuses plan and apply with zero PATCHes and zero state writes',()=>authWitness(main))
+test('F18 CLI repeats auth gate after env to catch plan/apply races',()=>authWitness(main,{race:true}))
+
+const bindingSetup=bindingFixture.toString()+';'
+const resumeSetup=bindingSetup+resumeWitness.toString()+`;const {secretLinkFindings}=await import(${JSON.stringify(url('src/fresh.mjs'))});await resumeWitness(subject.bindSecrets);`
+knockout('F18 resumable plugin failure phase','src/fresh.mjs',s=>s.replace("failedStep==='host-plugins'?'awaiting-plugin-auth':'failed'","'failed'"),resumeSetup)
+knockout('F18 resume entry guard','src/fresh.mjs',s=>s.replace("['awaiting-secret-entry','awaiting-plugin-auth']","['awaiting-secret-entry']"),resumeSetup)
+knockout('F18 env failure retry refusal','src/fresh.mjs',s=>s.replace("['awaiting-secret-entry','awaiting-plugin-auth']","['awaiting-secret-entry','awaiting-plugin-auth','failed']"),bindingSetup+envFailureWitness.toString()+';await envFailureWitness(subject.bindSecrets);')
+knockout('F18 plugin diagnostic withholding','src/fresh.mjs',s=>s.replace('      catch{','      catch(error){').replace("message:'Host plugin provisioning failed; runtime output withheld; inspect the runtime manager by hand before resuming bind-secrets'","message:error.message"),bindingSetup+credentialFailureWitness.toString()+';await credentialFailureWitness(subject.bindSecrets);')
+knockout('F18 failure cleared on success','src/fresh.mjs',s=>s.replace('delete state.pluginFailure;delete state.failedStep','/* knocked out */'),resumeSetup)
+const authSetup=bindingSetup+authWitness.toString()+`;const {catalogEntries}=await import(${JSON.stringify(url('src/skills.mjs'))});`
+knockout('F18 auth preflight before any write','src/index.mjs',s=>s.replace('    checkPluginAuth()','    /* knocked out */'),authSetup+'await authWitness(subject.main);')
+knockout('F18 second auth gate','src/index.mjs',s=>s.replace('      checkPluginAuth()','      /* knocked out */'),authSetup+'await authWitness(subject.main,{race:true});')
+
+async function resumeGuardWitness(bind,kind) {
+  const f=await bindingFixture(),opts={io:f.io},p=await bind(f.api,source,opts)
+  await assert.rejects(bind(f.api,source,{...opts,apply:true,approvedDigest:p.digest,provisionPlugins:async()=>{throw new Error('synthetic')}}))
+  assert.equal((await f.io.readState()).phase,'awaiting-plugin-auth')
+  const next=await bind(f.api,source,opts)
+  let pluginCalls=0
+  if(kind==='lock')f.io.locked=true
+  if(kind==='state-race' || kind==='live-race'){
+    const acquire=f.io.acquire
+    f.io.acquire=async()=>{
+      const release=await acquire()
+      if(kind==='state-race'){const state=await f.io.readState();state.digest='concurrent';await f.io.save(state)}
+      else f.api.state.agents[0].title='Concurrent edit'
+      return release
+    }
+  }
+  if(kind==='invariants')f.api.state.agents[0].status='idle'
+  if(kind==='ids'){const state=await f.io.readState();state.ids['qa-engineer']='unexpected-id';await f.io.save(state)}
+  if(kind==='contract'){const state=await f.io.readState();state.contractSha='changed';await f.io.save(state)}
+  if(kind==='readback' || kind==='between-operations' || kind==='post-operation'){
+    const request=f.api.request.bind(f.api);let patches=0
+    f.api.request=async(m,p,b)=>{
+      const result=await request(m,p,b)
+      if(kind==='post-operation' && m==='GET' && p.endsWith('/configuration'))f.api.state.agents[0].adapterConfig.dangerouslyBypassApprovalsAndSandbox=false
+      if(m==='PATCH'){
+        patches++
+        if(kind==='readback' && patches===2)f.api.state.agents[0].adapterConfig.env.GH_TOKEN={type:'secret_ref',secretId:'wrong'}
+        if(kind==='between-operations' && patches===1)f.api.state.agents[0].status='idle'
+        if(kind==='post-operation' && patches===1)f.api.state.agents[0].adapterConfig.dangerouslyBypassApprovalsAndSandbox=true
+      }
+      return result
+    }
+  }
+  f.api.state.calls.length=0;f.io.writes.length=0
+  await assert.rejects(bind(f.api,source,{...opts,apply:true,approvedDigest:kind==='digest'?'wrong':next.digest,provisionPlugins:async()=>{pluginCalls++;return {needsAuth:[]}}}),kind==='ids'?/Persisted generated ids differ/:undefined)
+  assert.equal(pluginCalls,0)
+  const patches=f.api.state.calls.filter(c=>c.method==='PATCH').length
+  assert.equal(patches,kind==='readback'?2:['between-operations','post-operation'].includes(kind)?1:0)
+  if(['state-race','live-race','readback','between-operations','post-operation'].includes(kind)){
+    const failed=await f.io.readState();assert.equal(failed.phase,'failed');assert.equal(failed.failedStep,3)
+    await assert.rejects(bind(f.api,source,opts),/failed jobs are not retried/)
+  }else assert.equal(f.io.writes.length,0)
+}
+for(const kind of ['digest','lock','state-race','live-race','invariants','ids','contract','readback','between-operations','post-operation'])test(`F18 resumed binding retains ${kind} guard`,()=>resumeGuardWitness(bindSecrets,kind))
+const resumeGuardSetup=bindingSetup+resumeGuardWitness.toString()+';'
+for(const [kind,needle,replacement='/* knocked out */']of [
+  ['digest',"requireThat(options.approvedDigest===digest, 'Secret binding digest is missing or stale')"],
+  ['lock',"announce(emit,{method:'LOCK',path:io.lockPath});const release=await io.acquire()","announce(emit,{method:'LOCK',path:io.lockPath});const release=async()=>{}"],
+  ['state-race',"requireThat(same(await io.readState(),state), 'Import state changed before binding')"],
+  ['live-race',"requireThat(hash(await readSnapshot(api,state.companyId))===hash(live), 'Live state changed before binding')"],
+  ['ids',"requireThat(same(idMap(live),state.ids), 'Persisted generated ids differ from readback')"],
+  ['readback',"requireThat(secretLinkFindings(contract,after).length===0, 'Post-binding secret-link check failed')"],
+  ['between-operations',"assertInvariants(contract,await readSnapshot(api,state.companyId))"],
+  ['post-operation',"assertInvariants(contract,await readSnapshot(api,state.companyId),[8])","await readSnapshot(api,state.companyId)"],
+])knockout(`F18 resumed ${kind} guard`,'src/fresh.mjs',s=>s.replace(needle,replacement),resumeGuardSetup+`await resumeGuardWitness(subject.bindSecrets,${JSON.stringify(kind)});`)
+knockout('F18 resumed env PATCHes cannot be skipped','src/fresh.mjs',s=>s.replace('for (const op of operations)','for (const op of state.phase===\'awaiting-plugin-auth\'?[]:operations)'),resumeSetup)
+test('F18 failed local persistence is attempted once and never reported as success',async()=>{
+  for(const pluginFails of [false,true]){
+    const f=await bindingFixture(),opts={io:f.io},p=await bindSecrets(f.api,source,opts);let saves=0
+    f.io.save=async()=>{saves++;throw new Error('synthetic persistence failure')}
+    await assert.rejects(bindSecrets(f.api,source,{...opts,apply:true,approvedDigest:p.digest,provisionPlugins:async()=>{if(pluginFails)throw new Error('synthetic plugin failure');return {needsAuth:[]}}}))
+    assert.equal(saves,1);assert.equal(f.io.locked,false)
+  }
+})
+
+test('F18 fake CLI completes after auth is present without starting a host manager',async()=>{
+  const f=await bindingFixture(),emitted=[],original=console.log
+  const runtime={...f,host:{exists:()=>true},pluginInventory:catalogEntries(source.contract.skills).filter(e=>e.pinned&&e.adapter==='claude_local').map(e=>({...e,sourceSha:e.source?.sha,installed:true})),provisionPlugins:async()=>({needsAuth:[]})}
+  console.log=(...args)=>emitted.push(args)
+  try{
+    await main(['bind-secrets','--fake'],runtime)
+    const p=JSON.parse(emitted.at(-1)[0])
+    await main(['bind-secrets','--fake','--apply','--approved-digest',p.digest],runtime)
+    assert.equal((await f.io.readState()).phase,'configured')
+    assert.equal(f.api.state.calls.filter(c=>c.method==='PATCH').length,2)
+  }finally{console.log=original}
+})
+test('F18 successful provisioning clears old failure while retaining manual app auth phase',async()=>{
+  const f=await bindingFixture(),opts={io:f.io},p=await bindSecrets(f.api,source,opts)
+  await assert.rejects(bindSecrets(f.api,source,{...opts,apply:true,approvedDigest:p.digest,provisionPlugins:async()=>{throw new Error('synthetic')}}))
+  const next=await bindSecrets(f.api,source,opts),needsAuth=[{plugin:'fixture@market',appId:'fixture-app',action:'Ryan authenticates by hand'}]
+  const result=await bindSecrets(f.api,source,{...opts,apply:true,approvedDigest:next.digest,provisionPlugins:async()=>({needsAuth})})
+  const state=await f.io.readState()
+  assert.equal(result.complete,false);assert.equal(state.phase,'awaiting-plugin-auth')
+  assert.deepEqual(state.pluginAuth,needsAuth);assert(!state.pluginFailure);assert(!state.failedStep)
+})

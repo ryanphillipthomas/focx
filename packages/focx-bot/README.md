@@ -67,6 +67,26 @@ node packages/focx-bot/src/index.mjs restore --base-url http://127.0.0.1:3100 \
 
 Host settings and instance-local state writes are additional, explicitly listed filesystem operations. The single-writer lock is instance-wide. Default state is `~/.paperclip/instances/default/focx-bot/state.json`; generated company and agent IDs never enter the contract. A failed import records the failed step, returned job ID and observed created IDs. A lost response triggers read-only observation by the unique requested name, never resubmission or adoption. Failed state cannot be retried. A failed state save is not attempted again. Recovery requires a separately reviewed action.
 
+A host-plugin exception after the env stage and its post-binding assertions leaves
+`phase:"awaiting-plugin-auth"`, with `pluginFailure:{key,message}`. The key identifies
+`host-plugins`; the message is fixed diagnostic text, never exception text,
+stdout/stderr or credentials. Installation still stops at the first failure and
+never retries automatically. After inspecting the runtime manager by hand, obtain
+a fresh `bind-secrets` plan and explicitly apply its approved digest to resume.
+The same phase also represents plugins awaiting manual app authentication.
+
+A resumed invocation reads live state again, checks the exact contract/target and
+generated IDs, verifies invariants and revoked permissions, and resolves secret
+names again. Apply requires the current plan digest and the same single-writer
+lock, rechecks persisted state and live-state races, reissues both merge-only env
+PATCHes with invariant checks between operations, and verifies all secret links
+before provisioning plugins. Claude planning omits pins already verified installed;
+native Codex reads each pin and skips matching active installs. Successful plugin
+provisioning clears `pluginFailure`; pending manual app authentication can still
+leave `awaiting-plugin-auth`. Env-stage or earlier failures inside the locked
+apply remain `phase:"failed", failedStep:3` and cannot be resumed. Preflight
+refusals make no state change; a failed state save is never retried.
+
 ## Host and skill prerequisites
 
 `contract.json` retains the sourced company name `Focx.ai`. That existing name must not be silently suffixed: use a Ryan-approved unique `--new-company-name` for a live fresh import; restore always requires it. The contract renders Connect and its primary focx git_repo workspace into the native bundle. Company, agent, project and workspace IDs, prefix and timezone are outputs. Database name and user-secret identity were not established by the permitted noncredential observations and are explicitly `null`; no credential-bearing connection URI was read. Host verification checks the Homebrew `postgresql@17` listener/executable and the pinned Claude runtime version. It does not install services, PostgreSQL, a tunnel or runtime software.
@@ -75,7 +95,7 @@ Snapshot renders two launchd plists from `service`/`network` with secret paths r
 
 Claude `workspaces/<generated-id>/.claude/settings.json` and `adapterLocal.claudeCodePlugins` derive from per-agent grants. The full pinned host catalog and the agent's enabled subset are distinct. Codex plugins use the per-company `codex-home`; its pinned set is company-wide. Entries with `pinned:false` are retained and reported as available, never installed. Full remote source identity distinguishes duplicate catalog names, including the two `webmcp` entries. Pin mismatches stop installation; there is no upgrade-to-latest fallback.
 
-Ryan must complete `codex login` for the intended company home before an authorized native plugin operation or Codex run. The provisioner checks auth-file presence/symlink metadata only. It never opens auth bytes. Plugin sign-in and app access remain manual. Claude plugin installation uses its management CLI; native Codex uses only initialize, plugin/read, plugin/install and app/installed. Execution, approval and OAuth requests are rejected. Native reads check source identity/version before installation and installed metadata afterward. Local cached manifests that lack a source ID are reported as unverified identity, not proof of remote provenance.
+Ryan must complete `codex login` for the intended company home before an authorized native plugin operation or Codex run. `bind-secrets` checks the auth link during plan/preflight and refuses with the exact `CODEX_HOME` before any env PATCH, lock or state write if it is absent. The same check runs again inside plugin provisioning to catch auth removal after preflight; that failure leaves the verified env stage resumable. The provisioner checks auth-file presence/symlink metadata only. It never opens auth bytes. Plugin sign-in and app access remain manual. Claude plugin installation uses its management CLI; native Codex uses only initialize, plugin/read, plugin/install and app/installed. Execution, approval and OAuth requests are rejected. Native reads check source identity/version before installation and installed metadata afterward. Local cached manifests that lack a source ID are reported as unverified identity, not proof of remote provenance.
 
 `native-schema/` keeps the 7 JSON schemas the native plugin calls rely on — `ClientRequest.json` (method names `initialize`, `plugin/read`, `plugin/install`, `app/installed`) and the v2 `PluginRead*`, `PluginInstall*` and `AppsInstalled*` params/responses — out of the 302 that `codex app-server generate-json-schema` produced from the installed native 0.152.1 binary during the FB4 build; the full set is preserved in that build's first commit (`c852f77`) and was trimmed in review. They are protocol evidence: only `PluginInstallParams.json` is read, by one test; nothing at runtime. Schema generation did not start a model run or management session. The isolated schema-home path was not created; a PATH-alias setup warning did not prevent schema generation. Native management interfaces still require live validation; OpenAI documents them in the [app-server reference](https://learn.chatgpt.com/docs/app-server).
 
