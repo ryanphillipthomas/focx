@@ -256,6 +256,9 @@ function knockout(label,file,transform,body) {
     if(label==='F19 optional manifest tolerance')assert.match(broken.stdout,/Plugin pin readback failed/);
     if(label==='F19 already-satisfied skip')assert.match(broken.stdout,/matching pin was reinstalled/);
     if(label==='F15 company de-duplication')assert.match(broken.stdout,/duplicate company skills imported/)
+    if(label==='F21 findings completion check')assert.match(broken.stdout,/outstanding findings must prevent completion/)
+    if(label==='F21 resolved findings cleared')assert.match(broken.stdout,/resolved findings must be removed from state/)
+    if(label==='F21 CLI plain summary')assert.match(broken.stdout,/CLI must print the count and every missing pin as plain text/)
     if(label==='F15 post-import singleton assertion')assert.match(broken.stdout,/Missing expected rejection/)
     const restored=child(url(file),body);assert.equal(restored.status,0,restored.stdout+restored.stderr)
     console.log(`KNOCK-OUT ${label}: guard broken -> guard witness FAIL (1); restored -> PASS (1)`)
@@ -1222,3 +1225,80 @@ test('F20 final app-state failure preserves every plugin outcome and still throw
     assert.deepEqual(emitted.at(-1),{nativePlugins:error.result});assert(!JSON.stringify(error.result).includes('Fake native diagnostic'));return true
   })
 })
+// F21: compose real native seed reporting with binding and the fake CLI.
+function seedBindingPlugins({missing=0,auth=false,failed=false}={}) {
+  const ops=nativePluginPlan(source.contract,'/fake/company-home'),reserved=ops.filter(o=>o.kind==='native-plugin-verify')
+  assert.equal(reserved.length,11)
+  const missingKeys=reserved.slice(0,missing).map(o=>o.entry.key)
+  const seeded=reserved.slice(missing).map(o=>({key:o.entry.key,version:o.entry.version,summary:{remotePluginId:o.entry.sourceId}}))
+  if(failed)seeded[0].version='wrong-version'
+  const runtime=memoryNativePlugins(ops,{seeded}),request=runtime.request.bind(runtime)
+  const appOp=ops.find(o=>o.kind==='native-plugin-install'),app={id:'fixture-app',name:'Fixture sign-in'}
+  if(auth)runtime.request=async(method,params)=>{
+    const result=await request(method,params)
+    if(method==='plugin/install' && JSON.stringify(params)===JSON.stringify(appOp.params))result.appsNeedingAuth=[app]
+    return result
+  }
+  return {ops,missingKeys,failedKey:failed?reserved[missing].entry.key:null,runtime,
+    needsAuth:auth?[{plugin:appOp.entry.key,appId:app.id,name:app.name,action:'Ryan authenticates by hand'}]:[],
+    provisionPlugins:()=>installNativePlugins(ops,runtime,()=>{})}
+}
+async function seedBindingWitness(bind,scenario={}) {
+  const f=await bindingFixture(),native=seedBindingPlugins(scenario),emitted=[]
+  const opts={io:f.io,pluginOperations:native.ops,provisionPlugins:native.provisionPlugins,emit:e=>emitted.push(e)}
+  const preview=await bind(f.api,source,opts)
+  assert.equal(native.runtime.calls.length,0);assert.equal(f.io.writes.length,0)
+  const result=await bind(f.api,source,{...opts,apply:true,approvedDigest:preview.digest})
+  const incomplete=!!(scenario.missing||scenario.auth||scenario.failed),state=await f.io.readState()
+  assert.equal(result.complete,!incomplete,'outstanding findings must prevent completion')
+  assert.equal(state.phase,incomplete?'awaiting-plugin-auth':'configured')
+  assert.deepEqual(state.pluginAuth,native.needsAuth);assert.deepEqual(result.plugins.needsAuth,native.needsAuth)
+  assert(!state.pluginFailure);assert(!state.failedStep);assert(!f.io.locked)
+  assert(emitted.some(e=>e.complete===result.complete && e.pluginSummary===result.pluginSummary),'completion summary must be emitted')
+  assert.equal(secretLinkFindings(source.contract,await readSnapshot(f.api,f.companyId)).length,0)
+  if(scenario.missing||scenario.failed){
+    assert.deepEqual(state.pluginFindings,result.plugins.findings)
+    assert.deepEqual(state.pluginFindings.filter(r=>r.status==='seeded-missing'),native.missingKeys.map(key=>({key,status:'seeded-missing',reportingOnly:true,reason:'Runtime has not seeded this pinned plugin'})))
+    assert(state.pluginFindings.every(r=>r.reportingOnly && Object.keys(r).every(k=>['key','status','stage','reportingOnly','reason'].includes(k))))
+    if(scenario.missing)assert(result.pluginSummary.includes(`${scenario.missing} pinned plugins are not seeded: ${native.missingKeys.join(', ')}`))
+    if(scenario.failed)assert(result.pluginSummary.includes(`1 outstanding pinned plugin findings: ${native.failedKey}`))
+  }else assert(!Object.hasOwn(state,'pluginFindings'))
+  if(scenario.auth)assert(result.pluginSummary.some(line=>line.includes('1 apps require manual authentication: Fixture sign-in') && line.includes(native.needsAuth[0].plugin) && line.includes('fixture-app')))
+  if(!incomplete){assert.deepEqual(result.pluginSummary,[]);assert.deepEqual(result.plugins.findings,[]);return}
+  const successful=seedBindingPlugins(),nextOpts={...opts,provisionPlugins:successful.provisionPlugins}
+  const next=await bind(f.api,source,nextOpts)
+  assert.deepEqual(await f.io.readState(),state,'a new plan must preserve outstanding findings')
+  const done=await bind(f.api,source,{...nextOpts,apply:true,approvedDigest:next.digest}),saved=await f.io.readState()
+  assert.equal(done.complete,true);assert.equal(saved.phase,'configured')
+  assert(!Object.hasOwn(saved,'pluginFindings'),'resolved findings must be removed from state')
+  assert.deepEqual(saved.pluginAuth,[]);assert.deepEqual(done.plugins.findings,[]);assert.deepEqual(done.pluginSummary,[])
+}
+for(const [label,scenario]of [
+  ['all eleven reserved entries seeded completes without persisted findings',{}],
+  ['some seeds missing remain incomplete and clear after a successful resume',{missing:2}],
+  ['all eleven seeds missing cannot overclaim completion',{missing:11}],
+  ['app auth and missing seeds are both reported and clear on resume',{missing:2,auth:true}],
+  ['reserved verification failure also prevents completion',{failed:true}],
+  ['manual app auth alone retains its meaning',{auth:true}],
+])test('F21 '+label,()=>seedBindingWitness(bindSecrets,scenario))
+async function seedCliWitness(run) {
+  const f=await bindingFixture(),native=seedBindingPlugins({missing:11,auth:true}),lines=[],original=console.log,exitCode=process.exitCode
+  const runtime={...f,host:{exists:()=>true},pluginInventory:catalogEntries(source.contract.skills).filter(e=>e.pinned&&e.adapter==='claude_local').map(e=>({...e,sourceSha:e.source?.sha,installed:true})),provisionPlugins:native.provisionPlugins}
+  console.log=(...args)=>lines.push(...args)
+  try{
+    await run(['bind-secrets','--fake'],runtime)
+    const preview=JSON.parse(lines.at(-1));lines.length=0
+    await run(['bind-secrets','--fake','--apply','--approved-digest',preview.digest],runtime)
+    const result=lines.filter(l=>l.startsWith('{')).map(l=>JSON.parse(l)).findLast(r=>Object.hasOwn(r,'complete'))
+    assert.equal(result.complete,false);assert.equal((await f.io.readState()).phase,'awaiting-plugin-auth')
+    assert.equal(process.exitCode,exitCode,'incomplete binding must not change CLI exit behavior')
+    assert.equal(result.plugins.findings.length,11);assert.deepEqual(result.plugins.needsAuth,native.needsAuth)
+    assert(lines.includes(`11 pinned plugins are not seeded: ${native.missingKeys.join(', ')}`),'CLI must print the count and every missing pin as plain text')
+    assert(result.pluginSummary.every(line=>lines.includes(line)),'CLI must print app auth alongside findings')
+  }finally{console.log=original}
+}
+test('F21 CLI prints all missing pin names and manual app auth without changing exit behavior',()=>seedCliWitness(main))
+const f21Setup=bindingSetup+`const {nativePluginPlan,installNativePlugins}=await import(${JSON.stringify(url('src/native-plugins.mjs'))});const {memoryNativePlugins}=await import(${JSON.stringify(url('src/fake-api.mjs'))});const {secretLinkFindings}=await import(${JSON.stringify(url('src/fresh.mjs'))});`+seedBindingPlugins.toString()+';'
+knockout('F21 findings completion check','src/fresh.mjs',s=>s.replace(' && !findings.length',''),f21Setup+seedBindingWitness.toString()+';await seedBindingWitness(subject.bindSecrets,{missing:11});')
+knockout('F21 resolved findings cleared','src/fresh.mjs',s=>s.replace('else delete state.pluginFindings','/* clear knocked out */'),f21Setup+seedBindingWitness.toString()+';await seedBindingWitness(subject.bindSecrets,{missing:2});')
+knockout('F21 CLI plain summary','src/index.mjs',s=>s.replace("if(flags.verb==='bind-secrets')result.pluginSummary?.forEach(line=>console.log(line))",'/* summary knocked out */'),f21Setup+`const {catalogEntries}=await import(${JSON.stringify(url('src/skills.mjs'))});`+seedCliWitness.toString()+';await seedCliWitness(subject.main);')

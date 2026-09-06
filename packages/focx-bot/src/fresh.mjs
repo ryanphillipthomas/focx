@@ -191,10 +191,21 @@ export async function bindSecrets(api, source, options={}) {
       }
       state.pluginAuth=plugins.needsAuth
     }
+    const findings=plugins.findings??[]
+    if(findings.length)state.pluginFindings=findings
+    else delete state.pluginFindings
     delete state.pluginFailure;delete state.failedStep
-    state.phase=plugins.needsAuth.length?'awaiting-plugin-auth':'configured';state.step=3
+    const complete=!plugins.needsAuth.length && !findings.length
+    state.phase=complete?'configured':'awaiting-plugin-auth';state.step=3
+    const missing=findings.filter(f=>f.status==='seeded-missing'),other=findings.filter(f=>f.status!=='seeded-missing')
+    const pluginSummary=[]
+    if(missing.length)pluginSummary.push(`${missing.length} pinned plugins are not seeded: ${missing.map(f=>f.key).join(', ')}`)
+    if(other.length)pluginSummary.push(`${other.length} outstanding pinned plugin findings: ${other.map(f=>f.key).join(', ')}`)
+    if(plugins.needsAuth.length)pluginSummary.push(`${plugins.needsAuth.length} apps require manual authentication: ${plugins.needsAuth.map(a=>`${a.name??a.appId} (${a.plugin}; ${a.appId})`).join(', ')}`)
     await save()
-    return {digest,complete:!plugins.needsAuth.length,plugins,access:accessReport(after)}
+    const result={digest,complete,pluginSummary,plugins,access:accessReport(after)}
+    emit(result)
+    return result
   } catch(error) {
     state.phase=failedStep==='host-plugins'?'awaiting-plugin-auth':'failed';state.failedStep=failedStep
     try{await save()}catch(persistenceError){emit({statePersistenceError:persistenceError.message})}
