@@ -1764,6 +1764,70 @@ since #87 merged.
   date can still be load-bearing by configuration. `staging` is in the same shape and is a live deploy branch
   (`staging.focx.ai`); it stays untouched.
 
+- 2026-09-06 Ryan: **"lets roll develop out"**, then **"ok, merged"** (PR #100, develop → staging).
+- 2026-09-06 16:47:23Z Claude: **Staging merged (`61bce8e`); the DEPLOY GATE is broken, and has been since before today.** PR #100
+  carried 61 merged PRs (#28–#99), 188 files, +36,676/−203, of which the served site is five files under `apps`
+  (+109/−30). The `deploy.yml` `verify` job failed on staging at **`actions/checkout`**, before any verification logic:
+  `fatal: could not read Username for 'https://github.com': terminal prompts disabled`, three retries, exit 128. The
+  cause is `token: ${{ secrets.PIPELINE_TOKEN || github.token }}` (`deploy.yml:58`): the secret **exists but is no longer
+  valid**, so checkout uses it and fails — were it unset, the `||` fallback to `github.token` would have worked. **Not
+  caused by this rollout:** the `main` run of 2026-09-01 failed identically, as did the run triggered by Ryan's restore
+  push at 16:39:53Z. That restore run also failed at checkout, i.e. **before** the rollback/issue logic, so nothing was
+  rolled back and no issue was opened (`gh issue list` empty).
+  **Consequences:** Render deploys independently of this gate, and `https://staging.focx.ai/` answers **200 over valid
+  TLS with `<title>Focx</title>` and the `skills/connect` mount present** — so the site is up. But there is **no release
+  record and no `staging → main` promotion PR**, because the code that writes them never ran. Promoting to production
+  right now would mean promoting **without the evidence the deploy role requires** (`live` status, evidence-backed
+  checks, empty `infraDrift`).
+  **Fix is Ryan's:** rotate `PIPELINE_TOKEN` in repository secrets (Claude never handles tokens), then re-run the
+  workflow. Raised rather than worked around.
+
+- 2026-09-06 Ryan: **"i rotated"** — `PIPELINE_TOKEN` updated 16:51:38Z.
+- 2026-09-06 16:54:03Z Claude: **Re-ran the staging verification (attempt 2). The token fix worked; the gate now runs.** Verified
+  output: `contracts: 49 artifact(s) valid` and
+  `deploy-verify: staging dep-daephbrbc2fs73ciu04g → degraded (serving 61bce8e, expected 61bce8e)`. So **the right
+  commit is live on staging**, health and content marker pass, and the record plus four evidence files
+  (`deploy.json`, `health.json`, `service.json`, `custom-domains.json`) were generated.
+  **Two things still stop a clean promotion.**
+  1. **The gate cannot write its own record.** `git push origin staging` was rejected: `GH006: Protected branch update
+     failed … Changes must be made through a pull request. Required status check "drift" is expected.` The workflow is
+     designed to commit the release record back to the deployed branch (its `paths-ignore` exists precisely to stop the
+     resulting loop), so branch protection and the workflow now contradict each other. Fixing it means letting the
+     pipeline identity bypass protection on `staging`/`main` — a **weakening of branch protection, which the guardrails
+     forbid Claude from touching**. Ryan's call.
+  2. **The release is `degraded`, and the reason is inside the record that could not be pushed.** By
+     `tools/deploy-verify/index.mjs:181`, `degraded` means live + correct SHA + healthy, but with non-empty `infraDrift`,
+     an unverified/uncertified custom domain, or unverified items. Declared values to compare against the live Render
+     service `srv-daatu9fqj5pc73b9ap0g`: name `focx-staging`, branch `staging`, autoDeploy `yes`, buildCommand
+     `node tools/site-compose/index.mjs`, publishPath `dist`.
+  No promotion PR was opened, and per the deploy role a human accepts one only on a `live` record with empty drift.
+
+- 2026-09-06 Ryan: **"i changed both main and staging branch protection try that again"** → attempt 3 SUCCEEDED;
+  the record pushed (`35cb0d9`). Record read: `infraDrift: []`, health 200/TLS valid/marker found, `staging.focx.ai`
+  verified + certificate issued, serving `61bce8e` as expected. The **only** blemish:
+  `unverified: ["promotion step failed: spawnSync gh ENOBUFS"]`.
+- 2026-09-06 Ryan (AskUserQuestion): **"Open the promotion PR by hand now"** → **PR #101** (staging → main) opened with
+  the recorded evidence quoted, drift gate green, and Ryan merged it. **focx.ai now serves the rolled-out tree** —
+  fetched read-only: 200, TLS valid, `CN=focx.ai`, `<title>Focx</title>`, byte-identical to staging.
+- 2026-09-06 17:17:13Z Claude: **The production verification came back `failed`, and it exposes a real drift — plus a correction to
+  something I told Ryan earlier.** Record `dep-daepfuuq1p3s73d9fmng.json` on `origin/main`:
+  `infraDrift: [{"setting":"branch","declared":"main","actual":"develop"}]` and
+  `unverified: ["serving e1380cc7582e instead of expected 3f780a80b30c — likely superseded"]`.
+  **The production Render service deploys from `develop`, not `main`.** The repo *declares* `main`
+  (`pipeline/deploy.config.json`) and the workflow triggers on `main`, but the live service tracks `develop`.
+  **Correction to my earlier claim:** I told Ryan that deleting `main` meant "no production deploy could run". That was
+  wrong. Production never deployed from `main`; it has been auto-deploying `develop` all along, which also means every
+  merge to develop today was already reaching focx.ai before the promotion. Restoring `main` was still right — the
+  workflow and the declared config both name it — but I overstated the impact and should have checked Render's actual
+  branch, which is exactly what this gate is for.
+  **No harm done:** the gate deliberately did **not** roll back (`index.mjs:183` — a live deploy of a different commit
+  usually means a newer push superseded it, and rolling back would fight that deploy), no issue was opened, and
+  focx.ai is healthy. **Open question for Ryan, not urgent:** either re-point the Render production service at `main`,
+  or change the declaration to `develop`. Right now the repo and the dashboard disagree, and that disagreement is the
+  only thing making production releases read `failed`.
+- 2026-09-06 Ryan: **"fix the buffer bug; i dont care about the branch protection untill i get close to release"** →
+  branch protection deliberately left loose; **F22 dispatched** for the ENOBUFS defect.
+
 ### FB3 log
 
 - 2026-09-05 Claude: **fragment written** → `~/Documents/focx-bot-FB3-skills-fragment.json`
