@@ -125,10 +125,13 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadPilotSou
         if(!worktrees.length)lines.push('observed on disk: no QA worktree settings yet — unobserved until an authorised run (FB8)')
         for(const row of worktrees){
           const expected=renderPermissions(a.adapterLocal,row.cwd)
-          const observed={allow:strings(row.permissions?.allow)?row.permissions.allow:null,deny:strings(row.permissions?.deny)?row.permissions.deny:null}
-          // Paperclip's writer seeds every Claude worktree with the five vendor rules and no deny before
-          // the launcher merges QA's rules: that file is a pre-launch baseline, evidence of nothing.
-          if(observed.allow&&isDeepStrictEqual(sorted(observed.allow),sorted(vendorBaseline(row.cwd)))&&!(observed.deny??[]).length){say('observed on disk','QA settings.local.json pre-launch baseline (Paperclip writer only; launcher has not merged rules) — not evidence',{path:row.path});continue}
+          const observed={allow:strings(row.permissions?.allow)?row.permissions.allow:null,deny:strings(row.permissions?.deny)?row.permissions.deny:null,defaultMode:typeof row.permissions?.defaultMode==='string'?row.permissions.defaultMode:null}
+          // Paperclip's writer keeps any pre-existing defaultMode other than dontAsk (acpx-engine/execute.js:815-816),
+          // so a worktree can carry bypassPermissions; the launcher refuses anything but 'default' (mergeSettings) and so does this check.
+          if(observed.defaultMode!=='default')diff('worktree permissions','permission-mode-unexpected',row.path,{defaultMode:observed.defaultMode,expected:'default',launcher:'mergeSettings refuses any other mode'})
+          // Paperclip's writer seeds every Claude worktree with the five vendor rules, defaultMode 'default' and no deny
+          // before the launcher merges QA's rules: that file is a pre-launch baseline, evidence of nothing.
+          if(observed.defaultMode==='default'&&observed.allow&&isDeepStrictEqual(sorted(observed.allow),sorted(vendorBaseline(row.cwd)))&&!(observed.deny??[]).length){say('observed on disk','QA settings.local.json pre-launch baseline (Paperclip writer only; launcher has not merged rules) — not evidence',{path:row.path});continue}
           say('observed on disk','QA settings.local.json',{path:row.path,permissions:observed})
           for(const field of ['allow','deny']){
             if(observed[field]===null)diff('worktree permissions','metadata-unavailable',row.path,field)
