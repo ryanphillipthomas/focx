@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync, statSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -293,8 +293,8 @@ import { idMap } from './src/api.mjs'
 import { main } from './src/index.mjs'
 import { readPluginInventory } from './src/plugins.mjs'
 const f1Sentence='codex_local: reported only — declared permissions and plugin sets do not bound Codex behavior (F1); the Claude lane is bounded by its settings and permission rules.'
-import { loadSource as loadPilotSource } from '../../tools/pilot-org/index.mjs'
-const pilotManifest=loadPilotSource().manifest
+import { loadRoleSource, buildRoleSource, ROLE_ROOT } from './src/roles.mjs'
+const pilotManifest=loadRoleSource().manifest
 async function grantFixture() {
   const api=createFakeApi()
   const f=await fixture({api,instanceRoot:'/fake-instance'}),c=source.contract
@@ -731,3 +731,117 @@ knockout('F15 post-import singleton assertion','src/portability.mjs',s=>s.replac
   'await assert.rejects(subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest}),/Invariant 5/);',
   'assert(injected);assert.equal((await io.readState()).failedStep,"restore-comparison");',
 ].join('\n'))
+
+// F16: retained .focx loader coverage and source mutations.
+const roleSource=loadRoleSource()
+test('all retained identities and role procedures load offline',()=>{assert.equal(roleSource.manifest.agents.length,26);assert.equal(Object.keys(roleSource.files).length,3)})
+// Rebuild the source from the real files with one mutation applied, so every
+// rejection below exercises the same validation the CLI runs.
+const readRepo=p=>readFileSync(resolve(ROLE_ROOT,p),'utf8')
+const rebuilt=(mutate,read=readRepo)=>{const manifest=structuredClone(roleSource.manifest),invariants=structuredClone(roleSource.invariants);mutate?.(manifest,invariants);return buildRoleSource({manifest,invariants,baseline:roleSource.baseline,read})}
+const qaOf=m=>m.agents.find(a=>a.roleKey==='qa-engineer')
+test('the committed QA entry records a reviewed Claude migration and its adapter-local tooling',()=>{const qa=qaOf(roleSource.manifest);assert.equal(qa.adapterType,'claude_local');assert.equal(qa.maxTurnsPerRun,20);assert.deepEqual(qa.adapterMigration,{from:'codex_local',to:'claude_local',approvedBy:'Ryan Thomas',date:'2026-09-04'});assert.deepEqual(qa.adapterLocal.claudeCodePlugins,['differential-review@trailofbits','pr-review-toolkit@claude-plugins-official','spec-to-code-compliance@trailofbits']);assert(qa.adapterLocal.permissionsAllow.includes('Task(pr-review-toolkit:silent-failure-hunter)'));assert(qa.adapterLocal.permissionsAllow.includes('Edit(/pipeline/runs/**)'));assert(!qa.adapterLocal.permissionsAllow.some(r=>r==='Edit'||r.startsWith('Write')||r==='Bash'||r.startsWith('Skill')));assert.deepEqual(qa.adapterLocal.permissionsDeny,['Edit','NotebookEdit','Skill']);assert.deepEqual(qa.executionPermissions,{permissionMode:'approve-reads',nonInteractivePermissions:'deny'})})
+// A pilot that cannot write to its task reports nothing. The rule and the file
+// it names have to travel together: Paperclip allow-lists this path in every
+// worktree but ships no script, and a rule pointing at a missing file is the
+// same silence as no rule at all.
+test('QA can report through the committed script, and the script is really there',()=>{const qa=qaOf(roleSource.manifest)
+  assert(qa.adapterLocal.permissionsAllow.includes('Bash(scripts/paperclip-issue-update.sh:*)'),'QA has no rule permitting the reporting script')
+  const path=resolve(ROLE_ROOT,'scripts/paperclip-issue-update.sh')
+  assert(existsSync(path),'the allow-listed reporting script is not committed')
+  assert(statSync(path).mode & 0o111,'the reporting script is not executable')
+  const body=readFileSync(path,'utf8')
+  // Reading these from the environment is the whole point: a call site that
+  // needs `$` matches no permission rule and is denied unattended.
+  for(const key of ['PAPERCLIP_API_URL','PAPERCLIP_API_KEY','PAPERCLIP_TASK_ID']) assert(body.includes(key),`the script does not read ${key} from the environment`)})
+test('a procedure may version past 0.1.0 but must stay semver',()=>{const path='.focx/skills/focx-verify-change/SKILL.md';assert(readRepo(path).includes('version: "0.1.4"'));rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.4"','version: "0.2.0"'):readRepo(p));assert.throws(()=>rebuilt(null,p=>p===path?readRepo(p).replace('version: "0.1.4"','version: "0.1"'):readRepo(p)),/versioned/)})
+for(const [label,mutate] of Object.entries({
+  'a migration between the same adapter':m=>{qaOf(m).adapterMigration.to='codex_local';qaOf(m).adapterMigration.from='codex_local'},
+  'a migration whose target differs from adapterType':m=>{qaOf(m).adapterMigration.to='codex_local'},
+  'a migration with no approver':m=>{qaOf(m).adapterMigration.approvedBy=''},
+  'a migration with a non-ISO date':m=>{qaOf(m).adapterMigration.date='Sept 4'},
+  'adapterLocal on a Codex agent':m=>{const e=m.agents.find(a=>a.roleKey==='implementation-engineer');e.adapterLocal={claudeCodePlugins:[]}},
+  'a bare plugin name':m=>{qaOf(m).adapterLocal.claudeCodePlugins=['pr-review-toolkit']},
+  'a plugin:skill name':m=>{qaOf(m).adapterLocal.claudeCodePlugins=['design:critique']},
+  'a Paperclip registry key':m=>{qaOf(m).adapterLocal.claudeCodePlugins=['paperclipai/paperclip/paperclip']},
+  'a duplicate plugin':m=>{qaOf(m).adapterLocal.claudeCodePlugins.push('differential-review@trailofbits')},
+  'a bare Bash rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Bash')},
+  'a bare Write rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Write')},
+  'an unanchored Edit path rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Edit(pipeline/runs/**)')},
+  'a Task for an undeclared plugin':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Task(feature-dev:code-reviewer)')},
+  'a file rule outside evidence':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Edit(/src/**)')},
+  'a missing Edit tool denial':m=>{qaOf(m).adapterLocal.permissionsDeny=['NotebookEdit','Skill']},
+  'a skill invocation grant':m=>{qaOf(m).adapterLocal.permissionsAllow.push('Skill(differential-review:diff-review)')},
+  'a malformed rule':m=>{qaOf(m).adapterLocal.permissionsAllow.push('bash(ls)')},
+}))test(`source refuses ${label}`,()=>{assert.throws(()=>rebuilt(mutate))})
+
+// Each witness removes one validation in memory, accepts its otherwise-valid
+// counterexample, then confirms the real module still refuses it. This covers
+// every guard exercised by the committed control files, including read guards.
+const roleGuardCases=[
+  ['adapterMigration must move',({qa})=>{qa.adapterMigration.from='claude_local'}],
+  ['adapterMigration.to must equal',({qa})=>{qa.adapterMigration.from='claude_local';qa.adapterMigration.to='codex_local'}],
+  ['adapterMigration needs approvedBy',({qa})=>{qa.adapterMigration.approvedBy=' '}],
+  ['adapterLocal is only meaningful',({qa})=>{qa.adapterType='codex_local';delete qa.adapterMigration}],
+  ['claudeCodePlugins must be unique',({qa})=>{qa.adapterLocal.claudeCodePlugins.push(qa.adapterLocal.claudeCodePlugins[0])}],
+  ['QA permissions require',({qa})=>{qa.adapterLocal.permissionDelivery='user-settings'}],
+  ['permissionsAllow must be unique',({qa})=>{qa.adapterLocal.permissionsAllow.push('Read')}],
+  ['deny actual Edit',({qa})=>{qa.adapterLocal.permissionsDeny=['NotebookEdit','Skill']}],
+  ['file modifications must be anchored',({qa})=>{qa.adapterLocal.permissionsAllow.push('Edit(/src/**)')}],
+  ['Write(path) rules are ineffective',({qa})=>{qa.adapterLocal.permissionsAllow.push('Write(/pipeline/runs/**)')}],
+  ['skill invocation may pre-approve',({qa})=>{qa.adapterLocal.permissionsAllow.push('Skill(differential-review:diff-review)')}],
+  ['bare Bash would allow',({qa})=>{qa.adapterLocal.permissionsAllow.push('Bash')}],
+  ['names tooling outside',({qa})=>{qa.adapterLocal.permissionsAllow.push('Task(undeclared:review)')}],
+  ['Pilot controls must prohibit',({invariants})=>{invariants.pilot.automaticWork=true}],
+  ['Locked Focx baseline changed',({invariants})=>{invariants.activeProducts.push('Unapproved')}],
+  ['All 26 retained identities',({manifest})=>{manifest.expectedAgentCount=25}],
+  ['Duplicate agent identity',({manifest})=>{const disabled=manifest.agents.filter(a=>a.disposition==='disabled-candidate');disabled[0].id=disabled[1].id}],
+  ['Exactly the three pilot roles',({manifest,overrides})=>{const a=manifest.agents.find(a=>a.roleKey==='implementation-engineer');const body=readRepo(a.instructions);a.roleKey='other-engineer';a.instructions='.focx/roles/other-engineer.md';overrides[a.instructions]=body}],
+  ['Invalid retained identity or disposition',({manifest})=>{manifest.agents.find(a=>a.disposition==='disabled-candidate').status='active'}],
+  ['Pilot must have human ownership',({qa})=>{qa.permissions.canAssignTasks=true}],
+  ['Per-run timeout cannot be relaxed',({qa})=>{qa.timeoutSec=901}],
+  ['Uncapped runs require explicit',({invariants})=>{invariants.pilot.environment='production'}],
+  ['Unknown adapter',({manifest})=>{manifest.agents.find(a=>a.roleKey==='implementation-engineer').adapterType='unknown'}],
+  ['Pilot ACP permissions must be explicit',({qa})=>{qa.executionPermissions.nonInteractivePermissions='allow'}],
+  ['Claude turn limit required',({qa})=>{qa.maxTurnsPerRun=21}],
+  ['Instructions must be isolated',({qa,overrides})=>{overrides['other-role.md']=readRepo(qa.instructions);qa.instructions='other-role.md'}],
+  ['Only scoped focx-* skills',({qa,overrides})=>{qa.skills=['other'];overrides['.focx/skills/other/SKILL.md']='version: "0.1.0"'}],
+  ['Procedure must be versioned',({qa,overrides})=>{overrides['.focx/skills/'+qa.skills[0]+'/SKILL.md']='version: "0.1"'}],
+  ['Empty role instructions',({qa,overrides})=>{overrides[qa.instructions]=' \n'}],
+  ['Project settings must mirror',({overrides})=>{overrides['.claude/settings.json']='{}'}],
+  ['Missing QA permission launcher',({overrides})=>{overrides['tools/qa-claude-agent-acp/index.mjs']='\n'}],
+]
+const roleInput=mutate=>{
+  const manifest=structuredClone(roleSource.manifest),invariants=structuredClone(roleSource.invariants),overrides={}
+  mutate({manifest,invariants,qa:qaOf(manifest),overrides})
+  return {manifest,invariants,baseline:roleSource.baseline,read:p=>Object.hasOwn(overrides,p)?overrides[p]:readRepo(p)}
+}
+for(const [message,mutate] of roleGuardCases)test('KNOCK-OUT role source: '+message,async()=>{
+  const original=await import('./src/roles.mjs'),text=readFileSync(resolve(PACKAGE,'src/roles.mjs'),'utf8')
+  const guards=text.split('\n').filter(line=>line.includes('requireThat(')&&line.includes(message))
+  assert.equal(guards.length,1,'Each witness must identify exactly one guard')
+  const witness=subject=>assert.throws(()=>subject.buildRoleSource(roleInput(mutate)),error=>error.message.includes(message))
+  witness(original)
+  const changed=text.replace(guards[0],'/* knocked out */').replaceAll('import.meta.url',JSON.stringify(url('src/roles.mjs')))
+  const broken=await import('data:text/javascript;base64,'+Buffer.from(changed).toString('base64'))
+  assert.doesNotThrow(()=>broken.buildRoleSource(roleInput(mutate)),'Only the removed guard should reject this counterexample')
+  assert.throws(()=>witness(broken),assert.AssertionError)
+  witness(original)
+  console.log('KNOCK-OUT role source '+message+': guard broken -> witness FAIL; restored -> PASS')
+})
+test('role loader preserves all returned control, bundle and launcher content',()=>{
+  assert.deepEqual(loadRoleSource(ROLE_ROOT),roleSource)
+  assert.deepEqual(roleSource.baseline,JSON.parse(readRepo('.focx/baseline.yaml')))
+  assert.deepEqual(roleSource.invariants,JSON.parse(readRepo('.focx/invariants.yaml')))
+  for(const a of roleSource.manifest.agents.filter(a=>a.disposition==='pilot')){
+    assert.equal(roleSource.files[a.id]['AGENTS.md'],readRepo(a.instructions))
+    for(const skill of a.skills)assert.equal(roleSource.files[a.id]['skills/'+skill+'/SKILL.md'],readRepo('.focx/skills/'+skill+'/SKILL.md'))
+  }
+  assert.deepEqual(roleSource.runtimeFiles,{'tools/qa-claude-agent-acp/index.mjs':readRepo('tools/qa-claude-agent-acp/index.mjs')})
+})
+test('role source preserves malformed JSON and missing source file refusals',()=>{
+  assert.throws(()=>rebuilt(null,p=>p==='.claude/settings.json'?'invalid JSON':readRepo(p)),SyntaxError)
+  for(const path of [qaOf(roleSource.manifest).instructions,'.focx/skills/focx-verify-change/SKILL.md','tools/qa-claude-agent-acp/index.mjs']){
+    assert.throws(()=>rebuilt(null,p=>{if(p===path)throw Error('missing source file');return readRepo(p)}),/missing source file/)
+  }
+})

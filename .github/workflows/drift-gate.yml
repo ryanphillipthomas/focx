@@ -25,16 +25,8 @@ jobs:
         uses: ryanphillipthomas/drift-check@v1
       - name: contract validation
         run: node tools/contracts/validate.mjs
-      # The reconciler decides who can push, who can wake, and what --apply is
-      # allowed to re-arm. Its suite ran only on developer machines, so every
-      # regression test written for it — including the ones guarding the
-      # 2026-09-04 comment loop — protected nothing on a pull request.
-      - name: org reconciler
-        run: node tools/paperclip-org/test.mjs
-      - name: pilot source and synchronization safeguards
-        run: |
-          node tools/pilot-org/index.mjs --check
-          node --test tools/pilot-org/test.mjs
+      - name: QA launcher safeguards
+        run: node --test tools/qa-claude-agent-acp/*.test.mjs
       # The reporting script is a pilot's only way to write back to its task
       # under approve-reads. A regression here is silent: the run still
       # succeeds, and the report is simply lost.

@@ -1,5 +1,5 @@
 // Optional integration: exercise the installed Claude CLI, never a real model.
-// FOCX_TEST_CLAUDE_SDK_ROOT=/path/to/@anthropic-ai/claude-agent-sdk node --test tools/pilot-org/runtime-permissions.test.mjs
+// FOCX_TEST_CLAUDE_SDK_ROOT=/path/to/@anthropic-ai/claude-agent-sdk node --test tools/qa-claude-agent-acp/runtime-permissions.test.mjs
 import {test} from 'node:test'
 import {execFileSync} from 'node:child_process'
 import {createHash} from 'node:crypto'

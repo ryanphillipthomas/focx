@@ -11,10 +11,10 @@
   "scripts": {
     "drift-check": "node tools/drift-check/index.mjs",
     "test:drift-check": "node --test tools/drift-check/test.mjs",
-    "pilot:check": "node tools/pilot-org/index.mjs --check",
-    "pilot:plan": "node tools/pilot-org/index.mjs",
-    "pilot:verify": "node tools/pilot-org/index.mjs --verify-only",
-    "test:pilot": "node --test tools/pilot-org/test.mjs",
+    "focx-bot:check": "node packages/focx-bot/src/index.mjs --validate-contract",
+    "focx-bot:plan": "node packages/focx-bot/src/index.mjs apply",
+    "focx-bot:verify": "node packages/focx-bot/src/index.mjs verify",
+    "test:focx-bot": "node --test packages/focx-bot/test.mjs",
     "test:scripts": "node --test scripts/paperclip-issue-update.test.mjs"
   }
 }

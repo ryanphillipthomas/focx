@@ -9,11 +9,15 @@ From the repository root:
 ```sh
 node packages/focx-bot/src/index.mjs --validate-contract
 node --test packages/focx-bot/test.mjs
-node tools/pilot-org/index.mjs --check
+node --test tools/qa-claude-agent-acp/*.test.mjs
 node packages/focx-bot/src/index.mjs fresh --fake
 ```
 
 The schema validator implements every keyword used by `contract.schema.json`. Tests exercise the same schema, native bundle renderer, operations, invariant functions and digest used by the CLI. The fake API is in-process; tests require neither sockets nor Paperclip credentials. `--fake` has ephemeral state and is useful for a fresh plan; the test fixture carries state across all stages.
+
+The retired `tools/pilot-org` and `tools/paperclip-org` reconciliation CLIs are superseded by this package. `src/roles.mjs` is the single `.focx` loader and validator (`loadRoleSource`, `buildRoleSource`); `src/contract.mjs` retains its separate `loadSource` for the provisioning contract. The package tests validate the real role source and include all 31 active validation guards as knock-outs. `--validate-contract` checks the provisioning contract only. Root scripts `focx-bot:check`, `focx-bot:plan`, `focx-bot:verify` and `test:focx-bot` wrap existing CLI operations; `focx-bot:plan` invokes `apply` without the write flag.
+
+The QA launcher suites include eight optional native permission tests. Set `FOCX_TEST_CLAUDE_SDK_ROOT` to an installed SDK directory to run them; otherwise they explicitly skip. They use a loopback stub and dummy authentication, while the ordinary launcher tests remain entirely in memory.
 
 ## Verbs and approval
 
@@ -105,7 +109,7 @@ Claude mismatches exit nonzero: grant/enablement/installation/pin differences,
 launcher command or environment presence, source divergence, launcher role/company/adapter identity,
 worktree permission deltas and H7's dead temp rule. Permissions are rendered with
 the launcher's `mergeSettings` and its five vendor baseline rules. The source
-validator is imported from `tools/pilot-org`; it reads repository `.focx` role and
+validator is `loadRoleSource` from `src/roles.mjs`, shared with the QA launcher; it reads repository `.focx` role and
 skill sources as well as the manifest. Runtime host readers inspect settings,
 plugin manifests and installation metadata only, refusing symlinked metadata;
 they never open auth files, plugin `SKILL.md` or marketplace snapshots. Missing

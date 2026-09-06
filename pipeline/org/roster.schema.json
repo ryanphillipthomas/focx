@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://focx.ai/contracts/org-roster.schema.json",
   "title": "Focx operating-company roster (pipeline/org/roster.json)",
-  "description": "Desired state for the Paperclip company. Deliberately NOT in pipeline/contracts/ \u2014 those are per-run artifact contracts in the parity structure tier. This schema documents the roster for humans and editors; tools/paperclip-org/index.mjs enforces it, plus the structural invariants a JSON Schema cannot express (single root, no cycles, budget arithmetic, env composition).",
+  "description": "Historical reference-only roster for the former Paperclip organization. Deliberately NOT in pipeline/contracts/ \u2014 those are per-run artifact contracts in the parity structure tier. This schema documents the roster for humans and editors only; no tool consumes or enforces it after the legacy reconciler retirement. Current role validation is packages/focx-bot/src/roles.mjs over .focx controls; provisioning is packages/focx-bot.",
   "type": "object",
   "required": [
     "version",

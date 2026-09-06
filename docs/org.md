@@ -2,23 +2,25 @@
 
 # The operating company
 
-The **source of truth for who executes the pipeline**: which agents exist, who they report to, what model they run, what they may write, what they cost, and what they are scheduled to do.
+Historical description of the former organization: which agents exist, who they report to, what model they run, what they may write, what they cost, and what they are scheduled to do.
 
 > **Supersedes** [`pipeline.md`](pipeline.md)'s "Phase 4 (planned) — Paperclip-native execution" section. That section still says the migration is "not started", and [`roles/chief.md`](roles/chief.md) carries the same sentence. Both are stale as of this document. They are left unedited deliberately: they are in the parity `identical` tier and changing them creates a byte-for-byte mirror obligation in `studio-810` that cannot be authored from this machine. Under the one-home rule, [`sources-of-truth.md`](sources-of-truth.md) and this file win. Correcting the two stale paragraphs is tracked as a separate paired-parity PR.
 
-## Where it lives
+The reconciliation tools `tools/paperclip-org` and `tools/pilot-org` have been retired and removed. [focx-bot](../packages/focx-bot/README.md) replaces them for its contract company; its shared `src/roles.mjs` is the single implementation of `.focx` loading and validation. `pipeline/org/roster.json` is now reference-only, with no tool consuming it. Its retained comment claiming it is applied by the old tool is historical provenance. The organization, validator guarantees and host observations below describe the retired approach, not current activation policy.
+
+## Where it lived
 
 | Concern | Home |
 |---|---|
-| Desired state — the org itself | [`pipeline/org/roster.json`](../pipeline/org/roster.json), with [`roster.schema.json`](../pipeline/org/roster.schema.json) |
+| Historical roster — reference only | [`pipeline/org/roster.json`](../pipeline/org/roster.json), with [`roster.schema.json`](../pipeline/org/roster.schema.json) |
 | Agent instructions | [`pipeline/org/instructions/`](../pipeline/org/instructions/) — 25 per-agent files plus three shared fragments |
 | Live state | The Paperclip company `Focx.ai` (`5f772ef2-25ce-466f-9392-027be5055470`) |
-| Reconciliation | [`tools/paperclip-org/`](../tools/paperclip-org/index.mjs) |
+| Current provisioning | [`packages/focx-bot/`](../packages/focx-bot/README.md) — its two-agent contract company only |
 | Secret **values** | Paperclip's secret store. Never this repo. |
 
-The repo holds desired state; Paperclip holds live state; `tools/paperclip-org/index.mjs --verify-only` is what makes divergence a failing check instead of a discovery months later — the same argument [`tools/pipeline-parity/`](../tools/pipeline-parity/index.mjs) makes for the two-repo pipeline.
+The retired reconciler compared the roster to live state. Current read-only verification is `node packages/focx-bot/src/index.mjs verify --base-url API_URL --company-id COMPANY_ID` for the focx-bot contract company. It is not a replacement check of the historical 26-identity organization.
 
-Instruction bundles are a **pure function of this repo**. Verification byte-diffs each live bundle against a fresh local render, so a hand-edit in the Paperclip UI surfaces as drift rather than quietly becoming the real org. Edit the source, never the live bundle.
+The retired instruction bundles were a **pure function of this repo**. Legacy verification byte-diffed each live bundle against a fresh local render, so a hand-edit in the Paperclip UI surfaces as drift rather than quietly becoming the real org. Edit the source, never the live bundle.
 
 ## The organization
 
@@ -164,16 +166,19 @@ Production releases · major product-direction changes · pricing · contracts �
 
 Rendered identically into all 25 bundles from `_preamble.md`.
 
-## Operating it
+## Current provisioning entrypoints
+
+The former roster dry-run, render-only and termination-count apply commands no longer exist. Use focx-bot's supported operations for its contract company:
 
 ```bash
-node tools/paperclip-org/index.mjs                 # dry run (default) — mutates nothing
-node tools/paperclip-org/index.mjs --render-only   # render 25 bundles offline, no credential
-node tools/paperclip-org/index.mjs --verify-only   # the 12 success conditions, read-only
-node tools/paperclip-org/index.mjs --apply --confirm-terminate=N
+node packages/focx-bot/src/index.mjs --validate-contract
+node --test packages/focx-bot/test.mjs
+node --test tools/qa-claude-agent-acp/*.test.mjs
+node packages/focx-bot/src/index.mjs apply --base-url API_URL --company-id COMPANY_ID # plan only
+node packages/focx-bot/src/index.mjs verify --base-url API_URL --company-id COMPANY_ID
 ```
 
-Applying needs a board token Ryan mints himself (`paperclipai auth login` → `paperclipai token board create`) and the two secrets present in Paperclip's store. The tool never fetches, prints, or persists a secret value — it reads names only.
+Live reads require existing authorized credentials in the secure environment. A write requires separate authorization and the exact reviewed plan's `--apply --approved-digest DIGEST`; see the [package workflow](../packages/focx-bot/README.md). No command here adopts the historical roster, terminates its agents or activates it. A migration decision for that company remains Ryan's.
 
 ## Two different skill systems
 
@@ -181,7 +186,7 @@ Applying needs a board token Ryan mints himself (`paperclipai auth login` → `p
 
 The design chain's tooling — Claude Design and the design review skills — are **Claude Code plugin skills**. They reach a `claude_local` agent through the local Claude Code installation and are never registered in Paperclip. They are recorded per agent as `claudeCodeSkills`, which is documentation for humans and is **never sent to the API**.
 
-Confusing the two fails preflight for a reason nobody would guess, so `validateRoster` rejects a `plugin:skill` name in `desiredSkills` and a `vendor/pack/skill` key in `claudeCodeSkills`. Discovery-mode design depends on Claude Design being present in the local install; if it is absent, that is a local installation blocker, not a Paperclip configuration one.
+To distinguish the two systems, the retired `validateRoster` rejected a `plugin:skill` name in `desiredSkills` and a `vendor/pack/skill` key in `claudeCodeSkills`. Discovery-mode design depends on Claude Design being present in the local install; if it is absent, that is a local installation blocker, not a Paperclip configuration one.
 
 ## Worktrees, not clones
 
@@ -189,9 +194,9 @@ Repo-tier agents get a **git worktree per issue**, cut from the Connect project'
 
 `cwd` is deliberately **not** set. It is not a workable way to place a repo agent: the `codex_local` lane honours it, but the `claude_local` ACP lane ignores it entirely and runs in Paperclip's own workspace directory, which contains no repository. Sixteen hand-made clones were built on that assumption and then deleted — the worktree is the workspace for both lanes.
 
-**`baseRef` must be remote-tracking, and this is load-bearing.** `refreshRemoteTrackingBaseRef` fetches only when the ref parses as `<remote>/<branch>`; a bare `develop` returns early, and Paperclip branches from whatever the local checkout happens to be. That is a silent staleness bug — the project checkout was once four merges behind, so agents would have worked from a tree containing no `pipeline/org/` at all. With `origin/develop` Paperclip fetches before every worktree, authenticating with the company GitHub secret, and staleness stops being anyone's job. `validateRoster` rejects a bare ref.
+**`baseRef` must be remote-tracking, and this is load-bearing.** `refreshRemoteTrackingBaseRef` fetches only when the ref parses as `<remote>/<branch>`; a bare `develop` returns early, and Paperclip branches from whatever the local checkout happens to be. That is a silent staleness bug — the project checkout was once four merges behind, so agents would have worked from a tree containing no `pipeline/org/` at all. With `origin/develop` Paperclip fetches before every worktree, authenticating with the company GitHub secret, and staleness stops being anyone's job. The retired `validateRoster` rejected a bare ref.
 
-It also rejects a `branchTemplate` with no `{{…}}` placeholder. Single braces render **literally**: an early attempt produced the branch `agent/-agentSlug-/-issueId`, which would have put every agent and every issue in one shared working tree — the exact collision that per-agent directories were meant to prevent.
+It also rejected a `branchTemplate` with no `{{…}}` placeholder. Single braces render **literally**: an early attempt produced the branch `agent/-agentSlug-/-issueId`, which would have put every agent and every issue in one shared working tree — the exact collision that per-agent directories were meant to prevent.
 
 ### Worktrees come from the project, so every issue needs one
 
@@ -202,7 +207,7 @@ Two places that binding has to happen:
 - **Routines** carry `projectId`, so routine-created issues inherit it. All ten were created without one, which would have failed every repo-tier routine — including the Morning Brief.
 - **Agents creating child issues** must carry the project across. `_repo-discipline.md` says so, and it is the one part of this that prose has to hold, since the handoff happens at runtime.
 
-`validateRoster` refuses a roster whose repo-tier routines have no project, and preflight reports any live routine that is still unbound.
+The retired `validateRoster` refused a roster whose repo-tier routines have no project, and its preflight reported live routines that were still unbound.
 
 This was found the hard way: every workspace probe written during the migration set `projectId` by hand, so the tests only ever exercised the path that construction made work. Real issues do not come with one.
 
@@ -231,12 +236,12 @@ The roster names a secret (`{ "secret": "claude_subscription_token" }`); the rec
 { "type": "secret_ref", "secretId": "<uuid>" }
 ```
 
-This matters more than it looks. Paperclip's env union also accepts a **bare string**, and coerces it to `{ "type": "plain" }`. An earlier roster used a `"[secret: name]"` string, so every agent was created with that literal 34-character string where its token belonged — accepted by the API, invisible until first run. `validateRoster` now rejects the string form outright, `resolveEnv` throws rather than falling back to a plain value, and `verify` checks the **stored type** rather than mere presence.
+This matters more than it looks. Paperclip's env union also accepts a **bare string**, and coerces it to `{ "type": "plain" }`. An earlier roster used a `"[secret: name]"` string, so every agent was created with that literal 34-character string where its token belonged — accepted by the API, invisible until first run. The retired `validateRoster` rejected the string form outright, its `resolveEnv` threw rather than falling back to a plain value, and its verification checked the **stored type** rather than mere presence.
 
-## Known gaps
+## Historical gaps (not a current live-state assessment)
 
 - **`pipeline/org/` and `tools/paperclip-org/` are deliberately absent from [`tools/pipeline-parity/manifest.json`](../tools/pipeline-parity/manifest.json).** The manifest is itself parity `identical`, so listing them would create a `studio-810` mirror obligation that cannot be satisfied from this machine. Unlisted files are simply not compared, so parity still passes — the precedent is `pipeline/prompts/paperclip-development-agent.md`, already unlisted. A completeness pass is a future paired PR.
-- **[`pipeline/prompts/qa-agent.md`](../pipeline/prompts/qa-agent.md) still says "the standalone Paperclip `QA` agent"** in three places, now that the roster names the agent `QA Engineer`. Left unedited on purpose: that file is parity `branded`, so changing it needs a matching edit in `studio-810`. The references are checked and **not load-bearing** — each is a "when you are running in this mode" condition addressed to the agent itself, not an instruction to look up an agent by name. The load-bearing references, in `paperclip-development-agent.md`, were updated, and `checkCharterCoupling` in the reconciler now fails the build if any charter ever again hands off to an agent the roster does not contain.
+- **[`pipeline/prompts/qa-agent.md`](../pipeline/prompts/qa-agent.md) still says "the standalone Paperclip `QA` agent"** in three places, now that the roster names the agent `QA Engineer`. Left unedited on purpose: that file is parity `branded`, so changing it needs a matching edit in `studio-810`. The references are checked and **not load-bearing** — each is a "when you are running in this mode" condition addressed to the agent itself, not an instruction to look up an agent by name. The load-bearing references, in `paperclip-development-agent.md`, were updated, and the retired reconciler's `checkCharterCoupling` used to check them. That roster coupling check no longer runs; the current pilot uses `.focx` ownership and Ryan-initiated handoffs.
 - **`--apply` has not been exercised against a live company.** Its offline half is covered by 57 tests against a stub API; the live path is first proven in Phase 2.
 - **Figma MCP is unauthorized**, so the design chain cannot promote until Ryan authorizes it.
 - **The `git: write` tier is provisional.** Security, AI Evals, and Product Analytics may turn out to report findings into Paperclip rather than commit anything; if so they should drop to `read` at the 30-day review.

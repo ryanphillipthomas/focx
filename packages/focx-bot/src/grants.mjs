@@ -1,6 +1,6 @@
 import { join, resolve, dirname } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { loadSource as loadPilotSource } from '../../../tools/pilot-org/index.mjs'
+import { loadRoleSource } from './roles.mjs'
 import { mergeSettings, COMMAND } from '../../../tools/qa-claude-agent-acp/index.mjs'
 import { readSnapshot, idMap } from './api.mjs'
 import { requireThat, slugOf } from './invariants.mjs'
@@ -67,7 +67,7 @@ export function readWorktreeSettings(host,root,companyId) {
 
 // The mandated pilot source validator reads repository .focx instruction files.
 // Runtime host readers above never open plugin payloads, auth or catalogs.
-export function grantReport(contract,live,homes,host,{pilotManifest=loadPilotSource().manifest,instanceRoot:root=dirname(dirname(dirname(homes.codex.home)))}={}) {
+export function grantReport(contract,live,homes,host,{pilotManifest=loadRoleSource().manifest,instanceRoot:root=dirname(dirname(dirname(homes.codex.home)))}={}) {
   const lines=[`declared: ${F1}`, 'observed on disk: effect evidence is reported by verifySkills: runtime-skills/ presence and run-log injection failures; grants checks metadata only.'],agents=[]
   const worktrees=readWorktreeSettings(host,root,live.company.id)
   const inventory=readPluginInventory(contract,homes.codex.home,{metadataOnly:true,host,userHome:host.userHome})

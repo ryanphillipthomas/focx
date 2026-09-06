@@ -5,9 +5,9 @@ import {syncBuiltinESMExports} from 'node:module'
 import {pathToFileURL} from 'node:url'
 import {join,resolve} from 'node:path'
 import childProcess from 'node:child_process'
-import {loadSource,ROOT} from './index.mjs'
-import {validateContext,mergeSettings,prepare} from '../qa-claude-agent-acp/index.mjs'
-const source=loadSource(),qa=source.manifest.agents.find(x=>x.roleKey==='qa-engineer')
+import {loadRoleSource,ROLE_ROOT as ROOT} from '../../packages/focx-bot/src/roles.mjs'
+import {validateContext,mergeSettings,prepare} from './index.mjs'
+const source=loadRoleSource(),qa=source.manifest.agents.find(x=>x.roleKey==='qa-engineer')
 const env={PAPERCLIP_API_URL:'http://paperclip.invalid',PAPERCLIP_API_KEY:'offline-fixture-key',PAPERCLIP_AGENT_ID:'cccccccc-cccc-cccc-cccc-cccccccccccc',PAPERCLIP_COMPANY_ID:'dddddddd-dddd-dddd-dddd-dddddddddddd',PAPERCLIP_TASK_ID:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',PAPERCLIP_RUN_ID:'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'}
 const agent={id:env.PAPERCLIP_AGENT_ID,companyId:env.PAPERCLIP_COMPANY_ID,urlKey:'qa-engineer',adapterType:'claude_local',name:'QA Engineer'}
 const matchingFetch=async()=>({status:200,json:async()=>({...agent})})
