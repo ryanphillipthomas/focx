@@ -105,6 +105,7 @@ States as section 3. Same protocol, same constraints.
 | F17 | Live `bind-secrets --apply` (env binding + first live plugin provisioning) | Claude | **partial** — env binding PASS; all 294 Claude plugins PASS; native Codex stage blocked by F20 | FB9, F18, F19 |
 | F20 | Native Codex plugins: `openai-bundled` is reserved and cannot be installed by path; `openai-curated-remote` needs network + sign-in | Claude (found) | **done** — PR #96 merged (`431eced`) | F17 |
 | F21 | `bind-secrets` must not report `configured` while pinned plugins are unseeded | Codex | **done** — landed on develop via PR #98 (`93ceec7`) | F20 |
+| F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **open** — one PR needed | F17 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
 
@@ -1827,6 +1828,28 @@ since #87 merged.
   only thing making production releases read `failed`.
 - 2026-09-06 Ryan: **"fix the buffer bug; i dont care about the branch protection untill i get close to release"** →
   branch protection deliberately left loose; **F22 dispatched** for the ENOBUFS defect.
+
+- 2026-09-06 Ryan (AskUserQuestion): **"Authorise the run"** (QA lane smoke in `focx-bot-4a-restore-2`).
+- 2026-09-06 17:37:27Z Claude: **QA lane run BLOCKED by F23; agent restored and paused.** Three wake attempts:
+  1. `73edc6cb…` cancelled — `issue_assignee_changed`. **My error:** I created the task with `assigneeId`, a field the
+     API ignores, then bound it to the project; the run gate saw no assignee.
+  2. `bc7cc19b…` cancelled the same way — my re-assign used the same wrong field.
+  3. `410acfed…` reached the adapter and **failed at `ensure_session`**:
+     `[focx-qa-permissions] stopped: QA must run at its FOC issue worktree root`.
+  The correct field is **`assigneeAgentId`** (`issues.js:6909`); once set, project `9c1b5803…`, workspace `f6c6bfba…`
+  and the assignee all held.
+- **F23 — the QA launcher is hardcoded to the original company's issue prefix.**
+  `tools/qa-claude-agent-acp/index.mjs:37`:
+  `requireThat(cwd === root && /^FOC-\d+-/.test(branch), 'QA must run at its FOC issue worktree root')`.
+  Paperclip names the worktree branch from the company's issue identifier, and a provisioned company gets its own
+  prefix — `FOCA` for `focx-bot-4a`, **`FOCAAA`** for `focx-bot-4a-restore-2`. `FOCAAA-1-…` fails `^FOC-\d+-`, so the
+  guard can only ever be satisfied by the original `Focx.ai` company. **The QA lane cannot run in ANY company focx-bot
+  provisions** — which is the whole point of focx-bot. The Implementation lane is unaffected: it runs Codex through a
+  different path and its FB8 smoke passed in `focx-bot-4a`.
+  **Correction to what I told Ryan:** I said zero more PRs were needed. That was wrong — this needs one.
+  **Cleanup done:** `runtimeConfig` restored **byte-identical** to the recorded `before` and the agent **paused**
+  (verified by read-back). The task `571e10d0…` remains in `backlog`, assigned, unstarted; no branch, commit or push
+  was made by the agent.
 
 ### FB3 log
 
