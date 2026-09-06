@@ -1,0 +1,14 @@
+{
+  "id": "dep-daephbrbc2fs73ciu04g",
+  "commit": {
+    "id": "61bce8e3b161042556f573dec5b32f8867f59e8f",
+    "message": "Merge pull request #100 from ryanphillipthomas/develop\n\nPromote develop to staging",
+    "createdAt": "2026-09-06T16:45:30Z"
+  },
+  "status": "live",
+  "trigger": "new_commit",
+  "createdAt": "2026-09-06T16:45:35.821555Z",
+  "updatedAt": "2026-09-06T16:45:49.224809Z",
+  "startedAt": "2026-09-06T16:45:35.820223Z",
+  "finishedAt": "2026-09-06T16:45:49.224593Z"
+}

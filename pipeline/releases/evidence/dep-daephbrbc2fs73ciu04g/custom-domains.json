@@ -1,0 +1,14 @@
+[
+  {
+    "cursor": "odo29By5eXp2NHA0MmhlYzczYjcwbnUw",
+    "customDomain": {
+      "createdAt": "2026-08-31T20:09:55.216807Z",
+      "domainType": "subdomain",
+      "id": "cdm-daatv4p42hec73b70nu0",
+      "name": "staging.focx.ai",
+      "publicSuffix": "ai",
+      "redirectForName": "",
+      "verificationStatus": "verified"
+    }
+  }
+]
