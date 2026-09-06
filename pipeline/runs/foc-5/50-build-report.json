@@ -1,0 +1,38 @@
+{
+  "runId": "foc-5",
+  "storiesImplemented": [
+    "FOC-5-primary-button"
+  ],
+  "filesChanged": [
+    "apps/connect/index.html",
+    "apps/connect/main.js",
+    "apps/connect/styles.css",
+    "apps/connect/vendor/design-connect.js",
+    "apps/connect/vendor/design-focx.js",
+    "packages/design-focx/src/button.js",
+    "packages/design-focx/src/index.js",
+    "pipeline/runs/foc-5/50-build-report.json"
+  ],
+  "componentsUsed": [
+    "@focx/design-connect/Button"
+  ],
+  "tokensUsed": [
+    "focx.border.focus-ring",
+    "focx.color.action-fill",
+    "focx.color.action-fill-hover",
+    "focx.color.action-fill-text",
+    "focx.color.border-focus",
+    "focx.control.h-md",
+    "focx.control.px-md",
+    "focx.font.sans",
+    "focx.radius.pill",
+    "focx.space.3",
+    "focx.text.label",
+    "focx.weight.medium"
+  ],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean — no design drift detected."
+  }
+}

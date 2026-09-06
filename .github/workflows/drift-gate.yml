@@ -21,9 +21,22 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      # drift-check is dependency-free vanilla Node; the runner's preinstalled
-      # Node is sufficient — no setup-node, no install, minimal billed time.
       - name: drift-check
-        run: node tools/drift-check/index.mjs
+        uses: ryanphillipthomas/drift-check@v1
       - name: contract validation
         run: node tools/contracts/validate.mjs
+      - name: QA launcher safeguards
+        run: node --test tools/qa-claude-agent-acp/*.test.mjs
+      # The reporting script is a pilot's only way to write back to its task
+      # under approve-reads. A regression here is silent: the run still
+      # succeeds, and the report is simply lost.
+      - name: agent reporting path
+        run: node --test scripts/paperclip-issue-update.test.mjs
+      - name: focx-bot Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: focx-bot contract schema
+        run: node packages/focx-bot/src/index.mjs --validate-contract
+      - name: focx-bot provisioning safeguards
+        run: node --test packages/focx-bot/test.mjs

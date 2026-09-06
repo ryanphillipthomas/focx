@@ -1,0 +1,32 @@
+diff --git a/apps/connect/index.html b/apps/connect/index.html
+index aeb7be6..1021da4 100644
+--- a/apps/connect/index.html
++++ b/apps/connect/index.html
+@@ -76,5 +76,8 @@
+       <button class="btn btn--destructive btn--md btn--pill" data-figma-node="31:117" title="Medium / Pill / Default">Delete</button>
+     </div>
+   </section>
++  <footer class="site-footer">
++    <p class="caption">Focx design system — Connect showcase</p>
++  </footer>
+ </body>
+ </html>
+diff --git a/apps/connect/styles.css b/apps/connect/styles.css
+index 5d6af9d..6fd9172 100644
+--- a/apps/connect/styles.css
++++ b/apps/connect/styles.css
+@@ -123,3 +123,14 @@ h1 {
+ .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+ .btn[disabled]:hover { background: var(--action-fill); }
+ .btn--destructive[disabled]:hover { background: var(--status-danger); }
++
++.site-footer {
++  margin-top: var(--control-px-lg);
++  padding-top: var(--space-3);
++  border-top: var(--border-hairline) solid var(--border-subtle);
++}
++
++.site-footer .caption {
++  font-size: var(--text-caption);
++  font-weight: var(--weight-regular);
++}

@@ -1,0 +1,34 @@
+{
+  "issue": "FOC-95",
+  "base": "e4c92ab5c2cc5c2a49dd033e643a6a2942902e4a",
+  "head": "158e973ff60683a85fbb88042ebc5f59290a5e43",
+  "exactDiffBytesMatch": true,
+  "files": {
+    "run.diff": {
+      "path": "/Users/ryanthomas/.paperclip/instances/default/projects/5f772ef2-25ce-466f-9392-027be5055470/60073b69-336b-4494-a549-e7dc6916eff5/focx/.paperclip/worktrees/FOC-95-qa-full-workflow-smoke-after-pr-85/pipeline/runs/smoke-pr85/evidence/run.diff",
+      "bytes": 22951,
+      "sha256": "917b3e8c7429346a84be9abeea3dd92bd0cb0701d2ceb81a7c163715ff910701"
+    },
+    "differential-review.md": {
+      "path": "/Users/ryanthomas/.paperclip/instances/default/projects/5f772ef2-25ce-466f-9392-027be5055470/60073b69-336b-4494-a549-e7dc6916eff5/focx/.paperclip/worktrees/FOC-95-qa-full-workflow-smoke-after-pr-85/pipeline/runs/smoke-pr85/evidence/differential-review.md",
+      "bytes": 10167,
+      "sha256": "1fc8c101396153b65aafc506e753c1d56b111808b369f037307e61c29258b411"
+    },
+    "silent-failure-hunter.md": {
+      "path": "/Users/ryanthomas/.paperclip/instances/default/projects/5f772ef2-25ce-466f-9392-027be5055470/60073b69-336b-4494-a549-e7dc6916eff5/focx/.paperclip/worktrees/FOC-95-qa-full-workflow-smoke-after-pr-85/pipeline/runs/smoke-pr85/evidence/silent-failure-hunter.md",
+      "bytes": 10382,
+      "sha256": "6e6625afe2293f9d1e8809e60dae3fea7523eb5ec2e9e1f86d86e412c95d3606"
+    }
+  },
+  "qaOwnSubstantiveReportCommentId": "1938d6a4-0a56-4603-a1a4-31b994808d3d",
+  "workflowSmoke": "pass",
+  "qaPaused": true,
+  "timerWakeups": false,
+  "manualWakeups": false,
+  "limits": [
+    "Runtime workflow smoke only; not product release/deployment verification.",
+    "Differential review labels five grouped rows as 5/5 files; actual diff contains nine files. Both reports contain substantive scoped review.",
+    "One attempted ScheduleWakeup call failed input validation because prompt was missing; no wakeup scheduled. It was not a permission denial and did not affect the required workflow.",
+    "Review findings concern tests/procedure and do not demonstrate a workflow failure; severity labels not independently endorsed."
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "digest": "c10a8fb76eee307b1e062e0354b6b5cad31c8bb12e94fa921f960c7f8b69cd8b",
+  "changes": [],
+  "deletions": 0,
+  "activations": 0,
+  "hostFindings": []
+}

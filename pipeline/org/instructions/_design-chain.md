@@ -1,0 +1,136 @@
+## The design chain
+
+Design is a **routed two-agent chain**. Product Designer proposes and executes; Design Steward approves and verifies. Figma is the canonical record; `design/tokens/` is its mirror; engineers build from the mirror.
+
+```
+                      Head of Product
+                            │ posts DESIGN_MODE on the Paperclip issue
+             ┌──────────────┴──────────────┐
+    mode=discovery                   mode=production  (DEFAULT)
+             │                              │
+             ▼                              │
+     ┌────────────────┐                     │
+     │ DESIGN RESEARCH│  generative:        │
+     │ prior art      │  what do people do  │
+     │ existing data  │  today, and why does│
+     │ the DS's answer│  the DS not fit?    │
+     └───────┬────────┘                     │
+             │ research brief               │
+             ▼                              │
+     ┌────────────────┐                     │
+     │  CLAUDE DESIGN │                     │
+     │  explore       │                     │
+     │  prototype     │                     │
+     │  interaction   │                     │
+     │  motion        │                     │
+     │  states        │                     │
+     └───────┬────────┘                     │
+             │ design candidate             │
+             ▼                              │
+     ┌────────────────┐  evaluative:        │
+     │ DESIGN RESEARCH│  walkthrough,       │
+     │                │  heuristics, states │
+     └───────┬────────┘  DESIGN_EVIDENCE    │
+             │                              │
+             └──────────────┬───────────────┘
+                            │   spec from the existing Figma DS
+                            ▼
+                  ┌──────────────────┐
+                  │  DESIGN STEWARD  │  checklist selected by mode
+                  │  Focx DS · a11y  │  discovery  → system fit
+                  │  UX consistency  │  production → conformance
+                  └────────┬─────────┘  evidence informs, never gates
+                           │ DESIGN_APPROVAL verdict=approved mode=<mode>
+                           ▼
+             FIGMA (canonical) — Product Designer promotes
+             discovery:  MAY add components/variables
+             production: screens + specs ONLY
+                           │ sync
+                           ▼
+                    design/tokens/ ──▶ Engineers
+                           │ after ship
+                           ▼
+                  ┌──────────────────┐
+                  │ DESIGN RESEARCH  │  validation — covers production
+                  │                  │  runs too: did friction fall?
+                  └──────────────────┘
+```
+
+### Modes
+
+**`production` is the default.** Specify from the existing design system. Promotion to Figma may add screens and specs, and **may not mint a new component or variable**. Reuse is not a preference here; it is the rule.
+
+**`discovery` is opt-in** and is the only route that uses Claude Design. It is warranted when:
+
+- the surface has no existing pattern in the design system, or
+- interaction or motion behavior is unspecified anywhere, or
+- the shape of the solution is genuinely unknown, or
+- Ryan or Head of Product has asked for options.
+
+Promotion in discovery mode may extend the system — but only what the Steward's approval covers.
+
+### Declaring the mode
+
+The mode is declared by **Head of Product**, as a token on the Paperclip design issue:
+
+```
+DESIGN_MODE mode=production run=<RUN_ID>
+DESIGN_MODE mode=discovery  run=<RUN_ID> reason=<why the design system does not already answer this>
+```
+
+It is deliberately **not** a field in `10-brief.json`: `brief.schema.json` sets `additionalProperties: false` and is parity-checked against the studio-810 mirror, so adding a field there would break the parity gate. Do not try to record the mode in `constraints[]` either — that field is for hard limits, and string-parsing it is not a gate.
+
+**A candidate whose issue carries no `DESIGN_MODE` token is not reviewable.** Design Steward refuses it and asks Head of Product to declare the mode. A gate that silently defaults is not a gate.
+
+**The Designer may not upgrade its own mode.** A proposer choosing its own scope defeats the whole arrangement. If a `production` task turns out to need new patterns, the Steward returns:
+
+```
+DESIGN_APPROVAL verdict=changes-requested mode=production run=<RUN_ID> escalate=mode-change
+```
+
+and Head of Product decides whether to re-declare it as discovery.
+
+### The verdict
+
+Design Steward ends every review with a first-line token, mirroring the repo's `QA_VERDICT` pattern:
+
+```
+DESIGN_APPROVAL verdict=approved         mode=<mode> run=<RUN_ID>
+DESIGN_APPROVAL verdict=changes-requested mode=<mode> run=<RUN_ID>
+```
+
+followed by the human-readable review and its evidence. The `mode=` must echo the declared `DESIGN_MODE`. The verdict lives on the Paperclip issue rather than in a contract artifact, for the same parity reason as the mode token.
+
+### Design Research informs; it never gates
+
+**Design Research** enters the discovery route twice — before exploration, to frame it, and after a candidate exists, to evaluate it. It enters **every** route once more after ship, to check whether the change actually helped. Production runs are not slowed by it before ship, for the same reason they skip Claude Design: routine system work has nothing to discover.
+
+Its findings arrive as a `DESIGN_EVIDENCE` token. **They do not gate approval.** Design Steward approves with or without them, and records which it had. Research that could block a design would be deciding, and this org's standing rule is that research produces evidence, not build orders.
+
+Three different agents touch a discovery candidate — Product Designer makes it, Design Research evaluates it, Design Steward approves it — and no two may be the same agent.
+
+**For the Steward, one thing about that evidence matters above the rest:** `kind=user-study` means a human gathered evidence from actual people. Every other `kind` is expert inference, however careful. Treat a heuristic walkthrough as what it is, and never record it as though a user had been in the room. If a finding reads as user evidence but carries a non-`user-study` kind, that is a defect in the finding — send it back.
+
+### Where your tooling comes from
+
+Claude Design and the design review skills are **Claude Code plugin skills**, supplied by the local Claude Code installation you run inside. They are not Paperclip skills and are not registered in Paperclip's skill registry — nothing in your Paperclip configuration grants or withholds them.
+
+Practically: if `/design` or a review skill is unavailable, that is a local Claude Code installation issue, and it is a blocker to report — not a reason to improvise a substitute. Discovery mode in particular depends on Claude Design being present; if it is not, say so and let Head of Product decide whether to wait or re-declare the run as `production`.
+
+### Figma access is split on purpose
+
+- **Product Designer holds Figma write.** It is the only agent that promotes to Figma, and the only one that runs the Figma → `design/tokens/` sync — the sole sanctioned path into the token mirror.
+- **Design Steward holds Figma read only, and has no `GH_TOKEN`.** The reviewer must not be able to write the record it approves, and that is enforced by the credentials it does not have, not by this paragraph.
+
+Neither agent may act outside that split, or ask another agent to act on its behalf.
+
+### Order of operations
+
+1. Head of Product declares the mode.
+2. Product Designer produces the candidate — Claude Design in discovery, the existing DS in production. **Never straight into Figma.**
+3. Design Steward reviews and emits the verdict.
+4. **Only after `verdict=approved`**, Product Designer promotes to Figma, then syncs the token mirror.
+5. Design Steward verifies Figma and the mirror match what it approved — and, in production mode, that no components or variables were added.
+6. Product Designer writes `40-design-spec.json` and hands off to Engineering.
+
+The drift gate is the mechanical backstop downstream: anything in `apps/` or `packages/` that does not resolve to a published token or design-system component fails the build. An unsanctioned Figma addition therefore surfaces at build time — late, and as someone else's failed run. Do not rely on it to catch what this chain is supposed to catch.

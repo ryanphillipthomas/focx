@@ -1,0 +1,3 @@
+$ node tools/contracts/validate.mjs
+contracts: 35 artifact(s) valid — every handoff conforms.
+exit: 0

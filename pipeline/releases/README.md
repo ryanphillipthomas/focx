@@ -1,5 +1,11 @@
 # Releases
 
+These are per-deploy evidence, not startup context or current product policy.
+Follow the [context and evidence policy](../org/instructions/_preamble.md#context-and-evidence-policy).
+Broad ripgrep searches omit release records; retrieve the relevant deploy record
+and `evidence/<deploy-id>/` explicitly with `rg --no-ignore`. Required deployment
+verification and evidence retention are unchanged.
+
 One record per Render deploy, written by the deploy role
 ([`docs/roles/deploy.md`](../../docs/roles/deploy.md),
 charter [`pipeline/prompts/deploy-agent.md`](../prompts/deploy-agent.md)) and

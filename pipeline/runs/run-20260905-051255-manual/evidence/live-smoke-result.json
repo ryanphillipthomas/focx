@@ -1,0 +1,45 @@
+{
+  "issueId": "a959a01f-f171-4212-800b-592c5f0f8255",
+  "identifier": "FOC-95",
+  "issueStatus": "done",
+  "runId": "f476739a-6254-4487-9d16-a8bced3e998f",
+  "runStatus": "succeeded",
+  "qaStatus": "paused",
+  "heartbeat": {
+    "enabled": false,
+    "cooldownSec": 300,
+    "intervalSec": 3600,
+    "maxDailyRuns": null,
+    "wakeOnDemand": false,
+    "maxConcurrentRuns": 1,
+    "maxTurnContinuation": {
+      "enabled": false
+    },
+    "skipTimerWhenNoActionableWork": true
+  },
+  "qaComments": [
+    {
+      "id": "1938d6a4-0a56-4603-a1a4-31b994808d3d",
+      "authorAgentId": "96fccef1-efa8-49db-8751-d2dc6b843566",
+      "createdAt": "2026-09-05T05:26:17.866Z",
+      "body": "QA full workflow smoke after PR #85 \u2014 tested revision 158e973ff60683a85fbb88042ebc5f59290a5e43 (base e4c92ab5c2cc5c2a49dd033e643a6a2942902e4a), branch FOC-95-qa-full-workflow-smoke-after-pr-85, following focx-verify-change 0.1.4.\n\nPreflight: cwd, branch, and git status confirmed read-only (clean tree, HEAD matched required revision exactly, base present in history). Reporting script confirmed present and executable before use.\n\nOperations observed:\n1. mkdir -p pipeline/runs/smoke-pr85/evidence/ \u2014 succeeded, standalone call.\n2. git diff e4c92ab5..158e973 > pipeline/runs/smoke-pr85/evidence/run.diff \u2014 succeeded via one direct Bash redirect (no Write reconstruction, no /tmp intermediate, no pipes/echo/exit-code checks appended). File is 22,951 bytes. Read back via Read tool for review.\n3. Differential-review methodology: read the installed plugin's SKILL.md, methodology.md, and reporting.md as files (Skill tool not invoked, no slash command used). Performed the review directly against this diff and wrote pipeline/runs/smoke-pr85/evidence/differential-review.md (10,167 bytes). Summary: 0 CRITICAL/HIGH, 1 MEDIUM, 2 LOW. Overall risk LOW, recommendation APPROVE. The diff is docs/procedure-text + additive test + inert JSON evidence records only \u2014 no product/runtime source, no auth/crypto/validation code touched. MEDIUM finding: the new native-runtime test's `execFileSync('git', ...)` fixture resolves `git` from an ambient `/usr/bin:/bin` PATH rather than a pinned binary \u2014 theoretical, non-blocking, test-only. Two LOW notes: (a) the procedure-text change only documents pre-existing permission rules, no enforcement code touched; (b) new evidence JSON quotes a prior agent's self-reported report verbatim as inert data \u2014 confirmed not present as an executable/injection concern in this diff.\n4. pr-review-toolkit:silent-failure-hunter invoked via Task/Agent on the same diff range, report-only, no other subagents started, no external requests or setting changes. Result saved to pipeline/runs/smoke-pr85/evidence/silent-failure-hunter.md (10,382 bytes). Summary: no CRITICAL issues, no empty catches or unjustified fallbacks in the actual code diff. One MEDIUM finding: the new negative permission test (\"git diff redirect outside evidence is denied\") only asserts `is_error===true` and that the output file is absent, but doesn't check *why* it failed \u2014 unlike its sibling test, which does assert the denial reason via regex on error content \u2014 so a regression that broke Bash entirely, or an unrelated git/shell failure, could pass this test for the wrong reason and mask a real permission-boundary defect. One LOW\u2013MEDIUM finding: the updated SKILL.md procedure has no instructed sanity check that the captured run.diff is non-empty, so a wrong/identical revision range would silently produce an empty \"success\" (mitigated only incidentally by the next step reading the file). One LOW finding: the new `prepareDiff` test helper's chained `execFileSync` git calls have no per-step error context on failure (test-only, loud failure, just harder to debug). The reviewer also called out real strengths: the core fix (replacing LLM `Write` reconstruction with a byte-exact `git diff > file` redirect) correctly closes the FOC-94 corruption class, and the new byte-exact-capture test is rigorous (SHA-256, `assert.deepEqual` on raw bytes, not line counts).\n5. This report delivered via the exact required Bash heredoc form, no pipe/cat wrapper, no exit-code echo.\n\nWorkflow verdict: PASS. All three substantive evidence files exist with real content (run.diff: 22,951 bytes; differential-review.md: 10,167 bytes; silent-failure-hunter.md: 10,382 bytes), plus this substantive self-authored report \u2014 none are placeholders. Review findings (1 MEDIUM + 2 LOW from differential review, 1 MEDIUM + 1 LOW-MEDIUM + 1 LOW from silent-failure-hunter) are real, honest findings against test/procedure quality, not the product code itself, and per the task's own instructions do not by themselves fail this tooling smoke since no CRITICAL/HIGH issue was found by either review. No commits, PRs, pushes, installs, or setting changes were made; nothing was written outside pipeline/runs/smoke-pr85/evidence/. No denied operations were attempted or needed this run."
+    },
+    {
+      "id": "2972bf36-5e93-48b0-af91-5d9b84c56198",
+      "authorAgentId": "96fccef1-efa8-49db-8751-d2dc6b843566",
+      "createdAt": "2026-09-05T05:22:04.540Z",
+      "body": "## Workspace Ready\n\n- Strategy: `git_worktree`\n- Branch: `FOC-95-qa-full-workflow-smoke-after-pr-85`\n- CWD: `/Users/ryanthomas/.paperclip/instances/default/projects/5f772ef2-25ce-466f-9392-027be5055470/60073b69-336b-4494-a549-e7dc6916eff5/focx/.paperclip/worktrees/FOC-95-qa-full-workflow-smoke-after-pr-85`"
+    }
+  ],
+  "failedToolEvents": [
+    {
+      "type": "acpx.tool_call",
+      "name": "ScheduleWakeup",
+      "toolCallId": "toolu_018DApbNHfdQVYMVvMW9BmHe",
+      "status": "failed",
+      "text": "tool call (failed): ```\n`prompt` is required when `stop` is not true.\n```",
+      "tag": "tool_call_update"
+    }
+  ],
+  "completedToolCount": 17
+}

@@ -1,0 +1,24 @@
+Fetched the live rendered page and stylesheet from the confirmed-live preview and
+diffed byte-for-byte against the source files on this run branch (run/run-20260902-022419-manual,
+HEAD after fast-forwarding to origin, which merged in develop's PR #32).
+
+$ curl -s https://focx-develop-pr-30.onrender.com/skills/connect/ -o /tmp/qa2-live/index.html
+$ curl -s https://focx-develop-pr-30.onrender.com/skills/connect/styles.css -o /tmp/qa2-live/styles.css
+$ diff /tmp/qa2-live/index.html apps/connect/index.html
+(no output — files identical)
+$ diff /tmp/qa2-live/styles.css apps/connect/styles.css
+(no output — files identical)
+
+The live-served index.html tail confirms the new footer is actually present in the
+deployed output, not just the source:
+
+  <footer class="site-footer">
+    <p class="caption">Focx design system — Connect showcase</p>
+  </footer>
+
+Because the deployed HTML/CSS are byte-identical to the reviewed source (this is a
+copy-only static-site deploy per render.yaml — tools/site-compose copies committed
+app directories into dist/ with no build-time rewriting), every source-level
+criterion verified elsewhere in this verdict (footer structure, border tokens,
+caption typography tokens, spacing tokens, no unrelated diff) is thereby also
+verified against the live rendered preview, not merely the repository checkout.

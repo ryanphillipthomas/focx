@@ -1,0 +1,29 @@
+{
+  "runId": "run-20260902-022419-manual",
+  "stories": [
+    {
+      "id": "S1",
+      "story": "As a visitor to the Connect design-system showcase page, I see a footer identifying the page, so that I know what design system and page I am looking at.",
+      "acceptanceCriteria": [
+        "apps/connect/index.html has one new <footer> element after the last existing section, containing exactly one line of text identifying the page as the focx design-system showcase.",
+        "The footer has a top border using var(--border-hairline) as the width and var(--border-subtle) as the color, and no other decoration (no background, box-shadow, or border-radius).",
+        "The footer's text is styled with font-size: var(--text-caption) and font-weight: var(--weight-regular), and no other font-size or font-weight rule applies to it.",
+        "The footer's spacing (its margin above the rule and padding between the rule and the text) uses only token values already defined in apps/connect/styles.css's :root block (e.g. var(--space-3), var(--control-px-lg)) — no new pixel literals anywhere in the diff.",
+        "node tools/drift-check/index.mjs exits 0 against the changed files.",
+        "No markup, class, or style outside the new footer changes in apps/connect/index.html or apps/connect/styles.css versus the pre-run committed version."
+      ]
+    }
+  ],
+  "outOfScope": [
+    "Restyling, reorganizing, or otherwise modifying the eyebrow, heading, Button/Primary, Button/Destructive, or Confirmation actions sections.",
+    "Adding new tokens to design/tokens/focx or design/tokens/connect for this footer.",
+    "Footer navigation, links, icons, or multi-line content — a single caption line only.",
+    "Running or wiring tools/poc-builder into this change."
+  ],
+  "designSystemNeeds": [
+    "focx.style.ui-caption (UI/Caption text style, via its text-caption and weight-regular sub-tokens)",
+    "focx.color.border-subtle",
+    "focx.border.hairline",
+    "focx.space.3 and/or focx.control.px-lg for spacing"
+  ]
+}

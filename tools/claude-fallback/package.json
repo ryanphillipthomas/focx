@@ -1,0 +1,13 @@
+{
+  "name": "@focx/claude-fallback",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Subscription-first credential fallback wrapper for Claude Code.",
+  "bin": {
+    "claude-fallback": "./index.mjs"
+  },
+  "scripts": {
+    "test": "node --test test.mjs"
+  }
+}
