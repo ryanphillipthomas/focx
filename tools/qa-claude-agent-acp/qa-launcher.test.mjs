@@ -10,10 +10,11 @@ import {validateContext,mergeSettings,prepare} from './index.mjs'
 const source=loadRoleSource(),qa=source.manifest.agents.find(x=>x.roleKey==='qa-engineer')
 const env={PAPERCLIP_API_URL:'http://paperclip.invalid',PAPERCLIP_API_KEY:'offline-fixture-key',PAPERCLIP_AGENT_ID:'cccccccc-cccc-cccc-cccc-cccccccccccc',PAPERCLIP_COMPANY_ID:'dddddddd-dddd-dddd-dddd-dddddddddddd',PAPERCLIP_TASK_ID:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',PAPERCLIP_RUN_ID:'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'}
 const agent={id:env.PAPERCLIP_AGENT_ID,companyId:env.PAPERCLIP_COMPANY_ID,urlKey:'qa-engineer',adapterType:'claude_local',name:'QA Engineer'}
-const matchingFetch=async()=>({status:200,json:async()=>({...agent})})
+const company={id:env.PAPERCLIP_COMPANY_ID,issuePrefix:'FOC'}
+const matchingFetch=async url=>({status:200,json:async()=>({...(url.includes('/api/companies/')?company:agent)})})
 const denyRules=qa.adapterLocal.permissionsDeny
 const cwd='/project/.paperclip/worktrees/FOC-92-smoke'
-const context={source,env,cwd,root:cwd,branch:'FOC-92-smoke',commonDir:'/project/.git'}
+const context={source,env,resolvedCompany:company,cwd,root:cwd,branch:'FOC-92-smoke',commonDir:'/project/.git'}
 const local=(root=cwd)=>({permissions:{defaultMode:'default',allow:['Bash(curl:*)','Bash(env:*)','Bash(env)',`Bash(${root}/scripts/paperclip-issue-update.sh:*)`,`Bash(${root}/scripts/paperclip:*)`],deny:['Bash(rm:*)'],additionalDirectories:['/agent']}})
 test('QA identity, bound task and isolated worktree are required',()=>{
  assert.deepEqual(validateContext(agent,context),qa.adapterLocal.permissionsAllow)
@@ -42,7 +43,7 @@ test('malformed, stale, broad or bypass settings fail closed',()=>{
 // disk writes, Git mutations, a CLI runtime or any network connection.
 async function worktreeFixture(t, run) {
  const file=join(cwd,'.claude/settings.local.json'),files=new Map([[file,JSON.stringify(local())]])
- const symlinks=new Set(),nonFiles=new Set(),writes=[]
+ const symlinks=new Set(),nonFiles=new Set(),writes=[],gitState={branch:'FOC-92-smoke'}
  const read=fs.readFileSync
  t.mock.method(fs,'realpathSync',p=>resolve(p))
  t.mock.method(fs,'lstatSync',p=>({isSymbolicLink:()=>symlinks.has(p),isFile:()=>!nonFiles.has(p)}))
@@ -56,11 +57,11 @@ async function worktreeFixture(t, run) {
  t.mock.method(fs,'unlinkSync',p=>{if(!files.delete(p))throw Object.assign(Error('absent'),{code:'ENOENT'})})
  t.mock.method(childProcess,'execFileSync',(command,args)=>{
   assert.equal(command,'git')
-  if(JSON.stringify(args)===JSON.stringify(['branch','--show-current']))return 'FOC-92-smoke'
+  if(JSON.stringify(args)===JSON.stringify(['branch','--show-current']))return gitState.branch
   assert.deepEqual(args,['rev-parse','--git-common-dir']);return '/project/.git'
  })
  syncBuiltinESMExports()
- try { await run({file,files,symlinks,nonFiles,writes,options:{cwd,root:cwd,env,fetch:matchingFetch}}) }
+ try { await run({file,files,symlinks,nonFiles,writes,gitState,options:{cwd,root:cwd,env,fetch:matchingFetch}}) }
  finally { t.mock.restoreAll();syncBuiltinESMExports() }
 }
 test('launcher writes and reads back only the isolated worktree mirror, rejects symlinks and ordinary checkouts',async t=>{
@@ -75,19 +76,20 @@ test('launcher writes and reads back only the isolated worktree mirror, rejects 
   nonFiles.clear();symlinks.add(join(cwd,'.claude'));await assert.rejects(prepare(options),/symlinked/)
  })
 })
-test('prepare resolves generated QA identity with a run-bound GET and bounded AbortSignal, reading only five fields',async t=>{
+test('prepare resolves agent and company with run-bound GETs, bounded signals and only identity fields',async t=>{
  await worktreeFixture(t,async({options})=>{
   let calls=0
   const timeout=AbortSignal.timeout.bind(AbortSignal),timeouts=[]
   t.mock.method(AbortSignal,'timeout',ms=>{timeouts.push(ms);return timeout(ms)})
   const fetch=async(url,request)=>{
-   calls++;assert.equal(url,env.PAPERCLIP_API_URL+'/api/agents/'+agent.id)
+   calls++;const isCompany=calls===2
+   assert.equal(url,env.PAPERCLIP_API_URL+(isCompany?'/api/companies/'+company.id:'/api/agents/'+agent.id))
    assert.equal(request.method,'GET');assert.equal(request.redirect,'error')
    assert.deepEqual(request.headers,{Authorization:'Bearer '+env.PAPERCLIP_API_KEY,'X-Paperclip-Run-Id':env.PAPERCLIP_RUN_ID})
    assert(request.signal instanceof AbortSignal);assert.equal(request.signal.aborted,false)
-   return {status:200,json:async()=>new Proxy({...agent},{get(target,key){if(key==='then')return undefined;assert(['id','urlKey','companyId','adapterType','name'].includes(key));return target[key]}})}
+   return {status:200,json:async()=>new Proxy({...(isCompany?company:agent)},{get(target,key){if(key==='then')return undefined;assert((isCompany?['id','issuePrefix']:['id','urlKey','companyId','adapterType','name']).includes(key));return target[key]}})}
   }
-  const result=await prepare({...options,fetch});assert.equal(calls,1);assert.deepEqual(timeouts,[10000]);assert.equal(result.rules,qa.adapterLocal.permissionsAllow.length)
+  const result=await prepare({...options,fetch});assert.equal(calls,2);assert.deepEqual(timeouts,[10000,10000]);assert.equal(result.rules,qa.adapterLocal.permissionsAllow.length)
   assert.deepEqual(validateContext(agent,context),qa.adapterLocal.permissionsAllow)
   const manifest=structuredClone(source.manifest);delete manifest.companyId;for(const a of manifest.agents)delete a.id
   assert.deepEqual(validateContext(agent,{...context,source:{...source,manifest}}),qa.adapterLocal.permissionsAllow)
@@ -106,10 +108,10 @@ test('identity mismatches, incomplete restricted views, HTTP errors and invalid 
   }
   for(const status of [201,302,401,403,404,500])attempts.push(async()=>({status,json:async()=>{assert.fail('non-200 body must never be read')}}))
   attempts.push(async()=>({status:200,json:async()=>{throw Error(marker)}}),async()=>{throw Error(marker)},async()=>({status:200,json:async()=>[agent]}),async()=>({status:200,json:async()=>null}))
-  for(const fetch of attempts)await assert.rejects(prepare({...options,fetch}),error=>{
+  for(const fetch of attempts)await assert.rejects(prepare({...options,fetch: url=>url.includes('/api/companies/')?matchingFetch(url):fetch(url)}),error=>{
    assert.match(error.message,/Paperclip agent identity/);assert(!error.message.includes(marker));assert(!error.message.includes(env.PAPERCLIP_API_KEY));assert(!error.message.includes('\n'));return true
   })
-  await prepare({...options,fetch:async()=>({status:200,json:async()=>({...agent,name:marker,privateBody:marker})})})
+  await prepare({...options,fetch:async url=>url.includes('/api/companies/')?matchingFetch(url):({status:200,json:async()=>({...agent,name:marker,privateBody:marker})})})
   assert.equal(output.length,0);assert.equal(writes.length,1)
   assert(!files.get(file).includes(marker));assert.notEqual(files.get(file),before)
  })
@@ -122,18 +124,74 @@ test('missing API URL/key or unbound run context fails before fetch',async()=>{
  }
 })
 
+test('live company prefixes accept FOC and FOCAAA, with no authority from the worktree name',async t=>{
+ await worktreeFixture(t,async({options,gitState,writes})=>{
+  for(const prefix of ['FOC','FOCAAA']){
+   gitState.branch=prefix+'-92-smoke'
+   const fetch=async url=>url.includes('/api/companies/')?{status:200,json:async()=>({...company,issuePrefix:prefix})}:matchingFetch(url)
+   await prepare({...options,fetch})
+   for(const branch of ['OTHER-92-smoke','develop','run/run-92-smoke',prefix+'-oops-smoke',prefix+'X-92-smoke']){
+    gitState.branch=branch
+    await assert.rejects(prepare({...options,fetch}),error=>{assert(error.message.includes(JSON.stringify(branch)));assert(error.message.includes(JSON.stringify(prefix)));return true})
+   }
+  }
+  assert.equal(writes.length,2)
+ })
+})
+test('unavailable, malformed or unbound API company prefixes refuse without fallback or writes',async t=>{
+ await worktreeFixture(t,async({options,files,file,writes})=>{
+  const before=files.get(file),marker='PRIVATE_UPSTREAM_BODY\nSECOND_LINE'
+  const attempts=[]
+  for(const issuePrefix of [undefined,null,'',42,'FOC.*','FOC-',' FOC','FOC\n'])attempts.push(async()=>({status:200,json:async()=>({...company,issuePrefix})}))
+  for(const id of [undefined,null,'','another-company'])attempts.push(async()=>({status:200,json:async()=>({...company,id})}))
+  for(const body of [null,[],{...agent,issuePrefix:'FOC'},{company:{...company}}])attempts.push(async()=>({status:200,json:async()=>body}))
+  for(const status of [201,302,401,403,404,500])attempts.push(async()=>({status,json:async()=>assert.fail('must not read failed response')}))
+  attempts.push(async()=>{throw Error(marker)},async()=>({status:200,json:async()=>{throw Error(marker)}}))
+  for(const companyFetch of attempts){
+   const fetch=url=>url.includes('/api/companies/')?companyFetch():matchingFetch(url)
+   await assert.rejects(prepare({...options,env:{...env,PAPERCLIP_ISSUE_PREFIX:'FOC'},fetch}),error=>{
+    assert.match(error.message,/company/);assert(!error.message.includes(marker));assert(!error.message.includes(env.PAPERCLIP_API_KEY));return true
+   })
+  }
+  assert.equal(writes.length,0);assert.equal(files.get(file),before)
+ })
+})
+
 // In-memory module mutations; each witness must pass, fail, then pass again.
 const launcherPath=join(ROOT,'tools/qa-claude-agent-acp/index.mjs')
 const launcherURL=pathToFileURL(launcherPath).href
 const launcherSource=fs.readFileSync(launcherPath,'utf8')
+const guardLine = text => launcherSource.split('\n').find(line=>line.includes(text)).trim()
+const contextWitness = (edit,pattern) => subject=>assert.throws(()=>subject.validateContext(agent,{...context,...edit}),pattern)
+const prepareWitness = (edit,pattern) => async(subject,t)=>worktreeFixture(t,async fixture=>{
+ edit(fixture)
+ await assert.rejects(subject.prepare(fixture.options),pattern)
+})
 for(const [label,needle,witness] of [
+ ['root',guardLine('requireThat(cwd === root,'),contextWitness({root:cwd+'/subdir'},/worktree root/)],
+ ['company binding',guardLine('requireThat(object(resolvedCompany)'),contextWitness({resolvedCompany:{...company,id:'other'}},/company identity/)],
+ ['prefix availability',guardLine("requireThat(typeof prefix === 'string'"),contextWitness({resolvedCompany:{...company,issuePrefix:''},branch:'-92-smoke'},/prefix is unavailable/)],
+ ['branch prefix',"branch.startsWith(prefix + '-') && ",contextWitness({branch:'BAD-92-smoke'},/company prefix/)],
+ ['issue number',"/^\\d+-/.test(branch.slice(prefix.length + 1))",contextWitness({branch:'FOC-not-an-issue'},/company prefix/)],
+ ['worktree containment',"cwd.startsWith(join(parent, '.paperclip/worktrees') + '/') && ",contextWitness({cwd:'/project/.paperclip/worktrees-other/tree',root:'/project/.paperclip/worktrees-other/tree'},/isolated Paperclip worktree/)],
+ ['common-directory isolation',guardLine("requireThat(cwd.startsWith(join(parent, '.paperclip/worktrees')"),contextWitness({commonDir:cwd+'/.git'},/isolated Paperclip worktree/)],
+ ['bound task and run',guardLine('requireThat(/^[0-9a-f-]{36}$/'),contextWitness({env:{...env,PAPERCLIP_TASK_ID:''}},/bound Paperclip/)],
+ ['delivery declaration',guardLine('requireThat(qa?.adapterLocal?.permissionDelivery'),subject=>{const copy=structuredClone(source);delete copy.manifest.agents.find(a=>a.roleKey==='qa-engineer').adapterLocal.permissionDelivery;contextWitness({source:copy},/not declared/)(subject)}],
+ ['symlink directory',guardLine("requireThat(!lstatSync(join(cwd,'.claude'))"),prepareWitness(f=>f.symlinks.add(join(cwd,'.claude')),/symlinked/)],
+ ['symlink file'," && !lstatSync(settingsPath).isSymbolicLink()",prepareWitness(f=>f.symlinks.add(f.file),/regular file/)],
+ ['regular file',"lstatSync(settingsPath).isFile() && ",prepareWitness(f=>f.nonFiles.add(f.file),/regular file/)],
+ ...['urlKey','companyId','adapterType','id'].map(key=>[
+  'identity '+key,
+  ({urlKey:"resolvedAgent.urlKey === 'qa-engineer' && ",companyId:'resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && ',adapterType:"resolvedAgent.adapterType === 'claude_local' && ",id:'resolvedAgent.id === env.PAPERCLIP_AGENT_ID'})[key],
+  subject=>assert.throws(()=>subject.validateContext({...agent,[key]:'other'},context),/Paperclip agent identity does not match/)
+ ]),
  ['identity guard',"requireThat(resolvedAgent.urlKey === 'qa-engineer' && resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && resolvedAgent.adapterType === 'claude_local' && resolvedAgent.id === env.PAPERCLIP_AGENT_ID, 'Paperclip agent identity does not match the assigned QA role, company and adapter')",subject=>assert.throws(()=>subject.validateContext({...agent,urlKey:'other'},context),/identity does not match/)],
  ['identity completeness',"requireThat(object(resolvedAgent) && ['id','urlKey','companyId','adapterType','name'].every(key => typeof resolvedAgent[key] === 'string' && resolvedAgent[key].trim()), 'Paperclip agent identity is incomplete')",subject=>assert.throws(()=>subject.validateContext({...agent,name:undefined},context),/identity is incomplete/)]
-])test('KNOCK-OUT launcher '+label,async()=>{
- const original=await import(launcherURL);witness(original)
- const changed=launcherSource.replace(needle,'/* knocked out */');assert.notEqual(changed,launcherSource)
+])test('KNOCK-OUT launcher '+label,async t=>{
+ const original=await import(launcherURL);await witness(original,t)
+ const changed=launcherSource.replace(needle,needle.startsWith('requireThat(')?'/* knocked out */':needle.endsWith(' && ')?'':needle.startsWith(' && ')?'':'true');assert.notEqual(changed,launcherSource)
  const absolute=changed.replace(/from '(\.\.?\/[^']+)'/g,(_,p)=>'from '+JSON.stringify(pathToFileURL(resolve(launcherPath,'..',p)).href)).replaceAll('import.meta.url',JSON.stringify(launcherURL))
  const broken=await import('data:text/javascript;base64,'+Buffer.from(absolute).toString('base64'))
- assert.throws(()=>witness(broken),assert.AssertionError);witness(original)
+ await assert.rejects(async()=>witness(broken,t),assert.AssertionError);await witness(original,t)
  console.log('KNOCK-OUT launcher '+label+': guard broken -> witness FAIL; restored -> PASS')
 })

@@ -28,13 +28,17 @@ export function mergeSettings(existing, rules, cwd, denyRules) {
   requireThat(p.allow.every(x => vendor.includes(x) || rules.includes(x)), 'Unknown or stale local permission rule; review required')
   return {...existing, permissions:{...p, allow:[...new Set([...vendor, ...rules])].sort(), deny:[...new Set([...(p.deny ?? []), ...denyRules])].sort()}}
 }
-export function validateContext(resolvedAgent, {source, env, cwd, root, branch, commonDir}) {
+export function validateContext(resolvedAgent, {source, env, resolvedCompany, cwd, root, branch, commonDir}) {
   const qa = source.manifest.agents.find(a => a.roleKey === 'qa-engineer')
   requireThat(qa?.adapterLocal?.permissionDelivery === 'qa-worktree-local', 'QA permission delivery is not declared')
   requireThat(object(resolvedAgent) && ['id','urlKey','companyId','adapterType','name'].every(key => typeof resolvedAgent[key] === 'string' && resolvedAgent[key].trim()), 'Paperclip agent identity is incomplete')
   requireThat(resolvedAgent.urlKey === 'qa-engineer' && resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && resolvedAgent.adapterType === 'claude_local' && resolvedAgent.id === env.PAPERCLIP_AGENT_ID, 'Paperclip agent identity does not match the assigned QA role, company and adapter')
   requireThat(/^[0-9a-f-]{36}$/.test(env.PAPERCLIP_RUN_ID ?? '') && /^[0-9a-f-]{36}$/.test(env.PAPERCLIP_TASK_ID ?? ''), 'A bound Paperclip task and run are required')
-  requireThat(cwd === root && /^FOC-\d+-/.test(branch), 'QA must run at its FOC issue worktree root')
+  requireThat(cwd === root, 'QA must run at its issue worktree root')
+  requireThat(object(resolvedCompany) && resolvedCompany.id === resolvedAgent.companyId && resolvedCompany.id === env.PAPERCLIP_COMPANY_ID, 'Paperclip company identity does not match the assigned QA company')
+  const prefix = resolvedCompany.issuePrefix
+  requireThat(typeof prefix === 'string' && /^[A-Z][A-Z0-9]*$/.test(prefix), 'Authoritative Paperclip company issue prefix is unavailable')
+  requireThat(typeof branch === 'string' && branch.startsWith(prefix + '-') && /^\d+-/.test(branch.slice(prefix.length + 1)), `QA branch ${JSON.stringify(branch)} must be an issue branch with company prefix ${JSON.stringify(prefix)}`)
   const parent = resolve(commonDir, '..')
   requireThat(cwd.startsWith(join(parent, '.paperclip/worktrees') + '/') && commonDir !== join(cwd, '.git'), 'Refusing to write settings outside an isolated Paperclip worktree')
   return qa.adapterLocal.permissionsAllow
@@ -58,12 +62,30 @@ async function resolveAgent(env, fetch) {
     return {id, urlKey, companyId, adapterType, name}
   } catch { throw Error('Paperclip agent identity response is not a JSON object') }
 }
+async function resolveCompany(env, resolvedAgent, fetch) {
+  let response
+  try {
+    response = await fetch(env.PAPERCLIP_API_URL.replace(/\/$/, '') + '/api/companies/' + encodeURIComponent(resolvedAgent.companyId), {
+      method:'GET', redirect:'error', signal:AbortSignal.timeout(10000),
+      headers:{Authorization:'Bearer ' + env.PAPERCLIP_API_KEY, 'X-Paperclip-Run-Id':env.PAPERCLIP_RUN_ID}
+    })
+  } catch { throw Error('Paperclip company identity request failed') }
+  requireThat(response?.status === 200, 'Paperclip company identity request did not return HTTP 200')
+  try {
+    const body = await response.json()
+    requireThat(object(body), 'Invalid company record')
+    // The API company record is prefix authority; branch names and env hints are not.
+    const {id, issuePrefix} = body
+    return {id, issuePrefix}
+  } catch { throw Error('Paperclip company identity response is not a JSON object') }
+}
 export async function prepare({env=process.env, cwd=realpathSync(process.cwd()), root=resolve(dirname(fileURLToPath(import.meta.url)), '../..'), fetch=globalThis.fetch}={}) {
   const resolvedAgent = await resolveAgent(env, fetch)
+  const resolvedCompany = await resolveCompany(env, resolvedAgent, fetch)
   cwd = realpathSync(cwd)
   const git = (...args) => execFileSync('git', args, {cwd, encoding:'utf8', stdio:['ignore','pipe','pipe']}).trim()
   const source = loadRoleSource(root)
-  const rules = validateContext(resolvedAgent, {source, env, cwd, root:realpathSync(root), branch:git('branch','--show-current'), commonDir:realpathSync(resolve(cwd, git('rev-parse','--git-common-dir')))})
+  const rules = validateContext(resolvedAgent, {source, env, resolvedCompany, cwd, root:realpathSync(root), branch:git('branch','--show-current'), commonDir:realpathSync(resolve(cwd, git('rev-parse','--git-common-dir')))})
   requireThat(!lstatSync(join(cwd,'.claude')).isSymbolicLink(), 'Refusing symlinked .claude directory')
   const settingsPath = join(cwd,'.claude/settings.local.json')
   requireThat(lstatSync(settingsPath).isFile() && !lstatSync(settingsPath).isSymbolicLink(), 'Local settings must be a regular file')

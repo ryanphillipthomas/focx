@@ -105,6 +105,7 @@ States as section 3. Same protocol, same constraints.
 | F17 | Live `bind-secrets --apply` (env binding + first live plugin provisioning) | Claude | **partial** — env binding PASS; all 294 Claude plugins PASS; native Codex stage blocked by F20 | FB9, F18, F19 |
 | F20 | Native Codex plugins: `openai-bundled` is reserved and cannot be installed by path; `openai-curated-remote` needs network + sign-in | Claude (found) | **done** — PR #96 merged (`431eced`) | F17 |
 | F21 | `bind-secrets` must not report `configured` while pinned plugins are unseeded | Codex | **done** — landed on develop via PR #98 (`93ceec7`) | F20 |
+| F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **PR #103 open** (`0bbcd2d`); awaiting Ryan merge, then a live QA re-run | F17 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
 
@@ -1827,6 +1828,44 @@ since #87 merged.
   only thing making production releases read `failed`.
 - 2026-09-06 Ryan: **"fix the buffer bug; i dont care about the branch protection untill i get close to release"** →
   branch protection deliberately left loose; **F22 dispatched** for the ENOBUFS defect.
+
+- 2026-09-06 Ryan (AskUserQuestion): **"Authorise the run"** (QA lane smoke in `focx-bot-4a-restore-2`).
+- 2026-09-06 17:37:27Z Claude: **QA lane run BLOCKED by F23; agent restored and paused.** Three wake attempts:
+  1. `73edc6cb…` cancelled — `issue_assignee_changed`. **My error:** I created the task with `assigneeId`, a field the
+     API ignores, then bound it to the project; the run gate saw no assignee.
+  2. `bc7cc19b…` cancelled the same way — my re-assign used the same wrong field.
+  3. `410acfed…` reached the adapter and **failed at `ensure_session`**:
+     `[focx-qa-permissions] stopped: QA must run at its FOC issue worktree root`.
+  The correct field is **`assigneeAgentId`** (`issues.js:6909`); once set, project `9c1b5803…`, workspace `f6c6bfba…`
+  and the assignee all held.
+- **F23 — the QA launcher is hardcoded to the original company's issue prefix.**
+  `tools/qa-claude-agent-acp/index.mjs:37`:
+  `requireThat(cwd === root && /^FOC-\d+-/.test(branch), 'QA must run at its FOC issue worktree root')`.
+  Paperclip names the worktree branch from the company's issue identifier, and a provisioned company gets its own
+  prefix — `FOCA` for `focx-bot-4a`, **`FOCAAA`** for `focx-bot-4a-restore-2`. `FOCAAA-1-…` fails `^FOC-\d+-`, so the
+  guard can only ever be satisfied by the original `Focx.ai` company. **The QA lane cannot run in ANY company focx-bot
+  provisions** — which is the whole point of focx-bot. The Implementation lane is unaffected: it runs Codex through a
+  different path and its FB8 smoke passed in `focx-bot-4a`.
+  **Correction to what I told Ryan:** I said zero more PRs were needed. That was wrong — this needs one.
+  **Cleanup done:** `runtimeConfig` restored **byte-identical** to the recorded `before` and the agent **paused**
+  (verified by read-back). The task `571e10d0…` remains in `backlog`, assigned, unstarted; no branch, commit or push
+  was made by the agent.
+
+- 2026-09-06 Ryan (AskUserQuestion): **"Fix F23 now"**. (Three garbled messages arrived around it —
+  `3.+.320`, `3.20.`, `3+6=/i,`1234++654` — read as stray keystrokes and deliberately not acted on.)
+- 2026-09-06 18:16:04Z Claude: **F23 reviewed — ACCEPT; committed `0bbcd2d`, PR #103 opened**, drift gate green. Codex ran at
+  **medium** effort per Ryan's new setting (`gpt-6-astra`; there is no `aura` in the 128-model catalog — the gpt-6
+  family is astra alone). First dispatch was refused by my own tree-clean guard because the F23 ledger entry was still
+  uncommitted; committed as `9e6c163`, then dispatched.
+  Fix read: `resolveCompany` mirrors `resolveAgent` — bounded `GET /api/companies/:id`, run-bound bearer,
+  `redirect:'error'`, 10 s timeout — and its `id` must agree with **both** the resolved agent and
+  `PAPERCLIP_COMPANY_ID`. The prefix must match `^[A-Z][A-Z0-9]*$` and the branch must start `<prefix>-<digits>-`, so a
+  `FOC` company cannot accept a `FOCAAA` branch or the reverse. **No fallback**: an unavailable prefix refuses. `cwd ===
+  root`, the worktrees containment, the git common-dir check, the symlink refusals and the identity assertions are all
+  untouched. Checks: launcher suites 27 pass / 8 SDK skips (18 knock-outs), focx-bot 282/282, `--validate-contract` 0,
+  `diff --check` clean, `contract.json` 0 lines in the diff. Live read-only: the two real companies return `FOC` and
+  `FOCAAA`, both matching the accepted shape. **Not yet proven: a live QA run in a provisioned company** — that is the
+  next step after merge and is what actually closes the objective.
 
 ### FB3 log
 
