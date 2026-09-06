@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync, lstatSync, statSync, readlinkSync, realpathSync, mkdirSync, openSync, closeSync, writeFileSync, unlinkSync } from 'node:fs'
 import { resolve, dirname, join, sep } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { requireThat } from './invariants.mjs'
@@ -30,7 +30,7 @@ export function defaultHost(contract) {
   const root=instanceRoot(contract)
   const readText=p=>{try{return readFileSync(p,'utf8')}catch{return null}}
   const entries=p=>{try{return readdirSync(p)}catch{return []}}
-  return {readText,entries,exists:existsSync,readJson:p=>{try{return JSON.parse(readText(p))}catch{return null}},mtime:p=>{try{return statSync(p).mtime.toISOString()}catch{return null}},isSymlink:p=>{try{return lstatSync(p).isSymbolicLink()}catch{return false}},containsLiteral:(p,s)=>{try{return readFileSync(p).includes(Buffer.from(s))}catch{return null}},runLogs:()=>{
+  return {readText,entries,exists:existsSync,userHome:homedir(),tempDir:tmpdir(),isDirectory:p=>{try{return lstatSync(p).isDirectory()}catch{return false}},readJson:p=>{try{return JSON.parse(readText(p))}catch{return null}},mtime:p=>{try{return statSync(p).mtime.toISOString()}catch{return null}},isSymlink:p=>{try{return lstatSync(p).isSymbolicLink()}catch{return false}},containsLiteral:(p,s)=>{try{return readFileSync(p).includes(Buffer.from(s))}catch{return null}},runLogs:()=>{
     const out=[]
     const walk=p=>{for(const name of entries(p)){const file=join(p,name);const stat=lstatSync(file);if(stat.isSymbolicLink())continue;if(stat.isDirectory())walk(file);else if(/\.(jsonl|log|txt)$/.test(name))out.push({path:file,text:readText(file)??''})}}
     walk(join(root,'data/run-logs'));return out

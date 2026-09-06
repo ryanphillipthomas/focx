@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { source,fixture,writes,corruptInvariant } from './test-support.mjs'
@@ -282,3 +282,223 @@ knockout('fresh post-import invariants are asserted','src/fresh.mjs',s=>s.replac
 knockout('native pinned:false selection','src/native-plugins.mjs',s=>s.replace(".filter(e=>e.adapter==='codex_local' && e.pinned)",".filter(e=>e.adapter==='codex_local')"),`assert(subject.nativePluginPlan(source.contract,'/fake').every(op=>op.entry.pinned===true));`)
 knockout('native source identity guard','src/native-plugins.mjs',s=>s.replace("requireThat(s && (!entry.sourceId || s.remotePluginId===entry.sourceId), `${entry.key}: native readback has a different remote source identity`)",'/* knocked out */'),`assert.throws(()=>subject.assertNativePin({key:'pin@market',sourceId:'expected',version:'1'},{plugin:{summary:{remotePluginId:'wrong',version:'1'}}}));`)
 knockout('native version pin guard','src/native-plugins.mjs',s=>s.replace("requireThat(version===entry.version,`${entry.key}: native pin version mismatch`)",'/* knocked out */'),`assert.throws(()=>subject.assertNativePin({key:'pin@market',sourceId:'expected',version:'1'},{plugin:{summary:{remotePluginId:'expected',version:'2'}}}));`)
+
+// FB5: metadata-only grant checks, using the existing fake and an in-memory host.
+import { grantReport, grants, assertGrantReport, deadTempRules, readCodexEnablement, renderPermissions, readWorktreeSettings, vendorBaseline } from './src/grants.mjs'
+import { memoryHost } from './src/fake-api.mjs'
+import { idMap } from './src/api.mjs'
+import { main } from './src/index.mjs'
+import { readPluginInventory } from './src/plugins.mjs'
+const f1Sentence='codex_local: reported only — declared permissions and plugin sets do not bound Codex behavior (F1); the Claude lane is bounded by its settings and permission rules.'
+import { loadSource as loadPilotSource } from '../../tools/pilot-org/index.mjs'
+const pilotManifest=loadPilotSource().manifest
+async function grantFixture({matchingIds=true}={}) {
+  const api=createFakeApi(matchingIds?{companyId:pilotManifest.companyId,agentIds:Object.fromEntries(source.contract.agents.map(a=>[a.slug,pilotManifest.agents.find(p=>p.roleKey===a.roleKey).id]))}:{})
+  const f=await fixture({api,instanceRoot:'/fake-instance'}),c=source.contract
+  const homes=renderSkillHomes(c,'/fake-instance',f.companyId,idMap(f.live)),files={...homes.files},plugins={}
+  for(const pin of catalogEntries(c.skills).filter(p=>p.pinned)){
+    const [name,marketplace]=pin.key.split('@'),version=pin.version??'unknown'
+    if(pin.adapter==='claude_local'){
+      const path=`/fake-user/.claude/plugins/cache/${marketplace}/${name}/${version}`
+      const row={installPath:path,version,contentHash:pin.contentHash,gitCommitSha:pin.pin==='manifestSha'?pin.source.sha:pin.gitCommitSha,installedAt:'2026-09-05T00:00:00Z',scope:'user'}
+      plugins[pin.key]=[row];files[`${path}/.claude-plugin/plugin.json`]=JSON.stringify({version})
+    }else{
+      files[`${homes.codex.home}/plugins/cache/${marketplace}/${name}/${version}/.codex-plugin/plugin.json`]=JSON.stringify({version,sourceId:pin.sourceId})
+    }
+  }
+  const indexPath='/fake-user/.claude/plugins/installed_plugins.json'
+  files[indexPath]=JSON.stringify({version:2,plugins})
+  files[`${homes.codex.home}/config.toml`]=homes.codex.plugins.map(k=>`[plugins."${k}"]\nenabled = true`).join('\n')
+  const host=memoryHost(files),claude=c.agents.find(a=>a.adapterType==='claude_local'),settingsPath=Object.keys(homes.files)[0]
+  const report=()=>grantReport(c,f.live,homes,host,{pilotManifest})
+  f.api.state.calls.length=0;f.io.writes.length=0
+  return {...f,pilotManifest,host,homes,claude,settingsPath,indexPath,plugins,report,options:{companyId:f.companyId,instanceRoot:'/fake-instance',host,io:f.io,pilotManifest}}
+}
+const hasDiff=(r,kind,adapter='claude_local')=>r.agents.some(a=>a.adapter===adapter&&a.diffs.some(d=>d.kind===kind))
+const worktreeOf=(f,name)=>`/fake-instance/projects/${f.companyId}/proj/focx/.paperclip/worktrees/${name}`
+const addDirs=(host,p)=>{for(let d=p;d!==dirname(d);d=dirname(d))host.dirs.add(d)}
+
+test('FB5 clean grants: canonical declarations, both rendered surfaces, launcher delivery and disk pins agree',async()=>{
+  const f=await grantFixture(),r=f.report()
+  assert.equal(r.ok,true);assert(r.agents.every(a=>!a.diffs.length));assertGrantReport(r)
+  assert(r.lines.every(l=>/^(declared|rendered|observed on disk): /.test(l)))
+  for(const needle of [f1Sentence,'settings.json enabledPlugins','adapterLocal','permissionsAllow','permissionsDeny','verifySkills','runtime-skills/','run-log injection failures'])assert(r.lines.some(l=>l.includes(needle)))
+  assert(!r.lines.some(l=>/plugin works/i.test(l)))
+})
+for(const kind of ['granted-but-not-enabled','enabled-but-not-granted','enabled-but-not-installed','installed-at-wrong-pin'])test(`FB5 Claude diff ${kind} is fatal`,async()=>{
+  const f=await grantFixture(),key=f.claude.grants.claudePlugins[0],settings=JSON.parse(f.host.files[f.settingsPath])
+  if(kind==='granted-but-not-enabled')settings.enabledPlugins[key]=false
+  if(kind==='enabled-but-not-granted')settings.enabledPlugins['extra@market']=true
+  if(kind==='enabled-but-not-installed')delete f.plugins[key]
+  if(kind==='installed-at-wrong-pin'){
+    const p=f.plugins[key][0];p.version='wrong';f.host.files[`${p.installPath}/.claude-plugin/plugin.json`]=JSON.stringify({version:'wrong'})
+  }
+  f.host.files[f.settingsPath]=JSON.stringify(settings);f.host.files[f.indexPath]=JSON.stringify({plugins:f.plugins})
+  const r=f.report();assert(hasDiff(r,kind));assert.equal(r.ok,false);assert.throws(()=>assertGrantReport(r),/Claude/)
+})
+test('FB5 worktree permission deltas and H7 are independently checked',async()=>{
+  const f=await grantFixture(),cwd=worktreeOf(f,'QA'),path=`${cwd}/.claude/settings.local.json`
+  const permissions=renderPermissions(f.claude.adapterLocal,cwd)
+  permissions.allow.push('Write(/tmp/**)');permissions.deny=[]
+  f.host.files[path]=JSON.stringify({permissions})
+  addDirs(f.host,`${cwd}/.claude`)
+  const r=f.report()
+  for(const kind of ['permission-extra','permission-missing','dead-rule'])assert(hasDiff(r,kind))
+  assert(r.lines.some(l=>l.includes('/tmp/**')&&l.includes(f.host.tempDir)))
+  assert.equal(r.ok,false)
+})
+test('FB5 no worktree settings is one nonfatal unobserved line; vendor baseline is not an extra grant',async()=>{
+  const f=await grantFixture(),line='observed on disk: no QA worktree settings yet — unobserved until an authorised run (FB8)'
+  assert.equal(f.report().lines.filter(l=>l===line).length,1);assert.equal(f.report().ok,true)
+  const cwd=worktreeOf(f,'QA'),path=`${cwd}/.claude/settings.local.json`
+  f.host.files[path]=JSON.stringify({permissions:renderPermissions(f.claude.adapterLocal,cwd)})
+  addDirs(f.host,`${cwd}/.claude`)
+  assert.equal(f.report().ok,true);assert(!f.report().lines.includes(line))
+  f.host.files[path]='not JSON';assert(hasDiff(f.report(),'metadata-unavailable'))
+})
+test('FB5 a worktree holding only Paperclip\'s five vendor rules is the pre-launch baseline, not a permission diff',async()=>{
+  const f=await grantFixture(),cwd=worktreeOf(f,'FOC-1-fresh'),path=`${cwd}/.claude/settings.local.json`
+  f.host.files[path]=JSON.stringify({permissions:{defaultMode:'default',allow:vendorBaseline(cwd),additionalDirectories:[]}});addDirs(f.host,`${cwd}/.claude`)
+  const r=f.report();assert.equal(r.ok,true);assert(!hasDiff(r,'permission-missing'))
+  assert(r.lines.some(l=>l.includes('pre-launch baseline')&&l.includes(path)))
+})
+for(const kind of ['delivery-command-missing','delivery-env-missing','declared-source-divergence'])test(`FB5 ${kind} is fatal`,async()=>{
+  const f=await grantFixture(),adapter=f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig
+  if(kind==='delivery-command-missing')adapter.agentCommand='node wrong.mjs'
+  if(kind==='delivery-env-missing')delete adapter.env.CLAUDE_CONFIG_DIR
+  if(kind==='declared-source-divergence'){
+    const manifest=structuredClone(pilotManifest)
+    manifest.agents.find(a=>a.roleKey===f.claude.roleKey).adapterLocal.permissionsAllow.push('Read')
+    const r=grantReport(source.contract,f.live,f.homes,f.host,{pilotManifest:manifest})
+    assert(hasDiff(r,kind));assert.equal(r.ok,false);return
+  }
+  const r=f.report();assert(hasDiff(r,kind));assert.equal(r.ok,false)
+})
+const f10Sentence="F10: QA permission delivery is bound to .focx/agents.json ids; a provisioned company cannot launch QA until the launcher's binding is redesigned (FB2 rev 2.7, Ryan)"
+test('FB5 generated ids fail F10; matching ids supplied to the fake are clean; either id alone is fatal',async()=>{
+  const generated=await grantFixture({matchingIds:false}),r=generated.report()
+  assert.equal(r.ok,false);assert(hasDiff(r,'delivery-binding-mismatch'));assert(r.lines.some(l=>l.includes(f10Sentence)))
+  assert.throws(()=>assertGrantReport(r),/Claude/)
+  const f=await grantFixture();assert.equal(f.report().ok,true)
+  for(const field of ['agent','company']){
+    const live=structuredClone(f.live)
+    if(field==='agent')live.agents.find(a=>a.adapterType==='claude_local').id='different'
+    else live.company.id='different'
+    const r=grantReport(source.contract,live,f.homes,f.host,{pilotManifest})
+    assert.equal(r.ok,false);assert(hasDiff(r,'delivery-binding-mismatch'))
+  }
+})
+test('FB5 Codex diffs are reported only, including wrong source identity and unknown enablement',async()=>{
+  const f=await grantFixture(),key=f.homes.codex.plugins[0],config=`${f.homes.codex.home}/config.toml`
+  f.host.files[config]=`[plugins."${key}"]\nenabled = false\n[plugins."extra@market"]\nenabled = true`
+  const manifest=Object.keys(f.host.files).find(p=>p.startsWith(f.homes.codex.home+'/plugins/cache/')&&p.endsWith('/.codex-plugin/plugin.json'))
+  f.host.files[manifest]=JSON.stringify({version:'wrong',sourceId:'wrong'})
+  const r=f.report()
+  for(const kind of ['granted-but-not-enabled','enabled-but-not-granted','enabled-but-not-installed','installed-at-wrong-pin'])assert(hasDiff(r,kind,'codex_local'))
+  assert.equal(r.ok,true);assertGrantReport(r);assert(r.lines.some(l=>l.includes('enablement unknown')))
+  delete f.host.files[config]
+  const absent=f.report();assert.equal(absent.ok,true);assert(hasDiff(absent,'metadata-unavailable','codex_local'))
+  assert(!hasDiff(absent,'granted-but-not-enabled','codex_local'))
+})
+test('FB5 no fabricated pin proof: missing content hash fails with an explicit unverified explanation',async()=>{
+  const f=await grantFixture(),key='pr-review-toolkit@claude-plugins-official'
+  delete f.plugins[key][0].contentHash;f.host.files[f.indexPath]=JSON.stringify({plugins:f.plugins})
+  const r=f.report();assert(hasDiff(r,'installed-at-wrong-pin'));assert(r.lines.some(l=>l.includes('absent hash/source evidence is unverified')))
+})
+test('FB5 H7 detector flags the dead temp rule, not a matching temp path or unrelated live rule',()=>{
+  assert.equal(deadTempRules(['Write(/tmp/**)','Read','Write(/private/var/folders/fake/T/**)'],'/private/var/folders/fake/T').length,1)
+  assert.deepEqual(deadTempRules(['Write(/tmp/**)'],'/tmp/runtime'),[])
+  assert.deepEqual(deadTempRules(['Write(/tmp/**)'],'/tmp'),[])
+})
+test('FB5 unattributed mtimes use only recorded matching-pin install time; retained directories do not grant installation',async()=>{
+  const f=await grantFixture(),key=f.claude.grants.claudePlugins[0],p=f.plugins[key][0].installPath
+  f.host.mtimes[p]='2026-09-05T00:00:01Z'
+  const retained=p.replace(/\/[^/]+$/,'/old');f.host.dirs.add(retained);f.host.mtimes[retained]='2026-09-05T00:00:02Z'
+  let r=f.report();assert.equal(r.ok,true)
+  assert(r.lines.some(l=>l.includes('unattributed')&&l.includes(p)))
+  assert(r.lines.some(l=>l.includes('unattributed')&&l.includes(retained)))
+  assert(r.lines.some(l=>l.includes('mtime baseline unavailable')&&l.includes('codex-home')))
+  f.host.mtimes[p]='2026-09-05T00:00:00Z';r=f.report();assert(!r.lines.some(l=>l.includes('unattributed')&&l.includes(`"path":"${p}"`)))
+  delete f.plugins[key];f.host.files[f.indexPath]=JSON.stringify({plugins:f.plugins})
+  assert(hasDiff(f.report(),'enabled-but-not-installed'))
+})
+test('FB5 malformed settings and missing delivery env cannot pass silently',async()=>{
+  const f=await grantFixture();f.host.files[f.settingsPath]='not JSON'
+  delete f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig.env.CLAUDE_CODE_PLUGIN_CACHE_DIR
+  assert(hasDiff(f.report(),'metadata-unavailable'));assert(hasDiff(f.report(),'delivery-env-missing'));assert.equal(f.report().ok,false)
+})
+test('FB5 parser exposes only explicit booleans; unsupported TOML and duplicate keys are unknown',()=>{
+  const path='/company/config.toml',host=memoryHost({[path]:`token = "DO_NOT_PRINT"\n[plugins."p@m"]\nenabled = true # explicit\n[plugins.'q@m']\nenabled=false\n[plugins]\n"x@m" = {enabled=true}`})
+  const r=readCodexEnablement(host,'/company');assert.equal(r.complete,false);assert.equal(r.entries.length,2);assert(!JSON.stringify(r).includes('DO_NOT_PRINT'))
+  host.files[path]='[plugins."p@m"]\nenabled=true\n[plugins."p@m"]\nenabled=false'
+  assert.equal(readCodexEnablement(host,'/company').duplicate,true)
+})
+test('FB5 readers never open auth files, plugin payloads, marketplace snapshots or symlinked metadata',async()=>{
+  const f=await grantFixture(),key=f.claude.grants.claudePlugins[0],pluginPath=f.plugins[key][0].installPath
+  f.host.symlinks.add(`${pluginPath}/.claude-plugin/plugin.json`)
+  f.plugins[key].push({installPath:'/outside/auth.json',version:'1'})
+  f.host.files[f.indexPath]=JSON.stringify({plugins:f.plugins})
+  f.report()
+  assert(!f.host.reads.includes(`${pluginPath}/.claude-plugin/plugin.json`))
+  assert(f.host.reads.every(p=>p===f.settingsPath||p===f.indexPath||p===`${f.homes.codex.home}/config.toml`||p.endsWith('/.claude-plugin/plugin.json')||p.endsWith('/.codex-plugin/plugin.json')))
+  assert(f.host.reads.every(p=>!p.includes('/auth.json')&&!p.includes('/marketplaces/')&&!p.endsWith('SKILL.md')))
+})
+test('FB5 grants is idempotent and ignores apply: zero host/io writes and exclusively GET API calls',async()=>{
+  const f=await grantFixture(),before=structuredClone(f.host.files)
+  const first=await grants(f.api,source,{...f.options,apply:true,approvedDigest:'irrelevant'})
+  const second=await grants(f.api,source,f.options)
+  assert.deepEqual(first,second);assert.deepEqual(f.host.files,before)
+  assert.equal(f.host.writes.length,0);assert.equal(f.io.writes.length,0);assert(f.api.state.calls.every(c=>c.method==='GET'))
+})
+test('FB5 verify includes the identical read-only grants report and cannot omit F1',async()=>{
+  const f=await grantFixture(),r=await synchronize(f.api,source,f.options)
+  assert.deepEqual(r.grants,f.report());assert(r.grants.lines.some(l=>l.includes(f1Sentence)))
+  assert.equal(f.io.writes.length,0);assert.equal(f.host.writes.length,0);assert(f.api.state.calls.every(c=>c.method==='GET'))
+})
+test('FB5 CLI grants --apply and verify --verify-only --apply stay read-only and enforce the Claude exit gate',async()=>{
+  const f=await grantFixture(),log=console.log,output=[];console.log=(...v)=>output.push(v.join(' '))
+  try{
+    for(const flags of [['grants','--apply'],['grants','--verify-only','--apply'],['verify','--verify-only','--apply']])await main([...flags,'--fake','--company-id',f.companyId],f)
+    assert(output.join('\n').includes(f1Sentence))
+    f.host.files[f.settingsPath]='{}'
+    for(const verb of ['grants','verify'])await assert.rejects(main([verb,'--fake','--company-id',f.companyId],f),/Claude/)
+  }finally{console.log=log}
+  assert.equal(f.io.writes.length,0);assert.equal(f.host.writes.length,0);assert(f.api.state.calls.every(c=>c.method==='GET'))
+})
+
+const grantWitness=`const f=await fixture({instanceRoot:'/fake-instance'});const {memoryHost}=await import(${JSON.stringify(url('src/fake-api.mjs'))});const host=memoryHost();f.api.state.calls.length=0;f.io.writes.length=0;const options={companyId:f.companyId,instanceRoot:'/fake-instance',host,io:f.io,apply:true};const report=await subject.grants(f.api,source,options);`
+knockout('FB5 Claude fatal gate','src/grants.mjs',s=>s.replace("const fatal=a.adapterType==='claude_local' && diffs.length>0",'const fatal=false'),grantWitness+`assert.equal(report.ok,false);assert.throws(()=>subject.assertGrantReport(report),/Claude/);`)
+knockout('FB5 CLI exit assertion','src/grants.mjs',s=>s.replace("requireThat(report.ok,'Claude plugin grants or permission metadata mismatch')",'/* knocked out */'),grantWitness+`assert.throws(()=>subject.assertGrantReport(report),/Claude/);`)
+knockout('FB5 F1 cannot be silenced','src/grants.mjs',s=>s.replace('`declared: ${F1}`','`declared: omitted`'),grantWitness+`assert(report.lines.some(l=>l.includes(${JSON.stringify(f1Sentence)})));`)
+knockout('FB5 dead temp rule detector','src/grants.mjs',s=>s.replace("rule==='Write(/tmp/**)'",'false'),`assert.equal(subject.deadTempRules(['Write(/tmp/**)','Read','Write(/private/var/folders/fake/T/**)'],'/private/var/folders/fake/T').length,1);`)
+knockout('FB5 granted-but-not-enabled detector','src/grants.mjs',s=>s.replace("diff(surface,'granted-but-not-enabled',key)",'void key'),grantWitness+`assert(report.agents.some(a=>a.adapter==='claude_local'&&a.diffs.some(d=>d.kind==='granted-but-not-enabled')));`)
+knockout('FB5 zero host writes witness','src/grants.mjs',s=>s.replace('const inventory=readPluginInventory','host.writeText("/fake/write","mutation"); const inventory=readPluginInventory'),grantWitness+`assert.equal(host.writes.length,0);assert.equal(f.io.writes.length,0);`)
+knockout('FB5 zero non-GET API calls witness','src/grants.mjs',s=>s.replace('const live=await readSnapshot(api,options.companyId)','const live=await readSnapshot(api,options.companyId); await api.request("PATCH","/api/agents/"+live.agents[0].id,{title:"mutation"})'),grantWitness+`assert(f.api.state.calls.every(c=>c.method==='GET'));`)
+
+// Each mutation must defeat its named witness, even when unrelated diffs remain.
+const grantDiffWitness=`const f=await fixture({instanceRoot:'/fake-instance'});const {memoryHost}=await import(${JSON.stringify(url('src/fake-api.mjs'))});const {renderSkillHomes}=await import(${JSON.stringify(url('src/skills.mjs'))});const {idMap}=await import(${JSON.stringify(url('src/api.mjs'))});const c=structuredClone(source.contract),qa=c.agents.find(a=>a.adapterType==='claude_local'),homes=renderSkillHomes(c,'/fake-instance',f.companyId,idMap(f.live)),settingsPath=Object.keys(homes.files)[0],key=qa.grants.claudePlugins[0],pinPath='/fake-user/.claude/plugins/cache/'+key.split('@').reverse().join('/')+'/wrong',files={...homes.files};const settings=JSON.parse(files[settingsPath]);settings.enabledPlugins['extra@market']=true;files[settingsPath]=JSON.stringify(settings);files[pinPath+'/.claude-plugin/plugin.json']=JSON.stringify({version:'wrong'});files['/fake-user/.claude/plugins/installed_plugins.json']=JSON.stringify({plugins:{[key]:[{installPath:pinPath,version:'wrong'}]}});const host=memoryHost(files),manifest={companyId:f.companyId,agents:c.agents.map(a=>({...a,id:f.live.agents.find(b=>b.urlKey===a.slug).id}))};const report=subject.grantReport(c,f.live,homes,host,{pilotManifest:manifest});`
+for(const kind of ['enabled-but-not-granted','enabled-but-not-installed','installed-at-wrong-pin'])knockout(`FB5 ${kind} detector`,'src/grants.mjs',s=>s.replace(`diff(${kind==='enabled-but-not-granted'?'surface':"'installed plugins'"},'${kind}',key`, `diff(${kind==='enabled-but-not-granted'?'surface':"'installed plugins'"},'knocked-out',key`),grantDiffWitness+`assert(report.agents.some(a=>a.adapter==='claude_local'&&a.diffs.some(d=>d.kind===${JSON.stringify(kind)})));`)
+knockout('FB5 Codex findings cannot become fatal','src/grants.mjs',s=>s.replace("const fatal=a.adapterType==='claude_local' && diffs.length>0",'const fatal=diffs.length>0'),grantDiffWitness+`const codex=report.agents.find(a=>a.adapter==='codex_local');assert(codex.diffs.length>0);assert.equal(codex.fatal,false);`)
+for(const kind of ['delivery-command-missing','delivery-env-missing','declared-source-divergence','delivery-binding-mismatch']){
+  const setup=kind==='delivery-command-missing'?"delete f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig.agentCommand;":kind==='delivery-env-missing'?"delete f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig.env.CLAUDE_CONFIG_DIR;":kind==='declared-source-divergence'?"manifest.agents.find(a=>a.roleKey===qa.roleKey).adapterLocal={};":"manifest.companyId='wrong';"
+  const witness=grantDiffWitness.replace('const report=subject.grantReport',setup+'const report=subject.grantReport')
+  knockout(`FB5 ${kind} detector`,'src/grants.mjs',s=>s.replace(`'${kind}'`,"'knocked-out'"),witness+`assert(report.agents.some(a=>a.diffs.some(d=>d.kind===${JSON.stringify(kind)})));`)
+}
+knockout('FB5 F10 explanation cannot be silenced','src/grants.mjs',s=>s.replace('lines.push(`declared: ${F10}`)','/* knocked out */'),grantDiffWitness.replace('const report=subject.grantReport',"manifest.companyId='wrong';const report=subject.grantReport")+`assert(report.lines.some(l=>l.includes(${JSON.stringify(f10Sentence)})));`)
+knockout('FB5 zero io writes witness','src/grants.mjs',s=>s.replace('const live=await readSnapshot(api,options.companyId)','const live=await readSnapshot(api,options.companyId); await options.io.save({mutation:true})'),grantWitness+`assert.equal(f.io.writes.length,0);`)
+test('FB5 worktree reader opens only settings metadata and skips symlinked trees',()=>{
+  const root='/instance',path=root+'/projects/C/P/focx/.paperclip/worktrees/QA/.claude/settings.local.json',host=memoryHost({[path]:JSON.stringify({permissions:{allow:['Read'],deny:['Edit']}}),[root+'/projects/C/P/focx/.paperclip/worktrees/QA/.claude/auth.json']:'FORBIDDEN',[root+'/projects/C/P/focx/.paperclip/worktrees/QA/plugin/SKILL.md']:'FORBIDDEN',[root+'/projects/C/P/focx/.paperclip/worktrees/linked/.claude/settings.local.json']:'FORBIDDEN'})
+  host.symlinks.add(root+'/projects/C/P/focx/.paperclip/worktrees/linked')
+  assert.equal(readWorktreeSettings(host,root,'C').length,1);assert.deepEqual(host.reads,[path]);assert.equal(host.writes.length,0)
+  host.symlinks.add(path);host.reads.length=0
+  assert.equal(readWorktreeSettings(host,root,'C')[0].permissions,null);assert.deepEqual(host.reads,[])
+  assert.equal(readWorktreeSettings(host,root,'OTHER').length,0,'other companies are out of scope')
+})
+
+test('FB5 default source reader checks the real launcher manifest; generated fake ids still fail F10',async()=>{
+  const f=await grantFixture({matchingIds:false}),options={...f.options};delete options.pilotManifest
+  const r=await grants(f.api,source,options)
+  assert(hasDiff(r,'delivery-binding-mismatch'));assert(!hasDiff(r,'declared-source-divergence'))
+  assert.equal(r.ok,false);assert(r.lines.some(l=>l.includes(f10Sentence)))
+  assert.equal(f.host.writes.length,0);assert.equal(f.io.writes.length,0);assert(f.api.state.calls.every(c=>c.method==='GET'))
+})

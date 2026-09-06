@@ -2,6 +2,20 @@ import { createServer } from 'node:http'
 import { parseYaml, parseMarkdown, markdown, yaml } from './bundle.mjs'
 import { expectedSkillWarning } from './fresh.mjs'
 import { requireThat, slugOf } from './invariants.mjs'
+import { dirname } from 'node:path'
+
+export function memoryHost(files={}) {
+  const dirs=new Set(),reads=[],writes=[],mtimes={},symlinks=new Set()
+  const host={files,dirs,reads,writes,mtimes,symlinks,userHome:'/fake-user',tempDir:'/private/var/folders/fake/T',
+    readText:p=>{reads.push(p);return files[p]??null},
+    readJson:p=>{try{return JSON.parse(host.readText(p))}catch{return null}},
+    entries:p=>[...new Set([...dirs,...Object.keys(files)].filter(f=>dirname(f)===p).map(f=>f.slice(p.length+1)))].sort(),
+    exists:p=>dirs.has(p)||Object.hasOwn(files,p),isDirectory:p=>dirs.has(p),isSymlink:p=>symlinks.has(p),mtime:p=>mtimes[p]??null,
+    containsLiteral:()=>false,runLogs:()=>[],writeText:(...args)=>writes.push(args),
+  }
+  for(const file of Object.keys(files))for(let p=dirname(file);p!==dirname(p);p=dirname(p))dirs.add(p)
+  return host
+}
 
 const clone=structuredClone
 const prune=value=>{
@@ -45,7 +59,7 @@ export function createFakeApi(options={}) {
       requireThat(!state.previewErrors.length,'Import preview errors')
       const requested=body.target.newCompanyName??companyDoc.meta.name
       const name=body.target.newCompanyName??(state.companies.some(c=>c.name===requested)?`${requested} (2)`:requested)
-      const company={id:`company-${++next}`,name,issuePrefix:`FB${next}`}
+      const company={id:options.companyId??`company-${++next}`,name,issuePrefix:`FB${next}`}
       state.companies.push(company)
       const result={company:{...company,action:'created'},agents:[],warnings,envInputs:[]}
       for(const entry of entries) {
@@ -53,7 +67,7 @@ export function createFakeApi(options={}) {
         const config=clone(ext.adapter.config)
         if(ext.adapter.type==='codex_local')config.extraArgs=[...new Set([...(config.extraArgs??[]),'--skip-git-repo-check'])]
         config.instructionsBundleMode='managed';config.instructionsRootPath=`/fake/managed/${next}`;config.instructionsEntryFile='AGENTS.md';config.paperclipSkillSync={desiredSkills:entry.meta.skills}
-        const id=`agent-${++next}`,prefix=`agents/${slug}/`
+        const id=options.agentIds?.[slug]??`agent-${++next}`,prefix=`agents/${slug}/`
         const agent={id,companyId:company.id,name:entry.meta.name,urlKey:slugOf({name:entry.meta.name}),title:entry.meta.title,status:body.pauseAutomations?'paused':'idle',role:ext.role,icon:ext.icon,reportsTo:null,adapterType:ext.adapter.type,adapterConfig:config,runtimeConfig:{...ext.runtime,heartbeat:{...ext.runtime?.heartbeat,enabled:false}},permissions:{canCreateAgents:false,canCreateSkills:true,...ext.permissions},desiredSkills:entry.meta.skills,entryFile:'AGENTS.md',legacyPromptTemplateActive:false,legacyBootstrapPromptTemplateActive:false,files:Object.fromEntries(Object.entries(files).filter(([p])=>p.startsWith(prefix)).map(([p,text])=>[p.slice(prefix.length),p===entry.path?entry.body+'\n':text])),access:{canAssignTasks:true,taskAssignSource:'explicit_grant',grants:[{permissionKey:'tasks:assign'}]}}
         state.agents.push(agent);result.agents.push({id,slug,name:agent.name,action:'created'})
         if(options.partialImport && result.agents.length===1)throw new Error('Injected partial import failure')
