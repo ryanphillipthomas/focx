@@ -1,0 +1,12 @@
+{
+  "runId": "run-20260904-010240-grok-scheduled",
+  "trigger": {
+    "source": "grok-scheduled",
+    "actor": "product-research",
+    "paperclipTaskId": "5f44ae7b-eb9c-44cc-9680-390f8bbf5e7f"
+  },
+  "prompt": "Nightly Research Scan (FOC-36): review product feedback, customer themes, market changes, competitors, new user behavior, and potential opportunities. Output is evidence, never an automatic build order.",
+  "mode": "research",
+  "createdAt": "2026-09-04T01:02:40Z",
+  "branch": "FOC-36-nightly-research-scan"
+}

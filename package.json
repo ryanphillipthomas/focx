@@ -9,6 +9,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "drift-check": "node tools/drift-check/index.mjs"
+    "drift-check": "node tools/drift-check/index.mjs",
+    "test:drift-check": "node --test tools/drift-check/test.mjs",
+    "focx-bot:check": "node packages/focx-bot/src/index.mjs --validate-contract",
+    "focx-bot:plan": "node packages/focx-bot/src/index.mjs apply",
+    "focx-bot:verify": "node packages/focx-bot/src/index.mjs verify",
+    "test:focx-bot": "node --test packages/focx-bot/test.mjs",
+    "test:scripts": "node --test scripts/paperclip-issue-update.test.mjs"
   }
 }

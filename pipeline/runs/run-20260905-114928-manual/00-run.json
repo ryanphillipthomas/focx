@@ -1,0 +1,11 @@
+{
+  "runId": "run-20260905-114928-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "paperclipTaskId": "a959a01f-f171-4212-800b-592c5f0f8255"
+  },
+  "prompt": "Do it",
+  "createdAt": "2026-09-05T11:49:28Z",
+  "branch": "run/run-20260905-114928-manual"
+}

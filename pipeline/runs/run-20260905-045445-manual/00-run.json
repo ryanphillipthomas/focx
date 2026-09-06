@@ -1,0 +1,11 @@
+{
+  "runId": "run-20260905-045445-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "paperclipTaskId": "56c1d659-4921-4649-bbe1-0220aa883cb7"
+  },
+  "prompt": "Get QA\u2019s full workflow working: create evidence, run both reviews, and post its own report. First test the exact approved commands and diagnose each denial. Don\u2019t broaden permissions to compensate for incorrect commands. Make the smallest durable fix, prove it locally, and open a PR for my merge. After each PR, give me the exact next step. Keep QA paused outside bounded tests. Continue until the live smoke passes, stopping only for my merge or a concrete decision. If Claude can help, give me a specific question to ask.",
+  "createdAt": "2026-09-05T04:54:45Z",
+  "branch": "run/run-20260905-045445-manual"
+}

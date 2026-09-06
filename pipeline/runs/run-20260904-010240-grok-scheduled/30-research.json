@@ -1,0 +1,69 @@
+{
+  "runId": "run-20260904-010240-grok-scheduled",
+  "questions": [
+    "What product feedback and customer themes exist for Connect right now?",
+    "What has changed in the personal-CRM / relationship-management market recently?",
+    "Who are the live competitors and how do they differentiate?",
+    "What does new user behavior in this space suggest about unmet needs?",
+    "What opportunities, if any, are worth flagging to Head of Product?"
+  ],
+  "findings": [
+    {
+      "finding": "Connect has no first-party customer feedback or usage data to review. Phase 1 leaves apps/connect/ deliberately empty — the app scaffold itself is Phase 2 work — so there are zero live users and zero product surface to have generated feedback.",
+      "sources": ["apps/connect/README.md", "docs/roles/research.md"]
+    },
+    {
+      "finding": "The only live internal signal this cycle is engineering/process friction, not customer signal: GitHub issue #34 documents that the Deploy charter describes a QA-verdict gate at deploy time that tools/deploy-verify cannot enforce. It is real and open, but it is a Security/Release/QA concern, not a product-opportunity finding, so it is noted here and not adopted as a Research recommendation.",
+      "sources": ["https://github.com (repo) issue #34: \"Deploy charter specifies behaviour tools/deploy-verify cannot perform; QA-verdict gate is dead at deploy time\""]
+    },
+    {
+      "finding": "The personal-CRM category is mature and crowded, with 60+ tracked entrants as of 2026. The visible leaders differentiate on distinct axes: Dex on LinkedIn-native enrichment and job-change alerts; Clay/Mesh on contact enrichment for high-value professional networks; Monica on open-source, self-hosted data ownership; Folk on team/shared-network collaboration; Covve on mobile-first phone-contact enrichment.",
+      "sources": [
+        "https://getdex.com/blog/personal-crm-for-networking/",
+        "https://getdex.com/blog/personal-crm-list/",
+        "https://www.yourpond.io/blog/best-personal-crm-apps-2026",
+        "https://dextr.app/articles/best-personal-crm-apps-in-2026/"
+      ]
+    },
+    {
+      "finding": "Category-wide, 2026 CRM trends are agentic AI moving from pilot to rollout, mobile access reaching ~58.7% of usage, rising voice-AI adoption, and a shift from flat subscriptions to hybrid free-plus-premium-AI-tier pricing. Professionals/consultants/sales roles remain the dominant end-user segment (~49.3%).",
+      "sources": [
+        "https://www.cio.com/article/1255983/customer-relationship-management-crm-trends.html",
+        "https://www.selecthub.com/customer-relationship-management/crm-trends/",
+        "https://www.bigin.com/articles/seven-crm-trends-that-will-define-2026-and-2027.html",
+        "https://www.futuremarketinsights.com/reports/personal-crm-market"
+      ]
+    },
+    {
+      "finding": "Almost every mainstream personal-CRM competitor is built around professional networking or sales use cases. A separate, smaller cluster of apps (amiqo, Fabriq, Bubblic, Waffle, Intriq) targets non-professional relationship maintenance (friends, family), but coverage is fragmented across communication apps, journal apps, and light CRM-style nudging tools — none unify both halves of the problem. One source frames it directly: friendship maintenance has two separate problems, remembering to reach out and remembering what to say, and most tools only address the first, and address it badly.",
+      "sources": [
+        "https://amiqo.life/best-apps-to-stay-in-touch-with-friends",
+        "https://www.bubblic.app/blog/best-apps-for-long-distance-friendships.html",
+        "https://www.intriq.app/blog/best-app-to-keep-in-touch-with-friends/",
+        "https://sharingme.app/blog/best-apps-for-families-to-stay-connected-2026"
+      ]
+    },
+    {
+      "finding": "This market has a specific failure pattern worth treating as a warning, not just a trend: attempts at a general-purpose \"CRM for your life\" have been made for over 15 years and most no longer exist. Named churn drivers for CRM-style apps generally are crashes/bugs (cited by 50.3% of users as a deal-breaker), manual data-entry burden, and unclear value versus price — all of which point at effort-to-maintain, not feature count, as the likely failure mode for this category.",
+      "sources": [
+        "https://getdex.com/blog/personal-crm-list/",
+        "https://www.luciq.ai/blog/mobile-app-churn"
+      ]
+    }
+  ],
+  "optionsConsidered": [
+    {
+      "option": "Position Connect to compete directly in professional-networking personal-CRM (Dex/Clay/Folk territory).",
+      "assessment": "Crowded and infrastructure-heavy (LinkedIn integration, contact enrichment pipelines) for a pre-launch entrant with no build yet; weak differentiation against incumbents with multi-year data moats."
+    },
+    {
+      "option": "Narrow toward non-professional relationship maintenance (friends, family, mentors) — closing the \"remembering what to say\" half that the current fragmented field leaves unsolved.",
+      "assessment": "Smaller, less-crowded field and matches the charter already on record for Connect (docs/roles/research.md: \"how people actually maintain the relationships Connect is for\"). The 15-year graveyard of general life-CRM attempts is a real risk signal: the finding above suggests manual upkeep effort, not missing features, is what has killed prior entrants, so this option is only sound if paired with near-zero manual data entry."
+    },
+    {
+      "option": "Take no product-direction action this cycle; wait for Phase 2 to ship before gathering any feedback.",
+      "assessment": "Defensible given there is genuinely no live product to survey yet, but it wastes the nightly cadence's only lever — flagging pre-build risk before Product commits a spec — when a specific, sourced risk (manual-entry churn) is already visible and cheap to record now."
+    }
+  ],
+  "recommendation": "No build action this cycle — evidence is thin because Connect has no live users, and this scan is not the mechanism that commissions builds. The one actionable item is a proposal for Head of Product to weigh when Connect's spec is written: if Connect's future scope leans toward personal (non-sales) relationship maintenance, the sourced risk above is manual data-entry burden, historically the primary reason general 'life CRM' products have failed over 15+ years, so any spec in that direction should treat near-zero manual upkeep as a hard constraint rather than a nice-to-have, and should not compete on the same axis as Dex/Clay/Folk. This is flagged to Head of Product as input, not adopted as a decision."
+}

@@ -1,0 +1,11 @@
+{
+  "runId": "run-20260905-051255-manual",
+  "trigger": {
+    "source": "manual",
+    "actor": "ryanphillipthomas",
+    "paperclipTaskId": "f52b968b-03ec-4a77-a490-d60ca03449df"
+  },
+  "prompt": "PR 84 is merged",
+  "createdAt": "2026-09-05T05:12:55Z",
+  "branch": "run/run-20260905-051255-manual"
+}

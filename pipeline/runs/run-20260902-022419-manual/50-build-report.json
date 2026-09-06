@@ -1,0 +1,24 @@
+{
+  "runId": "run-20260902-022419-manual",
+  "storiesImplemented": ["S1"],
+  "filesChanged": [
+    "apps/connect/index.html",
+    "apps/connect/styles.css"
+  ],
+  "componentsUsed": [
+    "focx/UI/Caption"
+  ],
+  "tokensUsed": [
+    "focx.border.hairline",
+    "focx.color.border-subtle",
+    "focx.control.px-lg",
+    "focx.space.3",
+    "focx.text.caption",
+    "focx.weight.regular"
+  ],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "drift-check: clean — no design drift detected."
+  }
+}

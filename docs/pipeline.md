@@ -91,8 +91,21 @@ instead: same Figma in → byte-identical POC out, at zero agent cost. Fallback
 runs produce only `00-run.json` and `50-build-report.json`; the full artifact
 trail is an agent-path feature.
 
+## Phase 4 (planned) — Paperclip-native execution
+
+The 2026-09-01 **Option B** decision is to move the same Chief → Product →
+Research → Design → Engineer → QA → Deploy role chain and contract-stage
+artifacts to Paperclip-registered Claude/Codex agents. This will replace GitHub
+Actions execution rather than wrap or dispatch work into the unchanged GitHub
+Actions pipeline. The drift gate, artifact contracts, and Render deploy target
+remain unchanged.
+
+Status: **not started**. Once the
+transition lands, `00-run.json`'s optional `trigger.paperclipTaskId` field will
+cross-reference the Paperclip task that owns the run.
+
 ## Run identity
 
 - Run ID format: `run-<UTC yyyymmdd-HHMMSS>-<trigger>` (e.g., `run-20260830-142201-ticket`).
-- Branch: `run/<run-id>`. All work, including artifacts, lives on this branch until merged or closed.
+- Branch: `run/<run-id>` when intake automation cuts it, or `FOC-<issue>-<slug>` when the run happens inside a Paperclip per-issue worktree, which names its own branch. All work, including artifacts, lives on that branch until merged or closed. `00-run.json` records the branch the run was actually on; the audit trail is worth more than the naming convention.
 - The originating trigger (issue number, dispatcher identity, or schedule) is recorded in `00-run.json` — every run is traceable to who or what asked for it.

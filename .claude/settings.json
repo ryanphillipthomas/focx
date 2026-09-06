@@ -1,0 +1,7 @@
+{
+  "enabledPlugins": {
+    "differential-review@trailofbits": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "spec-to-code-compliance@trailofbits": true
+  }
+}

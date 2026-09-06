@@ -1,0 +1,24 @@
+{
+  "runId": "run-20260905-051255-manual",
+  "storiesImplemented": [
+    "Continue the approved QA workflow repair: preserve byte-exact Git diff evidence with existing permissions."
+  ],
+  "filesChanged": [
+    ".focx/skills/focx-verify-change/SKILL.md",
+    "docs/pilot-operation.md",
+    "tools/pilot-org/runtime-permissions.test.mjs",
+    "tools/pilot-org/test.mjs",
+    "pipeline/runs/run-20260905-051255-manual/00-run.json",
+    "pipeline/runs/run-20260905-051255-manual/50-build-report.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/diagnosis.json",
+    "pipeline/runs/run-20260905-051255-manual/evidence/native-tests.txt",
+    "pipeline/runs/run-20260905-051255-manual/evidence/qa-posted-report.json"
+  ],
+  "componentsUsed": [],
+  "tokensUsed": [],
+  "deviations": [],
+  "driftCheckLocal": {
+    "passed": true,
+    "output": "Drift clean: 23 values from 2 token files. 76 pilot/reporting tests pass; optional native suite separately enabled with 8/8 passing on Claude 2.1.232, including exact 121705-byte diff capture and denied outside-evidence redirect. Existing permissions and launcher unchanged. FOC-94 proved evidence/report writes, both substantive reviews and QA self-reporting; byte comparison rejected reconstructed run.diff despite the agent PASS. Only procedure 0.1.4 and tests/docs change. QA restored paused; no unmerged procedure applied. Human merge, fresh reviewed procedure sync and full smoke remain required; no independent QA verdict. Render preview pending existing integration."
+  }
+}
