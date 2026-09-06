@@ -105,7 +105,8 @@ States as section 3. Same protocol, same constraints.
 | F17 | Live `bind-secrets --apply` (env binding + first live plugin provisioning) | Claude | **partial** — env binding PASS; all 294 Claude plugins PASS; native Codex stage blocked by F20 | FB9, F18, F19 |
 | F20 | Native Codex plugins: `openai-bundled` is reserved and cannot be installed by path; `openai-curated-remote` needs network + sign-in | Claude (found) | **done** — PR #96 merged (`431eced`) | F17 |
 | F21 | `bind-secrets` must not report `configured` while pinned plugins are unseeded | Codex | **done** — landed on develop via PR #98 (`93ceec7`) | F20 |
-| F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **PR #103 open** (`0bbcd2d`); awaiting Ryan merge, then a live QA re-run | F17 |
+| F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **done and PROVEN LIVE** — PR #103 merged (`7a49b9c`); the gate no longer fires in a provisioned company | F17 |
+| F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open** — needs Ryan's decision; it widens a permission | F23 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
 
@@ -1866,6 +1867,33 @@ since #87 merged.
   `diff --check` clean, `contract.json` 0 lines in the diff. Live read-only: the two real companies return `FOC` and
   `FOCAAA`, both matching the accepted shape. **Not yet proven: a live QA run in a provisioned company** — that is the
   next step after merge and is what actually closes the objective.
+
+- 2026-09-06 Ryan: **"merged, run the QA lane again"** → PR #103 on develop (`7a49b9c`).
+- 2026-09-06 18:30:51Z Claude: **QA lane re-run: the F23 fix HOLDS LIVE, and the lane got two steps further.** Run
+  `0f7af0f6…`, status **succeeded**, `usageJson.model = claude-opus-5`, `requestedModel = claude-opus-5`.
+  (Note for future polling: Paperclip reports **`succeeded`**, not `completed` — my loop watched for the wrong word and
+  spun past the result, which briefly made Ryan think it had failed.)
+  **What the agent proved:** session init cleared the F23 gate — `git rev-parse --show-toplevel` matched
+  `PAPERCLIP_WORKSPACE_WORKTREE_PATH` and the branch matched `PAPERCLIP_WORKSPACE_BRANCH`, on branch
+  `FOCAAA-1-qa-lane-smoke-…`. **Step 1 done:** it wrote exactly `pipeline/runs/run-20260906-173426-qa/evidence/
+  qa-smoke.txt` containing one line, and touched nothing else. Verified by hand in the worktree; the file is there and
+  uncommitted.
+  **Where it stopped, and it stopped correctly:** `git add …` and the reporting `curl` both returned `User refused
+  permission to run tool`. The agent **halted on each rather than retrying or routing around**, and reported through the
+  run summary because the control-plane write was itself denied — exactly the F14 rule, obeyed without being reminded.
+- **F24 — the QA role's write rules are written for a branch convention Paperclip does not use.**
+  `.focx/agents.json` grants QA `Bash(git push origin run/:*)`. The launcher mirrored it verbatim into the worktree
+  (confirmed in `.claude/settings.local.json`, 31 rules). Paperclip names the branch `FOCAAA-1-…`, so **that rule can
+  never match** — the same convention drift as F23, and the same family as the repo's own open issue #55
+  ("run.schema.json's branch pattern (^run/) can't be satisfied by Paperclip-native execution branches").
+  A second, separate cause: the agent ran `cd … && git add … && git status --porcelain`, and a **compound** command
+  cannot match a prefix rule like `Bash(git add pipeline/runs:*)` even though the underlying command is allowed. That
+  one is fixable in the task text, not in the permission set.
+  **This widens a permission, so it is Ryan's call, not mine.** Recorded, not acted on.
+  **Cleanup:** runtimeConfig restored byte-identical, agent paused, both read back. The worktree and its uncommitted
+  evidence file are left in place so a retry resumes at step 2. Task `FOCAAA-1` still reads `blocked`; the agent could
+  not update it because that write went through the same denied channel — worth knowing, since the board will show a
+  stale status whenever this happens.
 
 ### FB3 log
 
