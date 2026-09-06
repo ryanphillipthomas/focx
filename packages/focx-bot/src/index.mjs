@@ -14,6 +14,7 @@ import { renderSkillHomes, verifySkills, catalogEntries } from './skills.mjs'
 import { localIO, instanceRoot, defaultHost, checkInstalledAdapters, modelEvidence, checkHostPrerequisites } from './host.mjs'
 import { readPluginInventory,pluginOperations,executePluginOperations } from './plugins.mjs'
 import { nativePluginPlan,installNativePlugins,NativePluginRuntime } from './native-plugins.mjs'
+import { grants, grantReport, assertGrantReport } from './grants.mjs'
 
 export function plan(source,live) {
   assertInvariants(source.contract,live,[1,2,3,4,5,6])
@@ -49,7 +50,8 @@ export async function synchronize(api,source,options={}) {
   const digest=approvalDigest(operations,{baseUrl:api.baseUrl,companyId},source.sha)
   const report={digest,changes:operations,invariants:assess(contract,live),secretLinks:secretLinkFindings(contract,live),access:accessReport(live),catalog,permissionsRevoked:permissionsDone(live)}
   if(options.host){
-    const homes=renderSkillHomes(contract,instanceRoot(contract),companyId,idMap(live));report.skills=verifySkills(contract,homes,options.host,live);report.modelEvidence=evidence
+    const homes=renderSkillHomes(contract,options.instanceRoot??instanceRoot(contract),companyId,idMap(live));report.skills=verifySkills(contract,homes,options.host,live);report.modelEvidence=evidence
+    report.grants=grantReport(contract,live,homes,options.host,options)
     if(options.pluginInventory)report.pins=catalogEntries(contract.skills).filter(e=>e.pinned).map(entry=>{
       const row=options.pluginInventory.find(r=>r.installed&&r.key===entry.key&&r.adapter===entry.adapter)
       return {key:entry.key,adapter:entry.adapter,installed:!!row,expectedVersion:entry.version??null,observedVersion:row?.version??null,contentHashMatches:entry.contentHash?row?.contentHash===entry.contentHash:null,sourceIdentityVerified:entry.sourceId?row?.sourceId===entry.sourceId:null}
@@ -83,24 +85,31 @@ function args(argv) {
     if(values.has(key)){requireThat(argv[i+1] && !argv[i+1].startsWith('--'),`Missing --${key} value`);options[key]=argv[++i]}
     else{requireThat(['apply','verify-only','check','validate-contract','fake','host'].includes(key),`Unknown flag --${key}`);options[key]=true}
   }
-  if(options['verify-only']){options.verb='verify';options.apply=false}
-  requireThat(['verify','apply','fresh','snapshot','restore','bind-secrets'].includes(options.verb),'Unknown verb')
+  if(options['verify-only']){if(options.verb!=='grants')options.verb='verify';options.apply=false}
+  requireThat(['verify','grants','apply','fresh','snapshot','restore','bind-secrets'].includes(options.verb),'Unknown verb')
   return options
 }
-export async function main(argv=process.argv.slice(2)) {
+export async function main(argv=process.argv.slice(2),runtime={}) {
   const flags=args([...argv]),source=loadSource(flags.contract??resolve(PACKAGE,'contract.json'))
   const emit=value=>console.log(JSON.stringify(value,null,2))
   if(flags.check || flags['validate-contract']){emit({contractSchema:'pass',agents:source.contract.agents.map(a=>a.slug),runtimeDependencies:0});return}
   requireThat(flags.fake || flags['base-url'],'An explicit --base-url is required; no default live target')
-  let api,io
-  if(flags.fake){const fake=await import('./fake-api.mjs');api=fake.createFakeApi();io=fake.memoryIO()}
+  let api,io,fakeHost
+  if(flags.fake){const fake=await import('./fake-api.mjs');api=runtime.api??fake.createFakeApi();io=runtime.io??fake.memoryIO();fakeHost=runtime.host??fake.memoryHost()}
   else{api=new Client(flags['base-url'],process.env.PAPERCLIP_API_KEY);io=localIO(source.contract,flags['state-file'])}
   const state=await io.readState()
-  const options={apply:!!flags.apply,approvedDigest:flags['approved-digest'],companyId:flags['company-id']??state?.companyId,catalogCompanyId:flags['catalog-company-id']??(flags.fake?'catalog-company':undefined),target:{mode:'new_company',...(flags['new-company-name']?{newCompanyName:flags['new-company-name']}:{})},expectedName:flags['new-company-name']??state?.expectedName,outputPath:flags['snapshot-file'],emit,io,instanceRoot:flags.fake?'/fake-instance':instanceRoot(source.contract)}
-  if(flags.verb==='verify')options.apply=false
+  const options={...(flags.fake?{pilotManifest:runtime.pilotManifest}:{}),apply:!!flags.apply,approvedDigest:flags['approved-digest'],companyId:flags['company-id']??state?.companyId,catalogCompanyId:flags['catalog-company-id']??(flags.fake?'catalog-company':undefined),target:{mode:'new_company',...(flags['new-company-name']?{newCompanyName:flags['new-company-name']}:{})},expectedName:flags['new-company-name']??state?.expectedName,outputPath:flags['snapshot-file'],emit,io,instanceRoot:flags.fake?'/fake-instance':instanceRoot(source.contract)}
+  if(['verify','grants'].includes(flags.verb))options.apply=false
   options.reportModelEvidence=lines=>lines.forEach(line=>console.log(line))
-  if(!flags.fake){options.hostPrerequisites=checkHostPrerequisites(source.contract);emit({adapters:await checkInstalledAdapters(source.contract),host:options.hostPrerequisites});options.host=defaultHost(source.contract);if(options.companyId)options.pluginInventory=readPluginInventory(source.contract,`${instanceRoot(source.contract)}/companies/${options.companyId}/codex-home`)}
+  if(!flags.fake && flags.verb!=='grants'){options.hostPrerequisites=checkHostPrerequisites(source.contract);emit({adapters:await checkInstalledAdapters(source.contract),host:options.hostPrerequisites});options.host=defaultHost(source.contract);if(options.companyId)options.pluginInventory=readPluginInventory(source.contract,`${instanceRoot(source.contract)}/companies/${options.companyId}/codex-home`)}
+  if(flags.fake && ['verify','grants'].includes(flags.verb))options.host=fakeHost
   let result
+  if(flags.verb==='grants'){
+    result=await grants(api,source,options)
+    result.lines.forEach(line=>console.log(line))
+    assertGrantReport(result)
+    return result
+  }
   if(['verify','apply'].includes(flags.verb))result=await synchronize(api,source,options)
   else if(flags.verb==='fresh')result=await fresh(api,source,options)
   else if(flags.verb==='snapshot')result=await snapshot(api,source,{...options,hostRecord:renderHost(source.contract)})
@@ -122,10 +131,11 @@ export async function main(argv=process.argv.slice(2)) {
   }
   emit(result)
   if(flags.verb==='verify'){
+    if(result.grants)assertGrantReport(result.grants)
     requireThat(!result.changes.length && !result.invariants.length && !result.secretLinks.length && result.permissionsRevoked && result.catalog.every(m=>m.present),'Verification found unmet checks')
     if(options.hostPrerequisites)requireThat(options.hostPrerequisites.postgresql17.listener && options.hostPrerequisites.claudeRuntime.matches,'Host prerequisites are unmet')
     if(result.skills)requireThat(result.skills.materialization.filter(r=>['claude-settings','claude-env'].includes(r.kind)).every(r=>r.matches) && !result.skills.injectionFailures.length,'Host declarations or skill injection checks failed')
-    if(result.pins)requireThat(result.pins.every(p=>p.installed && (!p.expectedVersion || p.observedVersion===p.expectedVersion) && p.contentHashMatches!==false),'Pinned plugin installation metadata is incomplete or mismatched')
+    if(result.pins)requireThat(result.pins.filter(p=>p.adapter==='claude_local').every(p=>p.installed && (!p.expectedVersion || p.observedVersion===p.expectedVersion) && p.contentHashMatches!==false),'Pinned Claude plugin installation metadata is incomplete or mismatched')
   }
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().catch(error=>{console.error(error.message);process.exitCode=1})

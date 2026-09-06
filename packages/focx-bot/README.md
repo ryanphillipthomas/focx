@@ -92,3 +92,37 @@ The source knock-outs load modified module bytes into isolated child `node:test`
 FB7–FB9 still need explicitly authorized live evidence: fresh import and no-change verification against installed Paperclip, model execution in each lane, actual skill injection and tool grants, installed plugin identity/version plus manual app authentication, real HTTP/filesystem/lock behavior, and an export/restore round trip into a distinct company. The HTTP fake transport is exercised in-process because this build sandbox disallows listening sockets. The native parser covers the installed portability format; a real export remains necessary evidence of full fidelity. Services, credentials and deployment are outside this offline build.
 
 No live Paperclip request, agent run, plugin installation, service change, credential-value access, commit, push or PR was performed in FB4. The only edit outside this package adds contract validation and package tests to the existing drift-gate workflow.
+
+## Plugin grants (FB5)
+
+`node packages/focx-bot/src/index.mjs grants --base-url <url> --company-id <id>`
+reports declarations, rendered settings and observed metadata for each contract
+agent. It is also included in `verify`. `grants` never writes or invokes a CLI;
+`--apply` cannot enable writes, and `--verify-only` stays read-only. An explicit
+API target and company id (or saved instance state) are required.
+
+Claude mismatches exit nonzero: grant/enablement/installation/pin differences,
+launcher command or environment presence, source divergence, launcher id binding,
+worktree permission deltas and H7's dead temp rule. Permissions are rendered with
+the launcher's `mergeSettings` and its five vendor baseline rules. The source
+validator is imported from `tools/pilot-org`; it reads repository `.focx` role and
+skill sources as well as the manifest. Runtime host readers inspect settings,
+plugin manifests and installation metadata only, refusing symlinked metadata;
+they never open auth files, plugin `SKILL.md` or marketplace snapshots. Missing
+pin hashes remain unverified; no plugin content is hashed by `grants`.
+
+codex_local: reported only — declared permissions and plugin sets do not bound Codex behavior (F1); the Claude lane is bounded by its settings and permission rules.
+
+Codex reports its company cache and explicit `enabled` booleans from
+`[plugins."key@marketplace"]` in `config.toml`; absent or unsupported enablement
+is unknown. Cache presence never implies enablement. The grant check references
+`verifySkills` for materialization/injection evidence and never asserts a plugin
+works. No worktree settings is unobserved until an authorised FB8 run. Directory
+mtimes after the matching pin's recorded `installedAt` are labelled unattributed;
+when that metadata is absent, the timestamp baseline is unavailable.
+
+F10: QA permission delivery is bound to .focx/agents.json ids; a provisioned company cannot launch QA until the launcher's binding is redesigned (FB2 rev 2.7, Ryan)
+
+The fake API supports explicit company/agent ids for the clean binding fixture;
+its ordinary generated ids fail the F10 check. These fixtures prove metadata
+comparison and read-only behavior offline, not runtime permission enforcement.

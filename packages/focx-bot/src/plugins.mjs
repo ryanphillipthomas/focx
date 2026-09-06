@@ -52,7 +52,8 @@ export function pluginOperations(contract,rows,companyHome,{adapter}={}) {
 }
 // These readers inspect metadata only. No CLI is run during verify, no auth
 // file is opened, and unavailable metadata is reported instead of guessed.
-export function readPluginInventory(contract,companyHome) {
+export function readPluginInventory(contract,companyHome,options={}) {
+  if(options.metadataOnly)return readInstalledMetadata(companyHome,options.host,options.userHome??homedir())
   const rows=[],cache=new Map()
   const cached=p=>{if(!cache.has(p))cache.set(p,json(p));return cache.get(p)}
   for(const entry of catalogEntries(contract.skills).filter(e=>e.pinned)) {
@@ -88,6 +89,51 @@ export function readPluginInventory(contract,companyHome) {
         }
       }catch{}
     }
+  }
+  return rows
+}
+
+// Grant reports never hash plugin payloads or consult marketplace/auth files.
+// Refuse symlinked metadata (including parent directories), and keep only the
+// metadata fields used by the report. The provisioning reader above is unchanged.
+export function metadataReadable(host,path) {
+  for(let p=resolve(path);;p=dirname(p)){
+    if(host.isSymlink(p))return false
+    if(dirname(p)===p)return true
+  }
+}
+export function readClaudePluginRecords(host,userHome=homedir()) {
+  const path=join(userHome,'.claude/plugins/installed_plugins.json')
+  const data=metadataReadable(host,path)?host.readJson(path):null
+  const records=[]
+  for(const [key,value]of Object.entries(data?.plugins??{}))for(const p of Array.isArray(value)?value:[value]){
+    if(!p || typeof p!=='object')continue
+    records.push({key,adapter:'claude_local',installPath:p.installPath,version:p.version,contentHash:p.contentHash,gitCommitSha:p.gitCommitSha,sourceSha:p.gitCommitSha,installedAt:p.installedAt,scope:p.scope,projectPath:p.projectPath})
+  }
+  return {path,available:!!data?.plugins,records}
+}
+function readInstalledMetadata(companyHome,host,userHome) {
+  requireThat(host,'Metadata inventory requires a read-only host')
+  const rows=[],base=join(userHome,'.claude/plugins/cache')
+  const dirs=p=>metadataReadable(host,p)?host.entries(p).filter(n=>n!=='.'&&n!=='..'&&!n.includes('/')&&host.isDirectory(join(p,n))&&metadataReadable(host,join(p,n))).sort():[]
+  for(const row of readClaudePluginRecords(host,userHome).records){
+    const path=typeof row.installPath==='string'?resolve(row.installPath):''
+    const readable=path.startsWith(base+'/') && metadataReadable(host,path)
+    const manifestPath=join(path,'.claude-plugin/plugin.json')
+    const manifest=readable && metadataReadable(host,manifestPath)?host.readJson(manifestPath):null
+    rows.push({...row,installed:!!(readable && host.isDirectory(path)),version:manifest?.version??row.version,contentHash:row.contentHash??manifest?.contentHash,mtime:readable?host.mtime(path):null})
+  }
+  // Retained cache directories are observable too, but do not substitute for
+  // Claude's installed index when checking whether an enabled key is installed.
+  for(const marketplace of dirs(base))for(const name of dirs(join(base,marketplace)))for(const version of dirs(join(base,marketplace,name))){
+    const path=join(base,marketplace,name,version)
+    if(!rows.some(r=>r.installPath===path))rows.push({key:`${name}@${marketplace}`,adapter:'claude_local',installed:false,retained:true,installPath:path,cacheVersion:version,mtime:host.mtime(path)})
+  }
+  const cache=join(companyHome,'plugins/cache')
+  for(const marketplace of dirs(cache))for(const name of dirs(join(cache,marketplace)))for(const version of dirs(join(cache,marketplace,name))){
+    const path=join(cache,marketplace,name,version),manifestPath=join(path,'.codex-plugin/plugin.json')
+    const manifest=metadataReadable(host,manifestPath)?host.readJson(manifestPath):null
+    rows.push({key:`${name}@${marketplace}`,adapter:'codex_local',installed:true,installPath:path,cacheVersion:version,version:manifest?.version,sourceId:manifest?.sourceId??manifest?.source_id,contentHash:manifest?.contentHash,installedAt:manifest?.installedAt,mtime:host.mtime(path)})
   }
   return rows
 }
