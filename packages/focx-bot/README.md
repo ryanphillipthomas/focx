@@ -81,7 +81,10 @@ names again. Apply requires the current plan digest and the same single-writer
 lock, rechecks persisted state and live-state races, reissues both merge-only env
 PATCHes with invariant checks between operations, and verifies all secret links
 before provisioning plugins. Claude planning omits pins already verified installed;
-native Codex reads each pin and skips matching active installs. Successful plugin
+Claude execution also refreshes inventory before every operation and emits
+`skipped` with the operation and reason when its installed pin already matches.
+Mismatched pins still require installation and strict readback. Native Codex
+reads each pin and skips matching active installs. Successful plugin
 provisioning clears `pluginFailure`; pending manual app authentication can still
 leave `awaiting-plugin-auth`. Env-stage or earlier failures inside the locked
 apply remain `phase:"failed", failedStep:3` and cannot be resumed. Preflight
@@ -94,6 +97,14 @@ refusals make no state change; a failed state save is never retried.
 Snapshot renders two launchd plists from `service`/`network` with secret paths redacted. These are review artifacts, not installable recovery credentials. Restoring the host's database and service authentication remains Ryan's prerequisite. The tunnel's dashboard management is recorded as an inference from FB1, not a newly verified fact.
 
 Claude `workspaces/<generated-id>/.claude/settings.json` and `adapterLocal.claudeCodePlugins` derive from per-agent grants. The full pinned host catalog and the agent's enabled subset are distinct. Codex plugins use the per-company `codex-home`; its pinned set is company-wide. Entries with `pinned:false` are retained and reported as available, never installed. Full remote source identity distinguishes duplicate catalog names, including the two `webmcp` entries. Pin mismatches stop installation; there is no upgrade-to-latest fallback.
+
+Claude installed rows come from `installed_plugins.json`, independently of
+marketplace or per-plugin manifest readability. Missing or malformed
+`.claude-plugin/plugin.json` does not discard a record; a readable manifest
+refines its version. Commit pins use the recorded commit, content pins still
+hash the install path, and version pins still require an exact release version:
+an install ID alone does not satisfy a release-version pin. A bad record cannot
+hide later good records; unreadable inventory remains unavailable evidence.
 
 Ryan must complete `codex login` for the intended company home before an authorized native plugin operation or Codex run. `bind-secrets` checks the auth link during plan/preflight and refuses with the exact `CODEX_HOME` before any env PATCH, lock or state write if it is absent. The same check runs again inside plugin provisioning to catch auth removal after preflight; that failure leaves the verified env stage resumable. The provisioner checks auth-file presence/symlink metadata only. It never opens auth bytes. Plugin sign-in and app access remain manual. Claude plugin installation uses its management CLI; native Codex uses only initialize, plugin/read, plugin/install and app/installed. Execution, approval and OAuth requests are rejected. Native reads check source identity/version before installation and installed metadata afterward. Local cached manifests that lack a source ID are reported as unverified identity, not proof of remote provenance.
 

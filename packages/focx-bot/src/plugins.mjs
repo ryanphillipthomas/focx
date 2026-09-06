@@ -54,12 +54,12 @@ export function pluginOperations(contract,rows,companyHome,{adapter}={}) {
 // file is opened, and unavailable metadata is reported instead of guessed.
 export function readPluginInventory(contract,companyHome,options={}) {
   if(options.metadataOnly)return readInstalledMetadata(companyHome,options.host,options.userHome??homedir())
-  const rows=[],cache=new Map()
-  const cached=p=>{if(!cache.has(p))cache.set(p,json(p));return cache.get(p)}
+  const rows=[],cache=new Map(),readJson=options.readJson??json,userHome=options.userHome??homedir()
+  const cached=p=>{if(!cache.has(p))cache.set(p,readJson(p));return cache.get(p)}
   for(const entry of catalogEntries(contract.skills).filter(e=>e.pinned)) {
     const [name,marketplace]=entry.key.split('@')
     if(entry.adapter==='claude_local') {
-      const base=join(homedir(),'.claude/plugins'),manifestPath=join(base,'marketplaces',marketplace,'.claude-plugin/marketplace.json')
+      const base=join(userHome,'.claude/plugins'),manifestPath=join(base,'marketplaces',marketplace,'.claude-plugin/marketplace.json')
       try {
         const manifest=cached(manifestPath),matches=manifest.plugins.filter(p=>p.name===name)
         for(const p of matches){
@@ -67,8 +67,19 @@ export function readPluginInventory(contract,companyHome,options={}) {
           const definition=local&&existsSync(join(local,'.claude-plugin/plugin.json'))?json(join(local,'.claude-plugin/plugin.json')):{}
           rows.push({key:entry.key,adapter:entry.adapter,available:true,version:p.version??definition.version,sourceSha:p.source?.sha,contentHash:entry.contentHash&&local?contentHash(local):undefined,gitCommitSha:entry.gitCommitSha?manifest.gitCommitSha:undefined})
         }
+      }catch{}
+      // Installed commit/version evidence does not depend on the marketplace or
+      // an optional plugin manifest: skills-only plugins have no plugin.json.
+      try {
         const installed=cached(join(base,'installed_plugins.json')).plugins?.[entry.key]??[]
-        for(const p of Array.isArray(installed)?installed:[installed])if(p.installPath){const definition=json(join(p.installPath,'.claude-plugin/plugin.json'));rows.push({key:entry.key,adapter:entry.adapter,installed:true,version:definition.version??p.version,gitCommitSha:p.gitCommitSha,sourceSha:p.gitCommitSha,contentHash:entry.contentHash?contentHash(p.installPath):undefined})}
+        for(const p of Array.isArray(installed)?installed:[installed]) {
+          try {
+            if(!p || typeof p.installPath!=='string' || !p.installPath)continue
+            let definition
+            try{definition=readJson(join(p.installPath,'.claude-plugin/plugin.json'))}catch{}
+            rows.push({key:entry.key,adapter:entry.adapter,installed:true,version:definition?.version??p.version,gitCommitSha:p.gitCommitSha,sourceSha:p.gitCommitSha,contentHash:entry.contentHash?contentHash(p.installPath):undefined})
+          }catch{}
+        }
       }catch{}
     } else {
       const root=join(companyHome,'plugins/cache',marketplace,name,entry.version??entry.catalogVersion??'')
@@ -140,6 +151,10 @@ function readInstalledMetadata(companyHome,host,userHome) {
 export async function executePluginOperations(operations,{readInventory,emit,run=execFileSync}={}) {
   for(const op of operations) {
     requireThat(op.kind==='install-pinned-plugin' && op.entry.pinned===true,'Unpinned entries are never installed')
+    if(readInventory().some(row=>row.installed&&pluginReadbackMatches(op.entry,row))){
+      emit({skipped:op,reason:'Installed plugin already matches the pin'})
+      continue
+    }
     emit({write:op})
     // stdout/stderr are captured and withheld: runtime managers may print
     // authentication prompts. Never invoke an OAuth/login command or a model.

@@ -9,7 +9,7 @@ import { validateSchema,validateContract,loadSource,PACKAGE } from './src/contra
 import { approvalDigest,hash,sha256 } from './src/digest.mjs'
 import { assess,assertInvariants,tighter,tighterDaily } from './src/invariants.mjs'
 import { fresh,bindSecrets,preflightFresh,freshPlan,permissionsDone,secretLinkFindings,resolveEnv } from './src/fresh.mjs'
-import { createFakeApi,memoryIO } from './src/fake-api.mjs'
+import { createFakeApi,memoryIO,memoryPluginInventory } from './src/fake-api.mjs'
 import { Client,readSnapshot } from './src/api.mjs'
 import { synchronize } from './src/index.mjs'
 import { snapshot,restore,overlayRestore,prunedFalseKeys,renderHost } from './src/portability.mjs'
@@ -17,7 +17,7 @@ import { renderFreshBundle,bundleExtension,parseYaml,yaml,parseMarkdown } from '
 import { catalogEntries,installPlan,installPinned,renderSkillHomes,verifySkills,validateGrants } from './src/skills.mjs'
 import { modelEvidence } from './src/host.mjs'
 import { nativePluginPlan,assertNativePin,installNativePlugins,NativePluginRuntime } from './src/native-plugins.mjs'
-import { pluginReadbackMatches } from './src/plugins.mjs'
+import { pluginReadbackMatches,executePluginOperations,contentHash } from './src/plugins.mjs'
 
 test('contract validates against its schema; ids are outputs and model keys are adapter data',()=>{
   assert.deepEqual(validateSchema(source.contract,source.schema),[])
@@ -252,6 +252,8 @@ function knockout(label,file,transform,body) {
     const broken=child(moduleURL(file,transform),body);assert.equal(broken.status,1,broken.stdout+broken.stderr);assert.match(broken.stdout,/not ok 1 - guard witness/)
     if(label.startsWith('restore overlay')){assert.match(broken.stdout,/Invariant 7:/);assert.match(broken.stdout,/Invariant 8:/)}
     if(label.startsWith('F15 reserved strip'))assert.match(broken.stdout,/HTTP 422: unpinned_external_source/)
+    if(label==='F19 optional manifest tolerance')assert.match(broken.stdout,/Plugin pin readback failed/);
+    if(label==='F19 already-satisfied skip')assert.match(broken.stdout,/matching pin was reinstalled/);
     if(label==='F15 company de-duplication')assert.match(broken.stdout,/duplicate company skills imported/)
     if(label==='F15 post-import singleton assertion')assert.match(broken.stdout,/Missing expected rejection/)
     const restored=child(url(file),body);assert.equal(restored.status,0,restored.stdout+restored.stderr)
@@ -1039,3 +1041,87 @@ test('F18 successful provisioning clears old failure while retaining manual app 
   assert.equal(result.complete,false);assert.equal(state.phase,'awaiting-plugin-auth')
   assert.deepEqual(state.pluginAuth,needsAuth);assert(!state.pluginFailure);assert(!state.failedStep)
 })
+
+// F19: the real reader and executor run against in-memory metadata, never a CLI.
+async function manifestlessWitness(reader,execute) {
+  const f=memoryPluginInventory(),readInventory=()=>reader(f.contract,'/fake-company',f.options)
+  let installed=false,calls=0
+  await execute([f.operation],{readInventory:()=>installed?readInventory():[],emit:()=>{},run:()=>{installed=true;calls++}})
+  assert.equal(calls,1)
+  const row=readInventory().find(r=>r.installed)
+  assert(row);assert.equal(row.gitCommitSha,f.entry.source.sha)
+  assert.equal(row.version,f.record.version)
+}
+async function skipWitness(execute) {
+  const f=memoryPluginInventory(),rows=[],events=[]
+  let calls=0,reads=0
+  await execute([f.operation,f.operation],{readInventory:()=>{reads++;return structuredClone(rows)},emit:e=>events.push(e),run:()=>{calls++;rows.push({...f.entry,installed:true,sourceSha:f.entry.source.sha})}})
+  assert.equal(calls,1,'matching pin was reinstalled')
+  assert.equal(reads,3,'inventory must refresh before each operation and after install')
+  assert.deepEqual(events,[{write:f.operation},{skipped:f.operation,reason:'Installed plugin already matches the pin'}])
+}
+test('F19 manifest-less commit pin passes real inventory readback after install',()=>manifestlessWitness(readPluginInventory,executePluginOperations))
+test('F19 missing or malformed manifest preserves records and a readable manifest refines version',()=>{
+  for(const manifest of [undefined,'{broken','null',JSON.stringify({version:'1.2.3'})]){
+    const f=memoryPluginInventory({manifest}),rows=readPluginInventory(f.contract,'/fake-company',f.options)
+    const row=rows.find(r=>r.installed);assert(row);assert(pluginReadbackMatches(f.entry,row))
+    assert.equal(row.version,manifest?.includes('1.2.3')?'1.2.3':f.record.version)
+    assert(f.host.reads.every(p=>!p.endsWith('/auth.json')));assert.equal(f.host.writes.length,0)
+  }
+})
+test('F19 manifest-less install ID fails a version pin and cannot be skipped',async()=>{
+  const f=memoryPluginInventory({pin:'version',version:'1.2.3'}),events=[]
+  const readInventory=()=>readPluginInventory(f.contract,'/fake-company',f.options)
+  let calls=0
+  assert(!pluginReadbackMatches(f.entry,readInventory().find(r=>r.installed)))
+  await assert.rejects(executePluginOperations([f.operation],{readInventory,emit:e=>events.push(e),run:()=>{calls++}}),/Plugin pin readback failed/)
+  assert.equal(calls,1);assert.equal(events.filter(e=>e.skipped).length,0)
+  f.host.files[f.manifestPath]=JSON.stringify({version:'1.2.3'})
+  assert(pluginReadbackMatches(f.entry,readInventory().find(r=>r.installed)))
+  delete f.host.files[f.manifestPath]
+  f.host.files[f.inventoryPath]=JSON.stringify({plugins:{[f.entry.key]:[{...f.record,version:'1.2.3'}]}})
+  assert(pluginReadbackMatches(f.entry,readInventory().find(r=>r.installed)))
+})
+test('F19 mismatched commits fail readback without skipping; gitCommitSha retains version check',async()=>{
+  for(const pin of ['manifestSha','gitCommitSha']){
+    const f=memoryPluginInventory({pin,version:'1.2.3',manifest:JSON.stringify({version:'1.2.3'})}),events=[]
+    if(pin==='gitCommitSha')f.entry.gitCommitSha=f.record.gitCommitSha
+    f.host.files[f.inventoryPath]=JSON.stringify({plugins:{[f.entry.key]:[{...f.record,gitCommitSha:'wrong'}]}})
+    const readInventory=()=>readPluginInventory(f.contract,'/fake-company',f.options)
+    let calls=0
+    await assert.rejects(executePluginOperations([f.operation],{readInventory,emit:e=>events.push(e),run:()=>{calls++}}),/Plugin pin readback failed/)
+    assert.equal(calls,1);assert.equal(events.filter(e=>e.skipped).length,0)
+    f.host.files[f.inventoryPath]=JSON.stringify({plugins:{[f.entry.key]:[{...f.record,version:'1.2.3'}]}})
+    delete f.host.files[f.manifestPath]
+    const row=readInventory().find(r=>r.installed);assert(pluginReadbackMatches(f.entry,row))
+    if(pin==='gitCommitSha')assert(!pluginReadbackMatches(f.entry,{...row,version:'wrong'}))
+  }
+})
+test('F19 content pin hashes payload; an unreadable record cannot hide the next good one',()=>{
+  const f=memoryPluginInventory({pin:'contentHash'}),path=resolve(PACKAGE,'native-schema')
+  f.entry.contentHash=contentHash(path)
+  f.host.files[f.inventoryPath]=JSON.stringify({plugins:{[f.entry.key]:[null,{installPath:42},{...f.record,installPath:'/missing-f19-payload'},{...f.record,installPath:path}]}})
+  const rows=readPluginInventory(f.contract,'/fake-company',f.options).filter(r=>r.installed)
+  assert.equal(rows.length,1);assert(pluginReadbackMatches(f.entry,rows[0]))
+  assert(!pluginReadbackMatches({...f.entry,contentHash:'wrong'},rows[0]))
+})
+test('F19 unreadable inventory is failure-tolerant and marketplace failure cannot hide installed records',()=>{
+  const f=memoryPluginInventory()
+  for(const marketplace of [undefined,'{broken']){
+    if(marketplace)f.host.files['/fake-user/.claude/plugins/marketplaces/fixture/.claude-plugin/marketplace.json']=marketplace
+    assert(readPluginInventory(f.contract,'/fake-company',f.options).some(r=>r.installed))
+  }
+  for(const inventory of [undefined,'{broken','null']){
+    if(inventory===undefined)delete f.host.files[f.inventoryPath];else f.host.files[f.inventoryPath]=inventory
+    assert.deepEqual(readPluginInventory(f.contract,'/fake-company',f.options),[])
+  }
+})
+test('F19 execution refreshes inventory and reports already-satisfied skips',()=>skipWitness(executePluginOperations))
+test('F19 available-only matching rows never skip installation',async()=>{
+  const f=memoryPluginInventory();let calls=0
+  await assert.rejects(executePluginOperations([f.operation],{readInventory:()=>[{...f.entry,available:true,sourceSha:f.entry.source.sha}],emit:()=>{},run:()=>{calls++}}),/Plugin pin readback failed/)
+  assert.equal(calls,1)
+})
+const f19Setup=`const {memoryPluginInventory}=await import(${JSON.stringify(url('src/fake-api.mjs'))});`
+knockout('F19 optional manifest tolerance','src/plugins.mjs',s=>s.replace("try{definition=readJson(join(p.installPath,'.claude-plugin/plugin.json'))}catch{}","definition=readJson(join(p.installPath,'.claude-plugin/plugin.json'))"),f19Setup+manifestlessWitness.toString()+';await manifestlessWitness(subject.readPluginInventory,subject.executePluginOperations);')
+knockout('F19 already-satisfied skip','src/plugins.mjs',s=>s.replace("      continue\n    }\n    emit({write:op})","      /* skip knocked out */\n    }\n    emit({write:op})"),f19Setup+skipWitness.toString()+';await skipWitness(subject.executePluginOperations);')
