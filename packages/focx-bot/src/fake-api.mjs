@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { parseYaml, parseMarkdown, markdown, yaml } from './bundle.mjs'
+import { parseYaml, parseMarkdown, markdown, yaml, RESERVED_SKILL_PREFIX } from './bundle.mjs'
 import { expectedSkillWarning } from './fresh.mjs'
 import { requireThat, slugOf } from './invariants.mjs'
 import { dirname } from 'node:path'
@@ -17,6 +17,7 @@ export function memoryHost(files={}) {
   return host
 }
 
+const bundledSlugs=['paperclip','paperclip-board','paperclip-converting-plans-to-tasks','paperclip-create-agent','para-memory-files']
 const clone=structuredClone
 const prune=value=>{
   if(value===false)return undefined
@@ -37,7 +38,7 @@ export function memoryIO() {
 }
 export function createFakeApi(options={}) {
   let next=0
-  const state={companies:[{id:'catalog-company',name:'Retained company'}],agents:[],projects:[],triggers:[],secrets:[],calls:[],isInstanceAdmin:true,models:{codex_local:[{id:'gpt-6-astra'},{id:'gpt-5.6-sol'}],claude_local:[{id:'claude-opus-5'}]},fail:null,ignoreWrites:false,previewErrors:[],extraWarnings:[],...clone(options.seed??{})}
+  const state={companies:[{id:'catalog-company',name:'Retained company'}],agents:[],projects:[],skills:[],triggers:[],secrets:[],calls:[],isInstanceAdmin:true,models:{codex_local:[{id:'gpt-6-astra'},{id:'gpt-5.6-sol'}],claude_local:[{id:'claude-opus-5'}]},fail:null,ignoreWrites:false,previewErrors:[],extraWarnings:[],...clone(options.seed??{})}
   const api={baseUrl:'http://fake.invalid',state,async request(method,path,body){
     state.calls.push({method,path,body:clone(body)})
     if (state.fail?.({method,path,body,call:state.calls.length})) throw new Error('Injected API failure')
@@ -53,7 +54,8 @@ export function createFakeApi(options={}) {
       const files=body.source.files,extension=parseYaml(files['.paperclip.yaml']),companyDoc=parseMarkdown(files['COMPANY.md'])
       requireThat(extension.schemaVersion===7 && body.target.mode==='new_company','Invalid import format/target')
       const entries=Object.entries(files).filter(([p])=>/^agents\/[^/]+\/AGENTS.md$/.test(p)).map(([p,text])=>({path:p,...parseMarkdown(text)}))
-      const warnings=entries.map(e=>expectedSkillWarning(e.meta.slug??e.path.split('/')[1])).concat(state.extraWarnings)
+      const packageSkills=Object.entries(files).filter(([p])=>p.toLowerCase().endsWith('/skill.md')).map(([path,text])=>({path,...parseMarkdown(text)}))
+      const warnings=(packageSkills.some(s=>s.meta.key===RESERVED_SKILL_PREFIX+'paperclip')?[]:entries.map(e=>expectedSkillWarning(e.meta.slug??e.path.split('/')[1]))).concat(state.extraWarnings)
       if(path.endsWith('/preview'))return {errors:send(state.previewErrors),warnings}
       requireThat(state.isInstanceAdmin,'Instance admin required')
       requireThat(!state.previewErrors.length,'Import preview errors')
@@ -61,6 +63,20 @@ export function createFakeApi(options={}) {
       const name=body.target.newCompanyName??(state.companies.some(c=>c.name===requested)?`${requested} (2)`:requested)
       const company={id:options.companyId??`company-${++next}`,name,issuePrefix:`FB${next}`}
       state.companies.push(company)
+      // Native apply seeds inventory, then validates package sources even when
+      // a bundled key already exists. Preview deliberately does neither check.
+      state.skills.push(...bundledSlugs.map(slug=>({companyId:company.id,key:RESERVED_SKILL_PREFIX+slug,slug,origin:'bundled'})))
+      for(const skill of packageSkills) {
+        const provenance=skill.meta.metadata?.sources?.[0]
+        const reserved=skill.path.startsWith('skills/'+RESERVED_SKILL_PREFIX) || skill.meta.key?.startsWith(RESERVED_SKILL_PREFIX)
+        if(reserved && !/^[0-9a-f]{40}$/i.test(provenance?.commit?.trim()??''))throw Object.assign(new Error('HTTP 422: unpinned_external_source; bundled package skill must resolve to a pinned Git commit before import'),{status:422})
+      }
+      for(const skill of packageSkills) {
+        const originalSlug=skill.meta.slug??skill.meta.name??skill.path.split('/').at(-2)
+        let slug=originalSlug,suffix=2
+        while(state.skills.some(s=>s.companyId===company.id && s.slug===slug))slug=originalSlug+'-'+suffix++
+        state.skills.push({companyId:company.id,key:slug===originalSlug?(skill.meta.key??'company/'+company.id+'/'+slug):'company/'+company.id+'/'+slug,slug,origin:'package',packagePath:skill.path})
+      }
       const result={company:{...company,action:'created'},agents:[],projects:[],warnings,envInputs:[]}
       for(const entry of entries) {
         const slug=entry.meta.slug??entry.path.split('/')[1],ext=extension.agents[slug]
@@ -100,7 +116,7 @@ export function createFakeApi(options={}) {
     if(companyPath && method==='POST' && companyPath[2]==='/export') {
       requireThat(body.include?.issues===false && ['company','agents','projects','skills'].every(k=>body.include[k]===true),'Wrong export include flags')
       const company=state.companies.find(c=>c.id===companyPath[1]);requireThat(company,'Unknown export company')
-      const files={'COMPANY.md':markdown({name:company.name})},agents={},manifestAgents=[],projects={},manifestProjects=[],warnings=[]
+      const files={'COMPANY.md':markdown({name:company.name})},agents={},manifestAgents=[],projects={},manifestProjects=[],manifestSkills=[],warnings=[]
       for(const a of state.agents.filter(a=>a.companyId===company.id)) {
         const slug=slugOf(a),config=prune(a.adapterConfig),inputs={env:{}}
         for(const [key,v] of Object.entries(config.env??{})) {
@@ -112,6 +128,17 @@ export function createFakeApi(options={}) {
         agents[slug]={role:a.role,icon:a.icon,adapter:{type:a.adapterType,config},runtime:prune(a.runtimeConfig),permissions:prune(a.permissions),inputs}
         manifestAgents.push({slug,adapterType:a.adapterType,adapterConfig:config,runtimeConfig:agents[slug].runtime,permissions:agents[slug].permissions})
       }
+      for(const [path,text] of Object.entries(files).filter(([p])=>/^agents\/[^/]+\/skills\/[^/]+\/SKILL.md$/.test(p))) {
+        const doc=parseMarkdown(text),slug=doc.meta.name,key='company/'+company.id+'/'+slug,copyPath='skills/company/'+company.issuePrefix+'/'+slug+'/SKILL.md'
+        const entry={slug,name:slug,sourceType:'catalog',sourceRef:null,metadata:{sourceKind:'catalog'},fileInventory:[{path:'SKILL.md',kind:'skill'}]}
+        manifestSkills.push({...clone(entry),key:slug,path},{...clone(entry),key,path:copyPath})
+        files[copyPath]=markdown({...doc.meta,slug,key,metadata:{...doc.meta.metadata,paperclip:{slug,skillKey:key},paperclipSkillKey:key,skillKey:key}},doc.body)
+      }
+      for(const slug of bundledSlugs) {
+        const key=RESERVED_SKILL_PREFIX+slug,path='skills/'+key+'/SKILL.md',url='https://github.com/paperclipai/paperclip/tree/master/skills/'+slug
+        files[path]=markdown({name:slug,slug,key,metadata:{sources:[{kind:'github-dir',commit:null,path:'skills/'+slug,repo:'paperclipai/paperclip',trackingRef:'master',url}]}},'Bundled skill fixture: '+slug)
+        manifestSkills.push({key,slug,name:slug,path,sourceType:'github',sourceLocator:url,sourceRef:null,metadata:{sourceKind:'paperclip_bundled',owner:'paperclipai',repo:'paperclip',ref:null,trackingRef:'master',repoSkillDir:'skills/'+slug},fileInventory:[{path:'SKILL.md',kind:'skill'}]})
+      }
       for(const p of state.projects.filter(p=>p.companyId===company.id)) {
         const slug=slugOf(p),workspaces={}
         files[`projects/${slug}/PROJECT.md`]=markdown({name:p.name,description:p.description??null,owner:null},p.description??'')
@@ -122,7 +149,7 @@ export function createFakeApi(options={}) {
         projects[slug]={status:p.status,workspaces};manifestProjects.push({slug,name:p.name,workspaces:Object.entries(workspaces).map(([key,w])=>({key,...w}))})
       }
       files['.paperclip.yaml']=yaml({schemaVersion:7,agents,projects})
-      return {files,manifest:{agents:manifestAgents,projects:manifestProjects,company:{name:company.name}},paperclipExtensionPath:'.paperclip.yaml',warnings}
+      return {files,manifest:{agents:manifestAgents,projects:manifestProjects,skills:manifestSkills,blobs:[],embeddedAssets:[],company:{name:company.name}},paperclipExtensionPath:'.paperclip.yaml',warnings}
     }
     if(method==='GET' && path.startsWith('/api/projects/')){const p=state.projects.find(p=>p.id===path.split('/').at(-1));requireThat(p,'Unknown fake project');return send(p)}
     if(method==='GET' && path.startsWith('/api/routines/'))return {triggers:send(state.triggers.filter(t=>t.routineId===path.split('/').at(-1)))}
@@ -149,7 +176,7 @@ export function createFakeApi(options={}) {
   }}
   const server=createServer(async(req,res)=>{
     try {const chunks=[];for await(const c of req)chunks.push(c);const body=chunks.length?JSON.parse(Buffer.concat(chunks).toString()):undefined;const result=await api.request(req.method,req.url,body);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(result))}
-    catch(error){res.writeHead(500,{'content-type':'application/json'});res.end(JSON.stringify({message:error.message}))}
+    catch(error){res.writeHead(error.status??500,{'content-type':'application/json'});res.end(JSON.stringify({message:error.message}))}
   })
   return Object.assign(api,{listen:()=>new Promise(resolve=>server.listen(0,'127.0.0.1',()=>{api.baseUrl=`http://127.0.0.1:${server.address().port}`;resolve(api.baseUrl)})),close:()=>new Promise(resolve=>server.close(resolve))})
 }

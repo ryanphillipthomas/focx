@@ -101,3 +101,33 @@ export function secretInputs(bundle) {
 export function importOperation(bundle, target) {
   return {method:'POST',path:'/api/companies/import',body:{source:{type:'inline',files:bundle.files,expectedFileCount:Object.keys(bundle.files).length},include:INCLUDE,target,pauseAutomations:true}}
 }
+
+export const RESERVED_SKILL_PREFIX = 'paperclipai/paperclip/'
+// Native blobs are content addressed; embeddedAssets.ownedBy holds categories,
+// not paths. Remove only assets referenced by removed files and no retained text,
+// preserving shared blobs and attachment references in the extension/manifest.
+export function removeSkillFiles(bundle, paths, removeEntry) {
+  const removed=paths.map(path=>bundle.files[path]).filter(v=>typeof v==='string')
+  for(const path of paths)delete bundle.files[path]
+  if(bundle.manifest?.skills)bundle.manifest.skills=bundle.manifest.skills.filter(s=>!removeEntry(s))
+  const {key,extension}=bundleExtension(bundle)
+  const texts=Object.entries(bundle.files).filter(([p,v])=>p!==key && typeof v==='string')
+  const references=(text,id)=>text.toLowerCase().includes('/api/assets/'+id.toLowerCase()+'/content')
+  const removedHashes=new Set()
+  for(const index of [extension,bundle.manifest].filter(Boolean))if(index.embeddedAssets) {
+    index.embeddedAssets=index.embeddedAssets.filter(asset=>{
+      if(!removed.some(text=>references(text,asset.assetId)))return true
+      const retained=texts.filter(([,text])=>references(text,asset.assetId))
+      const extensionText=JSON.stringify({...extension,blobs:undefined,embeddedAssets:undefined})
+      if(!retained.length && !references(extensionText,asset.assetId)){removedHashes.add(asset.sha256);return false}
+      if(asset.ownedBy?.includes('skills') && !retained.some(([p])=>p.startsWith('skills/')))asset.ownedBy=asset.ownedBy.filter(owner=>owner!=='skills')
+      return true
+    })
+  }
+  const retainedMetadata=JSON.stringify([extension,bundle.manifest].filter(Boolean).map(index=>({...index,blobs:undefined})))
+  for(const hash of removedHashes)if(!retainedMetadata.includes(hash) && !texts.some(([p,text])=>p!=='blobs/'+hash && text.includes(hash))) {
+    delete bundle.files['blobs/'+hash]
+    for(const index of [extension,bundle.manifest].filter(Boolean))if(index.blobs)index.blobs=index.blobs.filter(blob=>blob.sha256!==hash)
+  }
+  bundle.files[key]=yaml(extension)
+}

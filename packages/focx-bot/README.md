@@ -26,7 +26,7 @@ The schema validator implements every keyword used by `contract.schema.json`. Te
 | `fresh` | Preflights instance-admin access, unique company name and adapter model catalogs, then imports one minimal native package with `pauseAutomations:true`. Performs the permissions stage and stops for hand-entered secrets. |
 | `bind-secrets` | Resolves secret names using `secrets/catalog`, patches merged `adapterConfig.env`, verifies readback, then provisions pinned plugins through host management interfaces. Reports apps requiring Ryan's manual sign-in. |
 | `snapshot` | Native export of company, agents, projects and skills, with issues excluded. Saves the bundle, verbatim export warnings, project/workspace summary, source configs, native fidelity report, pruned `false` keys and rendered host declarations. Refuses omitted workspaces. |
-| `restore` | Requires an explicit unique new company name. Overlays invariants 7–8 into the exported bundle before the same three provisioning stages. Verifies invariants 1–9, zero configuration changes, and source config parity; returns a `compare` block. Secrets remain unbound and plugins unprovisioned. |
+| `restore` | Requires an explicit unique new company name. Strips native bundled skills and verified duplicate company copies (F15 below). Overlays invariants 7–8 into the exported bundle before the same three provisioning stages. Verifies invariants 1–9, zero configuration changes, and source config parity; returns a `compare` block. Secrets remain unbound and plugins unprovisioned. |
 
 Live examples below are documentation only; none was executed during FB4:
 
@@ -204,3 +204,69 @@ knock-outs prove invariant 9, project rendering and missing-workspace refusal;
 removing project rendering yields no fake project and invariant 9 fails. Offline
 results do not establish a successful live native import or a working credential,
 plugin, agent execution, or deployment.
+
+## F15 — restore native bundled and company skills
+
+FB9's real snapshot contains five files under
+`skills/paperclipai/paperclip/`: `paperclip`, `paperclip-board`,
+`paperclip-converting-plans-to-tasks`, `paperclip-create-agent`, and
+`para-memory-files`. Each has `metadata.sources[0].commit: null`; each manifest
+entry has `sourceType: github`, `sourceRef: null`, and
+`metadata.sourceKind: paperclip_bundled`. The snapshot contains zero
+`secret_ref` occurrences. This was checked read-only against the FB9 snapshot;
+no credential file was opened.
+
+Installed Paperclip 2026.831.1 explains why preview passed but apply returned 422:
+`server/dist/services/company-skills.js:24–41` rejects external GitHub skills
+without a 40-hex commit. At `:4948–4960`, apply refreshes inventory, then runs the
+reserved-key and source assertions even on conflicts. The bundled source kind
+passes the key assertion (`:42–48`) but does not bypass the source assertion.
+`company-portability.js:4207–4228` only checks skill references in preview;
+`:4516–4518` returns that preview without importing skills. A fabricated commit
+would pass the format check (`company-skills.js:21–22`); inventing provenance is
+forbidden.
+
+Restore clones the snapshot bundle, removes every reserved skill file (including
+support files) and reserved manifest entry, then computes the inline import's
+`expectedFileCount` from the remaining files. It removes affected unreferenced
+embedded assets from both the manifest and YAML extension, retaining shared blobs
+and other references. The dry-run result, emitted report and successful restore
+state record `strippedReservedSkills` (canonical keys) and
+`deduplicatedCompanySkills` (removed company directories). The source snapshot
+and retained agent instruction files stay unchanged.
+
+This uses the same P26 assumption as fresh: `ensureSkillInventoryCurrent`
+(`company-skills.js:4949`) calls `ensureBundledSkills` (`:2487`, definition at
+`:2271`). The target instance seeds its own bundled skills. Restore therefore
+accepts only fresh's exact per-agent preview warning:
+
+> Agent <slug> references skill paperclipai/paperclip/paperclip, but that skill is not present in the package.
+
+Any other preview warning still fails closed. Unmapped agent skill references
+remain unchanged (`company-portability.js:4849`) and are written into
+`paperclipSkillSync` (`:3096`). At completion, restore reads the agents again
+and asserts invariant 5's exact singleton, independently of configuration parity,
+and asserts that the submitted bundle contains no reserved skill files/entries.
+
+The native export also lists each Focx instruction skill twice: its bare
+`focx-*` key under `agents/<slug>/skills/<name>/SKILL.md`, and a
+`company/<source-id>/focx-*` key under
+`skills/company/<PREFIX>/<name>/SKILL.md`. The importer scans every SKILL.md
+(`company-skills.js:649–686`), preserves explicit keys (`:275–277`), otherwise
+uses `company/<target-id>/<slug>` (`:309`), and can rename collisions
+(`:5022–5023`). Restore drops the company copies and their manifest entries;
+the retained agent copies supply the target inventory. It first compares complete
+file inventories, skill bodies and metadata, ignoring only native export identity
+fields. Divergent or unmatched company skills are refused rather than silently
+lost. No extra instruction files are created, preserving invariant 4.
+
+The fake now exports the null-commit bundled skills and duplicate company copies,
+seeds target inventory, and rejects the raw export on apply with a 422-style error
+after creating the company row. It records package skill imports for inspection.
+F15 tests cover asset sharing, immutable stripping, exact warnings, generated
+company keys and singleton readback. Three source knock-outs separately remove
+the reserved strip, company de-duplication and final singleton assertion; each
+witness fails with the change removed and passes again with the original source.
+The existing overlay knock-out keeps stripping enabled so it still independently
+proves both safety invariants 7 and 8. A new live round trip remains Claude's
+verification task after review and Ryan's merge.

@@ -1,14 +1,54 @@
+import { isDeepStrictEqual as same } from 'node:util'
 import { requireThat, slugOf,assertInvariants } from './invariants.mjs'
 import { approvalDigest } from './digest.mjs'
-import { bundleExtension, yaml, overlayAgent, INCLUDE, secretInputs, renderAdapter, composeEnv } from './bundle.mjs'
+import { bundleExtension, yaml, overlayAgent, INCLUDE, secretInputs, renderAdapter, composeEnv, parseMarkdown, removeSkillFiles, RESERVED_SKILL_PREFIX } from './bundle.mjs'
 import { fresh } from './fresh.mjs'
 import { readSnapshot, idMap } from './api.mjs'
-import { projectSummary, portableProjects, agentConfigs, renderedClaude, compareRoundTrip } from './roundtrip.mjs'
+import { projectSummary, portableProjects, agentConfigs, renderedClaude, compareRoundTrip, assertRestoredSkills } from './roundtrip.mjs'
 import { instanceRoot } from './host.mjs'
+
+// F15: inventory refresh seeds Paperclip's bundled skills before package import
+// (installed company-skills.js:4949,2487,2271); never manufacture a commit.
+export function stripRestoreSkills(contract,bundle) {
+  const result=structuredClone(bundle)
+  const reservedFiles=Object.keys(result.files).filter(p=>p.startsWith('skills/'+RESERVED_SKILL_PREFIX))
+  result.strippedReservedSkills=[...new Set([
+    ...reservedFiles.map(p=>p.split('/').slice(1,4).join('/')),
+    ...(result.manifest?.skills??[]).filter(s=>s.key?.startsWith(RESERVED_SKILL_PREFIX)).map(s=>s.key),
+  ])].sort()
+  removeSkillFiles(result,reservedFiles,s=>s.key?.startsWith(RESERVED_SKILL_PREFIX) || reservedFiles.includes(s.path))
+  deduplicateCompanySkills(contract,result)
+  return result
+}
+function comparableSkill(text) {
+  const doc=parseMarkdown(text)
+  // Native export adds identity only; preserve all other metadata in comparison.
+  delete doc.meta.key;delete doc.meta.slug
+  if(doc.meta.metadata) {
+    delete doc.meta.metadata.skillKey;delete doc.meta.metadata.paperclipSkillKey
+    if(doc.meta.metadata.paperclip) {
+      delete doc.meta.metadata.paperclip.skillKey;delete doc.meta.metadata.paperclip.slug
+      if(!Object.keys(doc.meta.metadata.paperclip).length)delete doc.meta.metadata.paperclip
+    }
+  }
+  return doc
+}
+function deduplicateCompanySkills(contract,bundle) {
+  const paths=Object.keys(bundle.files).filter(p=>p.startsWith('skills/company/'))
+  const roots=[...new Set(paths.map(p=>p.split('/').slice(0,4).join('/')))]
+  for(const root of roots) {
+    const name=root.split('/').at(-1),copies=contract.agents.filter(a=>a.skills.includes(name)).map(a=>'agents/'+a.slug+'/skills/'+name)
+    const inventory=prefix=>Object.fromEntries(Object.entries(bundle.files).filter(([p])=>p.startsWith(prefix+'/')).map(([p,text])=>[p.slice(prefix.length+1),p===prefix+'/SKILL.md'?comparableSkill(text):text]))
+    requireThat(Object.hasOwn(bundle.files,root+'/SKILL.md') && copies.length>0 && copies.every(copy=>same(inventory(root),inventory(copy))), 'Company skill copy differs from retained agent instruction skill: '+root)
+  }
+  bundle.deduplicatedCompanySkills=roots.sort()
+  removeSkillFiles(bundle,paths,s=>s.key?.startsWith('company/') && roots.some(root=>s.path===root+'/SKILL.md') || paths.includes(s.path))
+  requireThat(!(bundle.manifest?.skills??[]).some(s=>s.key?.startsWith('company/')), 'Unmatched company skill manifest entry; refuse silent loss')
+}
 
 export function overlayRestore(contract,bundle) {
   portableProjects(contract,bundle)
-  const result=structuredClone(bundle),{key,extension}=bundleExtension(result)
+  const result=stripRestoreSkills(contract,bundle),{key,extension}=bundleExtension(result)
   requireThat(JSON.stringify(Object.keys(extension.agents??{}).sort())===JSON.stringify(contract.agents.map(a=>a.slug).sort()), 'Restore bundle must have the exact contract slug set')
   for (const a of contract.agents) {
     const entry=extension.agents[a.slug]
@@ -85,20 +125,25 @@ export async function restore(api,source,record,options={}) {
   portableProjects(source.contract,record.bundle,record.projects)
   const bundle=overlayRestore(source.contract,record.bundle)
   const original=bundleExtension(record.bundle).extension.agents
-  return fresh(api,source,{...options,bundle,finishState:async(live,state)=>{
+  const stripping={strippedReservedSkills:bundle.strippedReservedSkills,deduplicatedCompanySkills:bundle.deduplicatedCompanySkills}
+  options.emit?.(stripping)
+  const result=await fresh(api,source,{...options,bundle,finishState:async(live,state)=>{
     const {synchronize}=await import('./index.mjs')
     const verify=await synchronize(api,source,{companyId:live.company.id,expectedName:state.expectedName})
     requireThat(!verify.changes.length && !verify.invariants.length && verify.permissionsRevoked && verify.catalog.every(m=>m.present), 'Restored configuration must verify invariants 1–9 with changes: []')
+    live=await readSnapshot(api,live.company.id)
+    assertRestoredSkills(source.contract,live,bundle)
     requireThat(live.agents.every(a=>!Object.values(a.adapterConfig?.env??{}).some(v=>v?.type==='secret_ref')) && live.secretCatalog.length===0, 'Restored secrets must remain unbound')
     const compare=compareRoundTrip(source.contract,record,live,options.instanceRoot??instanceRoot(source.contract))
     options.emit?.({compare})
     requireThat(compare.differences.length===0, 'Restored configuration differs from source; see compare block')
-    state.restoration={configurationParity:true,sourceCompanyId:record.source.companyId,secretInputs:state.secretInputs,plugins:'unprovisioned'}
+    state.restoration={...stripping,configurationParity:true,sourceCompanyId:record.source.companyId,secretInputs:state.secretInputs,plugins:'unprovisioned'}
     return {verify,compare,expectedFindings:{secretInputs:state.secretInputs,secretLinks:verify.secretLinks,plugins:'unprovisioned'},configurationParity:compare.differences.length===0}
   },validateImportedState:live=>{
     const previous={agents:live.agents.map(a=>({id:a.id,adapterConfig:original[slugOf(a)]?.adapter?.config??{},runtimeConfig:original[slugOf(a)]?.runtime??{}}))}
     assertInvariants(source.contract,{...live,previous},[7,8])
   }})
+  return {...result,...stripping}
 }
 const xml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 const plistValue = v => {
