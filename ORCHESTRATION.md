@@ -105,7 +105,7 @@ States as section 3. Same protocol, same constraints.
 | F17 | Live `bind-secrets --apply` (env binding + first live plugin provisioning) | Claude | **partial** — env binding PASS; all 294 Claude plugins PASS; native Codex stage blocked by F20 | FB9, F18, F19 |
 | F20 | Native Codex plugins: `openai-bundled` is reserved and cannot be installed by path; `openai-curated-remote` needs network + sign-in | Claude (found) | **done** — PR #96 merged (`431eced`) | F17 |
 | F21 | `bind-secrets` must not report `configured` while pinned plugins are unseeded | Codex | **done** — landed on develop via PR #98 (`93ceec7`) | F20 |
-| F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **open** — one PR needed | F17 |
+| F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **PR #103 open** (`0bbcd2d`); awaiting Ryan merge, then a live QA re-run | F17 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
 
@@ -1850,6 +1850,22 @@ since #87 merged.
   **Cleanup done:** `runtimeConfig` restored **byte-identical** to the recorded `before` and the agent **paused**
   (verified by read-back). The task `571e10d0…` remains in `backlog`, assigned, unstarted; no branch, commit or push
   was made by the agent.
+
+- 2026-09-06 Ryan (AskUserQuestion): **"Fix F23 now"**. (Three garbled messages arrived around it —
+  `3.+.320`, `3.20.`, `3+6=/i,`1234++654` — read as stray keystrokes and deliberately not acted on.)
+- 2026-09-06 18:16:04Z Claude: **F23 reviewed — ACCEPT; committed `0bbcd2d`, PR #103 opened**, drift gate green. Codex ran at
+  **medium** effort per Ryan's new setting (`gpt-6-astra`; there is no `aura` in the 128-model catalog — the gpt-6
+  family is astra alone). First dispatch was refused by my own tree-clean guard because the F23 ledger entry was still
+  uncommitted; committed as `9e6c163`, then dispatched.
+  Fix read: `resolveCompany` mirrors `resolveAgent` — bounded `GET /api/companies/:id`, run-bound bearer,
+  `redirect:'error'`, 10 s timeout — and its `id` must agree with **both** the resolved agent and
+  `PAPERCLIP_COMPANY_ID`. The prefix must match `^[A-Z][A-Z0-9]*$` and the branch must start `<prefix>-<digits>-`, so a
+  `FOC` company cannot accept a `FOCAAA` branch or the reverse. **No fallback**: an unavailable prefix refuses. `cwd ===
+  root`, the worktrees containment, the git common-dir check, the symlink refusals and the identity assertions are all
+  untouched. Checks: launcher suites 27 pass / 8 SDK skips (18 knock-outs), focx-bot 282/282, `--validate-contract` 0,
+  `diff --check` clean, `contract.json` 0 lines in the diff. Live read-only: the two real companies return `FOC` and
+  `FOCAAA`, both matching the accepted shape. **Not yet proven: a live QA run in a provisioned company** — that is the
+  next step after merge and is what actually closes the objective.
 
 ### FB3 log
 
