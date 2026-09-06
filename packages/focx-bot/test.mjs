@@ -9,7 +9,7 @@ import { validateSchema,validateContract,loadSource,PACKAGE } from './src/contra
 import { approvalDigest,hash,sha256 } from './src/digest.mjs'
 import { assess,assertInvariants,tighter,tighterDaily } from './src/invariants.mjs'
 import { fresh,bindSecrets,preflightFresh,freshPlan,permissionsDone,secretLinkFindings,resolveEnv } from './src/fresh.mjs'
-import { createFakeApi,memoryIO,memoryPluginInventory } from './src/fake-api.mjs'
+import { createFakeApi,memoryIO,memoryPluginInventory,memoryNativePlugins } from './src/fake-api.mjs'
 import { Client,readSnapshot } from './src/api.mjs'
 import { synchronize } from './src/index.mjs'
 import { snapshot,restore,overlayRestore,prunedFalseKeys,renderHost } from './src/portability.mjs'
@@ -213,7 +213,8 @@ test('a failed state save is never retried and the original failure keeps its st
 test('native installation uses only pinned source identities and installed protocol fields',()=>{
   const ops=nativePluginPlan(source.contract,'/fake/company-home'),schema=JSON.parse(readFileSync(resolve(PACKAGE,'native-schema/v2/PluginInstallParams.json'),'utf8'))
   assert.equal(ops.length,73)
-  for(const op of ops){assert(op.entry.pinned);assert(Object.keys(op.params).every(k=>k in schema.properties));if(op.entry.sourceId)assert.equal(op.params.pluginName,op.entry.sourceId)}
+  const listSchema=JSON.parse(readFileSync(resolve(PACKAGE,'native-schema/ClientRequest.json'),'utf8')).definitions.PluginListParams
+  for(const op of ops){assert(op.entry.pinned);assert(Object.keys(op.params).every(k=>k in (op.kind==='native-plugin-verify'?listSchema:schema).properties));if(op.entry.sourceId)assert.equal(op.params.pluginName,op.entry.sourceId)}
   const web=ops.filter(op=>op.entry.key==='webmcp@openai-curated-remote');assert.equal(web.length,1);assert.equal(web[0].params.pluginName,'Plugin_671d912bf3d88191a88bc76fe741e84b')
 })
 test('native install rejects wrong source identity/version before writing and reports manual auth separately',async()=>{
@@ -1125,3 +1126,99 @@ test('F19 available-only matching rows never skip installation',async()=>{
 const f19Setup=`const {memoryPluginInventory}=await import(${JSON.stringify(url('src/fake-api.mjs'))});`
 knockout('F19 optional manifest tolerance','src/plugins.mjs',s=>s.replace("try{definition=readJson(join(p.installPath,'.claude-plugin/plugin.json'))}catch{}","definition=readJson(join(p.installPath,'.claude-plugin/plugin.json'))"),f19Setup+manifestlessWitness.toString()+';await manifestlessWitness(subject.readPluginInventory,subject.executePluginOperations);')
 knockout('F19 already-satisfied skip','src/plugins.mjs',s=>s.replace("      continue\n    }\n    emit({write:op})","      /* skip knocked out */\n    }\n    emit({write:op})"),f19Setup+skipWitness.toString()+';await skipWitness(subject.executePluginOperations);')
+
+// F20: reserved runtime seeds are verified, never path-installed.
+function nativeFixture(plan=nativePluginPlan) {
+  const marketplaces={reserved:{kind:'local',manifest:'~/.codex/.tmp/seed/.agents/plugins/marketplace.json'},shared:{kind:'local',manifest:'~/.cache/codex-runtimes/fixture/.agents/plugins/marketplace.json'}}
+  const plugins=Object.fromEntries(['present@reserved','missing@reserved','wrong@reserved','first@shared','last@shared'].map(key=>[key,{version:'1',pinned:true}]))
+  return plan({skills:{codexPlugins:{marketplaces,plugins}}},'/fake/company-home')
+}
+async function nativeSeedWitness(install=installNativePlugins,plan=nativePluginPlan) {
+  const ops=nativeFixture(plan),runtime=memoryNativePlugins(ops,{seeded:[{key:'present@reserved',version:'1'},{key:'wrong@reserved',version:'2'}]}),emitted=[]
+  assert(ops.slice(0,3).every(op=>op.kind==='native-plugin-verify' && op.method==='plugin/list' && !('marketplacePath' in op.params)))
+  const result=await install(ops,runtime,e=>emitted.push(e))
+  assert.deepEqual(result.entries.map(e=>[e.key,e.status]),[['present@reserved','verified'],['missing@reserved','seeded-missing'],['wrong@reserved','failed'],['first@shared','installed'],['last@shared','installed']])
+  assert.equal(result.findings.length,2);assert(result.findings.every(f=>f.reportingOnly))
+  assert.equal(result.entries[2].stage,'seeded-pin')
+  assert.equal(runtime.calls.filter(c=>c.method==='plugin/list').length,1)
+  assert.deepEqual(runtime.calls.find(c=>c.method==='plugin/list').params,{marketplaceKinds:['local'],forceRefetch:false})
+  assert.deepEqual(runtime.calls.filter(c=>c.method==='plugin/install').map(c=>c.params.pluginName),['first','last'])
+  assert.equal(result.oauthPerformed,false);assert.equal(result.needsAuth.length,0)
+  assert.equal(emitted.filter(e=>e.write).length,2)
+}
+test('F20 reserved verified / seeded-missing / failed findings continue to installed entries',()=>nativeSeedWitness())
+test('F20 classification follows normalized home containment, not a marketplace name',()=>{
+  const ops=nativePluginPlan(source.contract,'/fake/company-home')
+  assert.equal(ops.filter(o=>o.kind==='native-plugin-verify').length,11)
+  assert.equal(ops.filter(o=>o.params.remoteMarketplaceName).length,57)
+  for(const [manifest,reserved]of [['~/.codex/seed/marketplace.json',true],[resolve(process.env.HOME,'.codex/seed/marketplace.json'),true],['/fake/company-home/seed/marketplace.json',true],['~/.codex-other/marketplace.json',false],['~/.codex/../.cache/codex-runtimes/marketplace.json',false]]) {
+    const contract={skills:{codexPlugins:{marketplaces:{renamed:{kind:'local',manifest}},plugins:{'seed@renamed':{version:'1',pinned:true}}}}}
+    const [op]=nativePluginPlan(contract,'/fake/company-home');assert.equal(op.kind,reserved?'native-plugin-verify':'native-plugin-install')
+    contract.skills.codexPlugins.plugins['seed@renamed'].sourceId='remote-id'
+    if(reserved)assert.equal(nativePluginPlan(contract,'/fake/company-home')[0].kind,'native-plugin-verify')
+  }
+})
+async function nativeFailureWitness(install=installNativePlugins) {
+  const ops=nativeFixture(),runtime=memoryNativePlugins(ops,{failures:{'first@shared':'plugin/install'}}),emitted=[]
+  await assert.rejects(install(ops,runtime,e=>emitted.push(e)),error=>{
+    assert.deepEqual(error.result.entries.map(e=>e.status),['seeded-missing','seeded-missing','seeded-missing','failed','skipped'])
+    assert.equal(error.result.entries[3].reportingOnly,false);assert.equal(error.result.entries[3].stage,'install')
+    assert.deepEqual(emitted.at(-1),{nativePlugins:error.result})
+    assert(!JSON.stringify(error.result).includes('Fake native diagnostic'));return true
+  })
+  assert.equal(runtime.calls.filter(c=>c.method==='plugin/install').length,1)
+  assert(!runtime.calls.some(c=>c.params.pluginName==='last'))
+}
+test('F20 non-reserved local install failure still stops without retry and reports untouched entries',()=>nativeFailureWitness())
+test('F20 one failed seed list reports every reserved entry without retry or aborting installs',async()=>{
+  const ops=nativeFixture(),runtime=memoryNativePlugins(ops,{failures:{'plugin/list':true}})
+  const result=await installNativePlugins(ops,runtime,()=>{})
+  assert.deepEqual(result.entries.map(e=>e.status),['failed','failed','failed','installed','installed'])
+  assert(result.findings.every(e=>e.stage==='seeded-read'&&e.reportingOnly))
+  assert.equal(runtime.calls.filter(c=>c.method==='plugin/list').length,1)
+})
+test('F20 unavailable, disabled, duplicate or malformed seeds are findings, never verified',async()=>{
+  const ops=nativeFixture().slice(0,1)
+  for(const summary of [{enabled:false},{availability:'DISABLED_BY_ADMIN'},{localVersion:null},{installed:undefined}]) {
+    const runtime=memoryNativePlugins(ops,{seeded:[{key:ops[0].entry.key,version:'1',summary}]}),r=await installNativePlugins(ops,runtime,()=>{})
+    assert.equal(r.entries[0].status,'failed');assert.equal(runtime.calls.length,1)
+  }
+  for(const listed of [{},{marketplaces:[],marketplaceLoadErrors:[{message:'withheld'}]},{marketplaces:[{name:'reserved'}]},{marketplaces:[{name:'reserved',plugins:[{name:'present'},{name:'present'}]}]}]){
+    const r=await installNativePlugins(ops,{request:async()=>listed},()=>{});assert.equal(r.entries[0].status,'failed')
+  }
+})
+test('F20 satisfied non-reserved pins are recorded as verified without reinstall',async()=>{
+  const ops=nativeFixture().slice(3),runtime=memoryNativePlugins(ops,{active:ops.map(o=>o.entry.key)})
+  const r=await installNativePlugins(ops,runtime,()=>{})
+  assert.deepEqual(r.entries.map(e=>e.status),['verified','verified']);assert(runtime.calls.every(c=>c.method==='plugin/read'))
+})
+async function nativePathWitness(install=installNativePlugins) {
+  const op={...nativeFixture()[0],kind:'native-plugin-install',method:'plugin/install',params:{marketplacePath:resolve(process.env.HOME,'.codex/seed/marketplace.json'),pluginName:'present'}},runtime=memoryNativePlugins([op])
+  await assert.rejects(install([op],runtime,()=>{}));assert.equal(runtime.calls.length,0)
+}
+test('F20 executor refuses a reserved path disguised as an install',()=>nativePathWitness())
+test('F20 wrong installed readback and unpinned verification remain failures',async()=>{
+  const ops=nativeFixture().slice(3),runtime=memoryNativePlugins(ops),request=runtime.request.bind(runtime)
+  runtime.request=async(method,params)=>{const r=await request(method,params);if(method==='plugin/read'&&r.plugin.summary.installed)r.plugin.summary.localVersion='wrong';return r}
+  await assert.rejects(installNativePlugins(ops,runtime,()=>{}),e=>e.result.entries[0].stage==='readback'&&e.result.entries[1].status==='skipped')
+  const op={...nativeFixture()[0],entry:{...nativeFixture()[0].entry,pinned:false}},unused=memoryNativePlugins([op])
+  await assert.rejects(installNativePlugins([op],unused,()=>{}));assert.equal(unused.calls.length,0)
+})
+const f20Setup='const {resolve}=await import("node:path");const {memoryNativePlugins}=await import('+JSON.stringify(url('src/fake-api.mjs'))+');const {nativePluginPlan}=await import('+JSON.stringify(url('src/native-plugins.mjs'))+');'+nativeFixture.toString()+';'
+knockout('F20 reserved plan classification','src/native-plugins.mjs',s=>s.replace('if(reservedManifest(market.manifest,companyHome))','if(false)'),f20Setup+nativeSeedWitness.toString()+';await nativeSeedWitness(subject.installNativePlugins,subject.nativePluginPlan);')
+knockout('F20 reserved verification cannot fall through to install','src/native-plugins.mjs',s=>s.replace("entries.push({key:op.entry.key,status:'verified',reserved:true})\n        continue","entries.push({key:op.entry.key,status:'verified',reserved:true})"),f20Setup+nativeSeedWitness.toString()+';await nativeSeedWitness(subject.installNativePlugins);')
+knockout('F20 missing seed report','src/native-plugins.mjs',s=>s.replace("entries.push(row);findings.push(row)","/* missing seed report removed */"),f20Setup+nativeSeedWitness.toString()+';await nativeSeedWitness(subject.installNativePlugins);')
+knockout('F20 seed pin strength','src/native-plugins.mjs',s=>s.replace('assertNativePin(op.entry,{plugin:{summary:matches[0]}},{installed:true})','/* seeded pin check removed */'),f20Setup+nativeSeedWitness.toString()+';await nativeSeedWitness(subject.installNativePlugins);')
+knockout('F20 reporting failures continue','src/native-plugins.mjs',s=>s.replace('if(reportingOnly){findings.push(row);continue}','if(reportingOnly){findings.push(row);throw new Error("reporting abort")}'),f20Setup+nativeSeedWitness.toString()+';await nativeSeedWitness(subject.installNativePlugins);')
+knockout('F20 genuine install failures stop','src/native-plugins.mjs',s=>s.replace('throw Object.assign(new Error(row.reason),{result})','continue'),f20Setup+nativeFailureWitness.toString()+';await nativeFailureWitness(subject.installNativePlugins);')
+knockout('F20 reserved executor path guard','src/native-plugins.mjs',s=>s.replace(" && !reservedManifest(op.params?.marketplacePath,op.home)",''),f20Setup+nativePathWitness.toString()+';await nativePathWitness(subject.installNativePlugins);')
+
+test('F20 final app-state failure preserves every plugin outcome and still throws',async()=>{
+  const ops=nativeFixture(),runtime=memoryNativePlugins(ops),request=runtime.request.bind(runtime),emitted=[]
+  runtime.request=async(method,params)=>{if(method==='app/installed')throw new Error('Fake native diagnostic: withheld');const r=await request(method,params);if(method==='plugin/read')r.plugin.apps=[{id:'app',name:'Manual'}];return r}
+  await assert.rejects(installNativePlugins(ops,runtime,e=>emitted.push(e)),error=>{
+    assert.deepEqual(error.result.entries.map(e=>e.status),['seeded-missing','seeded-missing','seeded-missing','installed','installed'])
+    assert.equal(error.result.findings.at(-1).stage,'app-state');assert.equal(error.result.findings.at(-1).reportingOnly,false)
+    assert.deepEqual(emitted.at(-1),{nativePlugins:error.result});assert(!JSON.stringify(error.result).includes('Fake native diagnostic'));return true
+  })
+})

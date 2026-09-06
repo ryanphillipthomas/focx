@@ -194,3 +194,25 @@ export function createFakeApi(options={}) {
   })
   return Object.assign(api,{listen:()=>new Promise(resolve=>server.listen(0,'127.0.0.1',()=>{api.baseUrl=`http://127.0.0.1:${server.address().port}`;resolve(api.baseUrl)})),close:()=>new Promise(resolve=>server.close(resolve))})
 }
+
+// Native plugin protocol fake: no host files, subprocesses or network.
+export function memoryNativePlugins(operations,{seeded=[],active=[],failures={}}={}) {
+  const calls=[],installed=new Set(active)
+  const summary=op=>({name:op.entry.key.split('@')[0],remotePluginId:op.entry.sourceId,version:op.entry.version,localVersion:installed.has(op.entry.key)?op.entry.version:null,source:{type:'remote'},installed:installed.has(op.entry.key),enabled:installed.has(op.entry.key),availability:'AVAILABLE'})
+  return {calls,installed,async request(method,params) {
+    calls.push({method,params:structuredClone(params)})
+    if(method==='plugin/list') {
+      if(failures['plugin/list'])throw new Error('Fake native diagnostic: withheld')
+      const marketplaces=[]
+      for(const row of seeded){const [name,marketplace]=row.key.split('@');let m=marketplaces.find(m=>m.name===marketplace);if(!m){m={name:marketplace,plugins:[]};marketplaces.push(m)}m.plugins.push({name,source:{type:'local',path:'/fake/runtime-seed'},availability:'AVAILABLE',installed:true,enabled:true,localVersion:row.version,...row.summary})}
+      return {marketplaces,marketplaceLoadErrors:[]}
+    }
+    if(method==='app/installed')return {apps:[]}
+    const op=operations.find(op=>op.kind==='native-plugin-install' && JSON.stringify(op.params)===JSON.stringify(params))
+    if(!op)throw new Error('Unexpected native operation')
+    if(failures[op.entry.key]===method)throw new Error('Fake native diagnostic: withheld')
+    if(method==='plugin/read')return {plugin:{summary:summary(op),apps:[]}}
+    if(method==='plugin/install'){installed.add(op.entry.key);return {appsNeedingAuth:[],authPolicy:'ON_INSTALL'}}
+    throw new Error('Unexpected native method')
+  }}
+}

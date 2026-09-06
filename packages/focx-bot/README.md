@@ -96,7 +96,7 @@ refusals make no state change; a failed state save is never retried.
 
 Snapshot renders two launchd plists from `service`/`network` with secret paths redacted. These are review artifacts, not installable recovery credentials. Restoring the host's database and service authentication remains Ryan's prerequisite. The tunnel's dashboard management is recorded as an inference from FB1, not a newly verified fact.
 
-Claude `workspaces/<generated-id>/.claude/settings.json` and `adapterLocal.claudeCodePlugins` derive from per-agent grants. The full pinned host catalog and the agent's enabled subset are distinct. Codex plugins use the per-company `codex-home`; its pinned set is company-wide. Entries with `pinned:false` are retained and reported as available, never installed. Full remote source identity distinguishes duplicate catalog names, including the two `webmcp` entries. Pin mismatches stop installation; there is no upgrade-to-latest fallback.
+Claude `workspaces/<generated-id>/.claude/settings.json` and `adapterLocal.claudeCodePlugins` derive from per-agent grants. The full pinned host catalog and the agent's enabled subset are distinct. Codex plugins use the per-company `codex-home`; its pinned set is company-wide. Entries with `pinned:false` are retained and reported as available, never installed. Full remote source identity distinguishes duplicate catalog names, including the two `webmcp` entries. Pin mismatches stop non-reserved installation; reserved seed mismatches are reporting-only findings. There is no upgrade-to-latest fallback.
 
 Claude installed rows come from `installed_plugins.json`, independently of
 marketplace or per-plugin manifest readability. Missing or malformed
@@ -106,9 +106,9 @@ hash the install path, and version pins still require an exact release version:
 an install ID alone does not satisfy a release-version pin. A bad record cannot
 hide later good records; unreadable inventory remains unavailable evidence.
 
-Ryan must complete `codex login` for the intended company home before an authorized native plugin operation or Codex run. `bind-secrets` checks the auth link during plan/preflight and refuses with the exact `CODEX_HOME` before any env PATCH, lock or state write if it is absent. The same check runs again inside plugin provisioning to catch auth removal after preflight; that failure leaves the verified env stage resumable. The provisioner checks auth-file presence/symlink metadata only. It never opens auth bytes. Plugin sign-in and app access remain manual. Claude plugin installation uses its management CLI; native Codex uses only initialize, plugin/read, plugin/install and app/installed. Execution, approval and OAuth requests are rejected. Native reads check source identity/version before installation and installed metadata afterward. Local cached manifests that lack a source ID are reported as unverified identity, not proof of remote provenance.
+Ryan must complete `codex login` for the intended company home before an authorized native plugin operation or Codex run. `bind-secrets` checks the auth link during plan/preflight and refuses with the exact `CODEX_HOME` before any env PATCH, lock or state write if it is absent. The same check runs again inside plugin provisioning to catch auth removal after preflight; that failure leaves the verified env stage resumable. The provisioner checks auth-file presence/symlink metadata only. It never opens auth bytes. Plugin sign-in and app access remain manual. Claude plugin installation uses its management CLI; native Codex uses only initialize, plugin/list, plugin/read, plugin/install and app/installed. Execution, approval and OAuth requests are rejected. Native reads check source identity/version before installation and installed metadata afterward. Local cached manifests that lack a source ID are reported as unverified identity, not proof of remote provenance.
 
-`native-schema/` keeps the 7 JSON schemas the native plugin calls rely on — `ClientRequest.json` (method names `initialize`, `plugin/read`, `plugin/install`, `app/installed`) and the v2 `PluginRead*`, `PluginInstall*` and `AppsInstalled*` params/responses — out of the 302 that `codex app-server generate-json-schema` produced from the installed native 0.152.1 binary during the FB4 build; the full set is preserved in that build's first commit (`c852f77`) and was trimmed in review. They are protocol evidence: only `PluginInstallParams.json` is read, by one test; nothing at runtime. Schema generation did not start a model run or management session. The isolated schema-home path was not created; a PATH-alias setup warning did not prevent schema generation. Native management interfaces still require live validation; OpenAI documents them in the [app-server reference](https://learn.chatgpt.com/docs/app-server).
+`native-schema/` keeps the 7 JSON schemas the native plugin calls rely on — `ClientRequest.json` (method names `initialize`, `plugin/read`, `plugin/install`, `app/installed`) and the v2 `PluginRead*`, `PluginInstall*` and `AppsInstalled*` params/responses — out of the 302 that `codex app-server generate-json-schema` produced from the installed native 0.152.1 binary during the FB4 build; the full set is preserved in that build's first commit (`c852f77`) and was trimmed in review. They are protocol evidence: `PluginInstallParams.json` and `ClientRequest.json` are read by protocol-shape tests; nothing at runtime. Schema generation did not start a model run or management session. The isolated schema-home path was not created; a PATH-alias setup warning did not prevent schema generation. Native management interfaces still require live validation; OpenAI documents them in the [app-server reference](https://learn.chatgpt.com/docs/app-server).
 
 `verify` reports three separate read-only model facts:
 
@@ -305,3 +305,122 @@ witness fails with the change removed and passes again with the original source.
 The existing overlay knock-out keeps stripping enabled so it still independently
 proves both safety invariants 7 and 8. A new live round trip remains Claude's
 verification task after review and Ryan's merge.
+
+## F20 — reserved native marketplaces and remote prerequisites
+
+The contract is unchanged. A marketplace manifest under the normalized operator
+Codex home (`~/.codex`) or the supplied company home is runtime-owned. Classification
+uses path containment, not the marketplace name; a catalog-cache path alone does
+not make a remote marketplace reserved. The current contract has 11 reserved
+pins, five local shared-cache pins, and 57 remote pins. The shared
+`~/.cache/codex-runtimes/` manifest remains installable. Re-basing a reserved
+manifest into the company home is not an installation strategy.
+
+Reserved operations are `native-plugin-verify`. They share one
+`plugin/list` request with `{marketplaceKinds:["local"],forceRefetch:false}`,
+match marketplace and plugin name uniquely, then check the existing pin guard
+against installed, enabled, available metadata and exact `localVersion`.
+They never call `plugin/read` or `plugin/install`. A missing/uninstalled seed
+is `seeded-missing`; mismatches, inactive seeds, ambiguous/incomplete inventory,
+or failed reads are `failed` findings with `reportingOnly:true`. Remaining entries
+continue; a rejected list is reused without retry. Verification covers seed pin
+and active metadata only: list summaries do not establish app authentication.
+The local-only request shape is supported by retained `ClientRequest.json` and
+used by installed desktop onboarding. Response shape was checked at
+`c852f77:packages/focx-bot/native-schema/v2/PluginListResponse.json`, using
+read-only Git, without starting a manager or regenerating schemas.
+
+The result includes `entries` and `findings` alongside the existing
+`needsAuth` and `oauthPerformed:false`. Each planned pin has one entry:
+`verified` (including satisfied installs), `seeded-missing`, `installed`,
+`failed`, or `skipped` (not attempted after a fatal failure). Non-reserved
+read/install/readback failures still throw immediately without retry. Their safe
+partial result is emitted as `nativePlugins` and attached to `error.result`;
+raw runtime diagnostics are withheld. A final app-state check failure also throws
+with the accumulated result and a fatal app-state finding. The existing bind-secrets boundary still
+withholds exceptions, so the emitted partial result is the failure evidence.
+Installed pin/source/activation assertions are unchanged. Remote selection,
+request parameters, installation, and manual app-auth handling are unchanged.
+Reporting-only seed findings do not stop configuration: inspect `plugins.findings`
+alongside `plugins.needsAuth`; bind-secrets' existing `complete` flag is not proof
+that runtime seeds or their app connections are ready.
+
+Offline tests use `memoryNativePlugins`. They cover reserved presence, absence,
+wrong pins, inactive/ambiguous/unreadable seeds, list failure without retry,
+shared-cache installation and satisfied-pin skips, fatal install/readback failures,
+unpinned refusal, and a disguised reserved path install. Seven source knock-outs
+remove classification, verification-only control flow, missing-seed reporting,
+seed pin validation, continuation, fatal stop, and the executor path guard.
+
+### Remote investigation — read-only observations, 2026-09-06
+
+No remote behavior was implemented or exercised. Evidence inspected:
+
+- Contract remote pins and retained `PluginReadParams`/`PluginInstallParams`/
+  `PluginInstallResponse` schemas.
+- Installed manager package `@openai/codex` metadata reports `0.153.4`. Literal
+  strings in its native binary confirm exactly one of `marketplacePath` or
+  `remoteMarketplaceName` for read/install, remote install endpoints, and catalog
+  disk-cache support. This is static binary evidence, not executed Rust source.
+- Installed desktop `/Applications/ChatGPT.app/Contents/Resources/app.asar`,
+  `webview/assets/app-initial-caa927532ffb.js`: `sz/eRr` select full remote IDs;
+  `eCi` sends `plugin/install`; the install flow maps
+  `app_ids_needing_auth` to `appsNeedingAuth` and opens app setup separately.
+  `app-primary-37ff25fd4643.js` sends
+  `{installAttemptId,pluginName,remoteMarketplaceName}` and labels a nonempty
+  `appsNeedingAuth` reply as installed/authentication-required.
+- `~/.codex/cache/remote_plugin_catalog/3e9b27235f139326.json`, schema 1,
+  fetched `2026-09-06T13:47:12.520589Z`: 3,721 rows (contract snapshot: 3,712).
+  All 57 pins match exactly one row by source ID and exact release version.
+
+Prerequisites and limits:
+
+- Ryan supplies a usable authenticated target company Codex home and authorizes
+  installation. No credential bytes or current sign-in state were inspected.
+- Read and install use `{remoteMarketplaceName:"openai-curated-remote",
+  pluginName:<contract sourceId>}`, never a cache-file path. Optional
+  `installAttemptId` correlates one attempt. No version-selection parameter exists
+  in the retained schema; exact pre/post pin checks must remain in force.
+- Remote installation requires access to the plugin service and any returned
+  download hosts. Native binary strings identify `/ps/plugins/<id>/install`,
+  `includeAppsNeedingAuth`, `includeDownloadUrls` and bundle-download handling.
+  Claude's supplied live read reached the ChatGPT backend; this build made no
+  request. Exact current network allowlists/download hosts remain unknown.
+- The catalog file can be read offline: this investigation did so. It is metadata,
+  not an installable marketplace or proof that `plugin/read` works offline.
+  All 57 cached `bundle_download_url` fields are null. Native cache read/refresh
+  strings establish cache support, but offline RPC fallback/expiry behavior is
+  unverified without executable backend source or a separately authorized probe.
+- Eligibility must be resolved: `bigquery`, `admin-console`, `databricks`,
+  `snowflake` and `company-knowledge` report `NOT_AVAILABLE`,
+  `DISABLED_BY_ADMIN`, reason `plan_not_eligible` in this operator cache.
+  Target-company/account eligibility is unknown.
+- `appsNeedingAuth` is a post-install list of app summaries needing auth/setup,
+  not evidence OAuth ran. Desktop code treats `ON_USE` as deferrable in its normal
+  flow. Ryan must handle sign-in and app access; an empty list alone does not prove
+  app callability, which the existing provisioner checks separately.
+
+Of the 57 pinned plugins, 26 declare nonempty `release.app_ids`:
+
+- `ON_INSTALL` (17): gmail, github, google-drive, outlook-email,
+  google-calendar, outlook-calendar, teams, sharepoint, openai-developers,
+  google-contacts, ads-manager, bigquery, gitlab, admin-console, figma,
+  codex-security, finances.
+- `ON_USE` (9): plugin-management, openai-templates, deep-research-work,
+  task-tool, data-analytics, public-equity-investing, sales,
+  investment-banking, healthcare-public-data.
+
+These are app declarations and plugin authentication policies, not a claim that
+all 26 need a new sign-in. The cache contains no per-user app authentication
+state or auth-type field; even `ON_INSTALL` is not proof of an OAuth requirement.
+Which apps would appear in this company's actual `appsNeedingAuth` reply remains
+unknown. The other 31 have no explicit app IDs in this cache; this is not proof of
+no external authentication (for example MCP or browser sessions).
+
+Five pinned plugins also declare workspace app templates: github (GitHub
+Enterprise), gitlab (GitLab Self-Managed), data-analytics (Databricks Genie,
+Snowflake, Metabase), databricks (Databricks Genie), and snowflake (Snowflake).
+All these template rows show `NO_ACTIVE_WORKSPACE` and no materialized app IDs.
+Workspace selection/materialization and app authorization are unresolved manual
+prerequisites where those templates are needed. The 57 `installed:false` observations
+and the original reserved-source failure remain Claude's supplied live evidence.
