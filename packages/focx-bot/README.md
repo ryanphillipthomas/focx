@@ -28,7 +28,7 @@ The QA launcher suites include eight optional native permission tests. Set `FOCX
 | `verify` | Reads configuration, effective access, secret references, models, host declarations, plugin metadata, runtime skill directories and injection-failure logs; exits nonzero on unmet checks. |
 | `apply` | Reconciles an existing exact two-agent company without changing identity, adapter type, activation or skill registry membership. Keeps stricter live limits and permission policies. |
 | `fresh` | Preflights instance-admin access, unique company name and adapter model catalogs, then imports one minimal native package with `pauseAutomations:true`. Performs the permissions stage and stops for hand-entered secrets. |
-| `bind-secrets` | Resolves secret names using `secrets/catalog`, patches merged `adapterConfig.env`, verifies readback, then provisions pinned plugins through host management interfaces. Reports apps requiring Ryan's manual sign-in. |
+| `bind-secrets` | Resolves secret names using `secrets/catalog`, patches merged `adapterConfig.env`, verifies readback, then provisions pinned plugins through host management interfaces. Reports outstanding pinned plugin findings and apps requiring Ryan's manual sign-in. |
 | `snapshot` | Native export of company, agents, projects and skills, with issues excluded. Saves the bundle, verbatim export warnings, project/workspace summary, source configs, native fidelity report, pruned `false` keys and rendered host declarations. Refuses omitted workspaces. |
 | `restore` | Requires an explicit unique new company name. Strips native bundled skills and verified duplicate company copies (F15 below). Overlays invariants 7–8 into the exported bundle before the same three provisioning stages. Verifies invariants 1–9, zero configuration changes, and source config parity; returns a `compare` block. Secrets remain unbound and plugins unprovisioned. |
 
@@ -73,7 +73,8 @@ A host-plugin exception after the env stage and its post-binding assertions leav
 stdout/stderr or credentials. Installation still stops at the first failure and
 never retries automatically. After inspecting the runtime manager by hand, obtain
 a fresh `bind-secrets` plan and explicitly apply its approved digest to resume.
-The same phase also represents plugins awaiting manual app authentication.
+The same phase also represents plugins awaiting manual app authentication or
+outstanding pinned plugin findings, including seeds absent from the runtime.
 
 A resumed invocation reads live state again, checks the exact contract/target and
 generated IDs, verifies invariants and revoked permissions, and resolves secret
@@ -85,8 +86,8 @@ Claude execution also refreshes inventory before every operation and emits
 `skipped` with the operation and reason when its installed pin already matches.
 Mismatched pins still require installation and strict readback. Native Codex
 reads each pin and skips matching active installs. Successful plugin
-provisioning clears `pluginFailure`; pending manual app authentication can still
-leave `awaiting-plugin-auth`. Env-stage or earlier failures inside the locked
+provisioning clears `pluginFailure`; pending manual app authentication or plugin
+findings still leave `awaiting-plugin-auth`. Env-stage or earlier failures inside the locked
 apply remain `phase:"failed", failedStep:3` and cannot be resumed. Preflight
 refusals make no state change; a failed state save is never retried.
 
@@ -341,9 +342,19 @@ with the accumulated result and a fatal app-state finding. The existing bind-sec
 withholds exceptions, so the emitted partial result is the failure evidence.
 Installed pin/source/activation assertions are unchanged. Remote selection,
 request parameters, installation, and manual app-auth handling are unchanged.
-Reporting-only seed findings do not stop configuration: inspect `plugins.findings`
-alongside `plugins.needsAuth`; bind-secrets' existing `complete` flag is not proof
-that runtime seeds or their app connections are ready.
+Reporting-only seed findings do not abort the plugin stage, but they prevent
+`bind-secrets` from reporting completion (F21). It returns `complete:false` and
+persists `phase:"awaiting-plugin-auth"` while either `plugins.findings` or
+`plugins.needsAuth` is nonempty. Findings retain F20's credential-free rows in
+`state.pluginFindings`, alongside app-auth-only `state.pluginAuth`. A subsequent
+approved run verifies the seeds again and removes `pluginFindings` when none
+remain; only zero findings and zero outstanding app auth yield `configured`.
+The emitted result includes top-level `pluginSummary` lines, also printed as
+plain CLI text: N pinned plugins are not seeded, with their full keys. Other
+verification findings and manual app-auth requirements are named separately.
+A resolved incomplete invocation still exits zero; exceptions still exit nonzero.
+This does not change `fresh`/`restore` completion or `verify` gates, and seed
+list summaries still do not prove app connections or agent execution.
 
 Offline tests use `memoryNativePlugins`. They cover reserved presence, absence,
 wrong pins, inactive/ambiguous/unreadable seeds, list failure without retry,
