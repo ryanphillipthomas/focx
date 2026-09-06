@@ -1,6 +1,6 @@
 # @focx/bot
 
-Dependency-free Node 22+ provisioner for FB2 rev 2.5, with FB3 rev 2.2's skills fragment preserved verbatim. The two agents remain paused. Claude reviews this build; Ryan controls subsequent live authorization and merges.
+Dependency-free Node 22+ provisioner for FB2 rev 2.8, with FB3 rev 2.2's skills fragment preserved verbatim. The two agents remain paused. Claude reviews this build; Ryan controls subsequent live authorization and merges.
 
 ## Offline checks
 
@@ -25,8 +25,8 @@ The schema validator implements every keyword used by `contract.schema.json`. Te
 | `apply` | Reconciles an existing exact two-agent company without changing identity, adapter type, activation or skill registry membership. Keeps stricter live limits and permission policies. |
 | `fresh` | Preflights instance-admin access, unique company name and adapter model catalogs, then imports one minimal native package with `pauseAutomations:true`. Performs the permissions stage and stops for hand-entered secrets. |
 | `bind-secrets` | Resolves secret names using `secrets/catalog`, patches merged `adapterConfig.env`, verifies readback, then provisions pinned plugins through host management interfaces. Reports apps requiring Ryan's manual sign-in. |
-| `snapshot` | Native export of company, agents, projects and skills, with issues excluded. Saves the bundle, native fidelity report, separately detected pruned `false` keys and rendered host declarations in one sidecar record. |
-| `restore` | Requires an explicit unique new company name. Overlays invariants 7–8 into the exported bundle before the same three provisioning stages. Compares imported limits against the original export as well as the contract. |
+| `snapshot` | Native export of company, agents, projects and skills, with issues excluded. Saves the bundle, verbatim export warnings, project/workspace summary, source configs, native fidelity report, pruned `false` keys and rendered host declarations. Refuses omitted workspaces. |
+| `restore` | Requires an explicit unique new company name. Overlays invariants 7–8 into the exported bundle before the same three provisioning stages. Verifies invariants 1–9, zero configuration changes, and source config parity; returns a `compare` block. Secrets remain unbound and plugins unprovisioned. |
 
 Live examples below are documentation only; none was executed during FB4:
 
@@ -65,7 +65,7 @@ Host settings and instance-local state writes are additional, explicitly listed 
 
 ## Host and skill prerequisites
 
-`contract.json` retains the sourced company name `Focx.ai`. That existing name must not be silently suffixed: use a Ryan-approved unique `--new-company-name` for a live fresh import; restore always requires it. Project identity remains sourced metadata. Company/agent IDs, prefix and timezone are outputs. Database name and user-secret identity were not established by the permitted noncredential observations and are explicitly `null`; no credential-bearing connection URI was read. Host verification checks the Homebrew `postgresql@17` listener/executable and the pinned Claude runtime version. It does not install services, PostgreSQL, a tunnel or runtime software.
+`contract.json` retains the sourced company name `Focx.ai`. That existing name must not be silently suffixed: use a Ryan-approved unique `--new-company-name` for a live fresh import; restore always requires it. The contract renders Connect and its primary focx git_repo workspace into the native bundle. Company, agent, project and workspace IDs, prefix and timezone are outputs. Database name and user-secret identity were not established by the permitted noncredential observations and are explicitly `null`; no credential-bearing connection URI was read. Host verification checks the Homebrew `postgresql@17` listener/executable and the pinned Claude runtime version. It does not install services, PostgreSQL, a tunnel or runtime software.
 
 Snapshot renders two launchd plists from `service`/`network` with secret paths redacted. These are review artifacts, not installable recovery credentials. Restoring the host's database and service authentication remains Ryan's prerequisite. The tunnel's dashboard management is recorded as an inference from FB1, not a newly verified fact.
 
@@ -85,11 +85,11 @@ These facts are independent. FB6's supplied catalog result is not an execution p
 
 ## Evidence and remaining live work
 
-Offline tests prove the eight invariant predicates against adversarial states; native P24/P26 bundle shape; paused import and permission-window handling in the fake; name-to-ID readback; secret-name resolution; digest/state/lock gates; finite-cap preservation; restore recovery from export-pruned falses; pinned-only selection and execution guards; grant rendering; model-evidence separation; and plugin protocol shape/readback guards.
+Offline tests prove the nine invariant predicates against adversarial states; native P24/P26 bundle shape; paused import and permission-window handling in the fake; name-to-ID readback; secret-name resolution; digest/state/lock gates; finite-cap preservation; restore recovery from export-pruned falses; pinned-only selection and execution guards; grant rendering; model-evidence separation; and plugin protocol shape/readback guards.
 
 The source knock-outs load modified module bytes into isolated child `node:test` processes. Each witness passes with the real guard, fails with the guard removed, then passes with the original module. The restore witness additionally requires explicit failures for **both invariants 7 and 8**. No production bypass switch or modified source copy is left behind. The test output records every knock-out and its restored pass count.
 
-FB7–FB9 still need explicitly authorized live evidence: fresh import and no-change verification against installed Paperclip, model execution in each lane, actual skill injection and tool grants, installed plugin identity/version plus manual app authentication, real HTTP/filesystem/lock behavior, and an export/restore round trip into a distinct company. The HTTP fake transport is exercised in-process because this build sandbox disallows listening sockets. The native parser covers the installed portability format; a real export remains necessary evidence of full fidelity. Services, credentials and deployment are outside this offline build.
+FB7/FB8 logs in ORCHESTRATION.md record the provisioned Codex lane passing on Astra, including a scoped commit/push and delivered reports. FB9 cross-checked the supplied content-addressed Git evidence and local logs; captured API JSON is internally consistent evidence supplied by Claude, not a current live read. The project import added here, native export/restore into a distinct company, QA execution, actual skill injection and tool grants, installed plugin identity/version plus manual app authentication, and real HTTP/filesystem/lock behavior still require separately authorized live evidence. The HTTP fake transport is exercised in-process because this build sandbox disallows listening sockets. The native parser covers the installed portability format; a real export remains necessary evidence of full fidelity. Services, credentials and deployment are outside this offline build.
 
 No live Paperclip request, agent run, plugin installation, service change, credential-value access, commit, push or PR was performed in FB4. The only edit outside this package adds contract validation and package tests to the existing drift-gate workflow.
 
@@ -130,3 +130,77 @@ HTTP errors (including a denied trust preset) and incomplete restricted views
 fail closed. Permission values still come from `.focx/agents.json` by roleKey.
 These fixtures prove metadata comparison and read-only behavior offline, not
 runtime permission enforcement.
+
+## FB9 live round trip (operator sequence; not executed by this build)
+
+Use the FB9 contract revision for both commands. An older snapshot lacks source
+configuration/project sidecars and must be taken again. Keep the source company's
+agents paused. Ryan authorizes each export/import write separately; review the
+printed operations and repeat that exact command with `--apply --approved-digest
+DIGEST`. Use an unused snapshot path, a unique target company name, and a separate
+restore state file. No flag changed in FB9.
+
+```sh
+node packages/focx-bot/src/index.mjs snapshot \
+  --base-url http://127.0.0.1:3100 \
+  --company-id SOURCE_COMPANY_ID \
+  --snapshot-file ~/.paperclip/instances/default/focx-bot/fb9-snapshot.json
+
+# After authorizing and applying the snapshot above, preview the restore:
+node packages/focx-bot/src/index.mjs restore \
+  --base-url http://127.0.0.1:3100 \
+  --catalog-company-id SOURCE_COMPANY_ID \
+  --new-company-name RYAN_APPROVED_UNIQUE_RESTORE_NAME \
+  --state-file ~/.paperclip/instances/default/focx-bot/fb9-restore-state.json \
+  --snapshot-file ~/.paperclip/instances/default/focx-bot/fb9-snapshot.json
+
+# After authorizing and applying the restore, use its generated company ID:
+node packages/focx-bot/src/index.mjs verify \
+  --base-url http://127.0.0.1:3100 \
+  --company-id RESTORED_COMPANY_ID \
+  --state-file ~/.paperclip/instances/default/focx-bot/fb9-restore-state.json
+```
+
+The native bundle has `projects/connect/PROJECT.md` and
+`.paperclip.yaml` → `projects.connect.workspaces.focx`, a **keyed object**.
+Invariant 9 requires exactly the contract project by url-key and one primary
+`git_repo` workspace with the contract repoUrl. Reports contain generated project
+and workspace IDs. Invariants 1–8 are unchanged. Restore preserves project files
+and extension fields; a missing workspace or native workspace-omission warning
+refuses before import, even if another primary workspace remains.
+
+Snapshot records `projects` (slug, workspace name/repoUrl/primary),
+`exportWarnings` verbatim, and `source` configuration with secret bindings and
+managed instruction locations excluded. It records the rendered source Claude
+config directory, never credential or plugin payloads. The native fidelity report
+is retained verbatim; its counts describe excluded history and do not cover P25's
+pruned false flags or prove project fidelity. Those losses have separate checks.
+
+Restore emits `compare.fidelity`, `compare.prunedFalseKeys`,
+`compare.exportWarnings`, per-agent `adapterConfig`/`runtimeConfig` differences,
+project/workspace differences, and both Claude directories under `compare.claudeConfigDirs` (source rendered
+versus restored rendered). Agents match by slug; generated IDs and managed
+instruction locations are excluded. Secret bindings and derived Claude directory
+env are compared separately as expected provisioning findings; plain env values
+normalize the native string/`plain` representations. Every other config value,
+including `false`, participates in the diff. A nonempty `compare.differences`
+fails the restore and records `restore-comparison` as the failed step. The overlay
+reconstructs contract plain env such as PATH, optional secret-input declarations,
+and safety flags; it never invents a missing project workspace.
+
+A successful restore saves its configuration-parity status in the target state
+file. While that matching state is `awaiting-secret-entry`, `verify` reports
+`scope: restored-configuration`, requires invariants 1–9 and `changes: []`, and
+checks the restored settings against their rendered content. Unbound secret links
+and unprovisioned plugins are explicit `expectedFindings`, so this configuration
+check exits zero without claiming operational readiness. Normal verification
+retains its existing credential, grant and plugin exit checks; a different company,
+contract or failed restore cannot inherit the parity scope. Do not run
+`bind-secrets`, install plugins, log in or wake an agent as part of this round-trip
+check. Those are separate authorizations and are not needed to prove config parity.
+
+FB9's fake round trips cover sources with bound and unbound secrets. Source
+knock-outs prove invariant 9, project rendering and missing-workspace refusal;
+removing project rendering yields no fake project and invariant 9 fails. Offline
+results do not establish a successful live native import or a working credential,
+plugin, agent execution, or deployment.

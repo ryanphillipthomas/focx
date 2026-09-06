@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isDeepStrictEqual as same } from 'node:util'
 import { loadSource, PACKAGE } from './contract.mjs'
-import { requireThat, assertInvariants, assess, accessReport, slugOf } from './invariants.mjs'
+import { requireThat, assertInvariants, assess, accessReport, slugOf, projectReport } from './invariants.mjs'
 import { approvalDigest, hash } from './digest.mjs'
 import { Client, readSnapshot, models, idMap } from './api.mjs'
 import { renderAdapter, overlayAgent,composeEnv } from './bundle.mjs'
@@ -42,13 +42,20 @@ export async function synchronize(api,source,options={}) {
   const contract=options.expectedName?{...source.contract,company:{name:options.expectedName}}:source.contract
   const effectiveSource={...source,contract}
   const live=await readSnapshot(api,companyId)
+  const state=await io?.readState()
+  const configurationOnly=!apply && state?.restoration?.configurationParity===true && state.phase==='awaiting-secret-entry' && state.companyId===companyId && state.baseUrl===api.baseUrl && state.contractSha===source.sha && same(state.ids,idMap(live))
   requireThat(live.company.name===contract.company.name,'Unexpected company name')
   const catalog=await models(api,companyId,contract)
   const evidence=options.host?modelEvidence(contract,companyId,catalog,options.host):undefined
   if(evidence)options.reportModelEvidence?.(evidence)
   const operations=plan(effectiveSource,live)
   const digest=approvalDigest(operations,{baseUrl:api.baseUrl,companyId},source.sha)
-  const report={digest,changes:operations,invariants:assess(contract,live),secretLinks:secretLinkFindings(contract,live),access:accessReport(live),catalog,permissionsRevoked:permissionsDone(live)}
+  const report={digest,changes:operations,invariants:assess(contract,live),projects:projectReport(live),secretLinks:secretLinkFindings(contract,live),access:accessReport(live),catalog,permissionsRevoked:permissionsDone(live)}
+  if(configurationOnly) {
+    requireThat(live.agents.every(a=>!Object.values(a.adapterConfig?.env??{}).some(v=>v?.type==='secret_ref')) && live.secretCatalog.length===0, 'Restored configuration verification requires secrets to remain unbound')
+    report.scope='restored-configuration'
+    report.expectedFindings={secretInputs:state.restoration.secretInputs,secretLinks:report.secretLinks,plugins:'unprovisioned'}
+  }
   if(options.host){
     const homes=renderSkillHomes(contract,options.instanceRoot??instanceRoot(contract),companyId,idMap(live));report.skills=verifySkills(contract,homes,options.host,live);report.modelEvidence=evidence
     report.grants=grantReport(contract,live,homes,options.host,options)
@@ -59,6 +66,7 @@ export async function synchronize(api,source,options={}) {
   }
   emit(report)
   if(!apply)return report
+  assertInvariants(contract,live,[9])
   requireThat(options.approvedDigest===digest,'Apply requires the current rendered-operation digest')
   requireThat(catalog.every(c=>c.present),'Contract model missing from Paperclip adapter catalog')
   requireThat(!report.secretLinks.length,'Resolve secret links through bind-secrets before apply')
@@ -131,6 +139,11 @@ export async function main(argv=process.argv.slice(2),runtime={}) {
   }
   emit(result)
   if(flags.verb==='verify'){
+    if(result.scope==='restored-configuration') {
+      requireThat(!result.changes.length && !result.invariants.length && result.permissionsRevoked && result.catalog.every(m=>m.present), 'Restored configuration verification failed')
+      if(result.skills)requireThat(result.skills.materialization.filter(r=>r.kind==='claude-settings').every(r=>r.matches), 'Restored Claude settings differ from rendered settings')
+      return result
+    }
     if(result.grants)assertGrantReport(result.grants)
     requireThat(!result.changes.length && !result.invariants.length && !result.secretLinks.length && result.permissionsRevoked && result.catalog.every(m=>m.present),'Verification found unmet checks')
     if(options.hostPrerequisites)requireThat(options.hostPrerequisites.postgresql17.listener && options.hostPrerequisites.claudeRuntime.matches,'Host prerequisites are unmet')

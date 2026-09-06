@@ -1,4 +1,4 @@
-import { requireThat, tighter, tighterDaily, bypassFlag, REGISTRY_SKILLS } from './invariants.mjs'
+import { requireThat, tighter, tighterDaily, bypassFlag, REGISTRY_SKILLS, slugOf } from './invariants.mjs'
 
 // Paperclip's portable YAML dialect accepts a JSON scalar after each key,
 // including objects and arrays. A whole JSON document is NOT a YAML document
@@ -81,7 +81,10 @@ export function renderFreshBundle(contract, sourceFiles) {
     const env=Object.fromEntries(Object.entries(composeEnv(contract,a)).filter(([,v])=>v && typeof v==='object').map(([key,v])=>[key,{kind:'secret',requirement:'optional',default:'',description:`Paperclip secret name: ${v.secret}`}]))
     agents[a.slug]={role:a.role,icon:a.icon,permissions:a.permissions,adapter:{type:a.adapterType,config:renderAdapter(contract,a)},runtime:overlayAgent(a).runtimeConfig,...(Object.keys(env).length?{inputs:{env}}:{})}
   }
-  files['.paperclip.yaml']=yaml({schemaVersion:7,agents})
+  const project=contract.project,slug=slugOf(project)
+  files[`projects/${slug}/PROJECT.md`]=markdown({name:project.name,description:null,owner:null})
+  const projects={[slug]:{status:'backlog',workspaces:Object.fromEntries(project.workspaces.map(w=>[w.name,{...w,repoRef:w.repoRef??null,defaultRef:w.defaultRef??null,visibility:null}]))}}
+  files['.paperclip.yaml']=yaml({schemaVersion:7,agents,projects})
   return {files}
 }
 export function bundleExtension(bundle) {

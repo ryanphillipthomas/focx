@@ -63,8 +63,15 @@ export function invariant8(contract, live) {
     return errors
   })
 }
-export const invariants = [invariant1,invariant2,invariant3,invariant4,invariant5,invariant6,invariant7,invariant8]
-export function assess(contract, live, numbers = [1,2,3,4,5,6,7,8]) {
+export function invariant9(contract, live) {
+  const projects=live.projects??[],slug=slugOf(contract.project)
+  if (projects.length!==1 || slugOf(projects[0])!==slug) return ['Exact project url-key set differs; expected '+slug]
+  const project=projects[0],primary=(project.workspaces??[]).filter(w=>w.isPrimary===true),expected=contract.project.workspaces.find(w=>w.isPrimary)
+  return project.id && project.companyId===live.company.id && primary.length===1 && primary[0].id && primary[0].sourceType==='git_repo' && primary[0].repoUrl===expected.repoUrl ? [] : ['Project must belong to the company and have exactly one primary git_repo workspace with the contract repoUrl and generated ids']
+}
+export const projectReport = live => (live.projects??[]).map(p=>({slug:slugOf(p),id:p.id,workspaces:(p.workspaces??[]).map(w=>({id:w.id,name:w.name,repoUrl:w.repoUrl,isPrimary:w.isPrimary}))}))
+export const invariants = [invariant1,invariant2,invariant3,invariant4,invariant5,invariant6,invariant7,invariant8,invariant9]
+export function assess(contract, live, numbers = [1,2,3,4,5,6,7,8,9]) {
   return numbers.flatMap(n => invariants[n-1](contract,live).map(message => ({ invariant:n, message })))
 }
 export function assertInvariants(contract, live, numbers) {

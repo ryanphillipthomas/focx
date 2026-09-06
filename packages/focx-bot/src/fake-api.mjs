@@ -37,7 +37,7 @@ export function memoryIO() {
 }
 export function createFakeApi(options={}) {
   let next=0
-  const state={companies:[{id:'catalog-company',name:'Retained company'}],agents:[],triggers:[],secrets:[],calls:[],isInstanceAdmin:true,models:{codex_local:[{id:'gpt-6-astra'},{id:'gpt-5.6-sol'}],claude_local:[{id:'claude-opus-5'}]},fail:null,ignoreWrites:false,previewErrors:[],extraWarnings:[],...clone(options.seed??{})}
+  const state={companies:[{id:'catalog-company',name:'Retained company'}],agents:[],projects:[],triggers:[],secrets:[],calls:[],isInstanceAdmin:true,models:{codex_local:[{id:'gpt-6-astra'},{id:'gpt-5.6-sol'}],claude_local:[{id:'claude-opus-5'}]},fail:null,ignoreWrites:false,previewErrors:[],extraWarnings:[],...clone(options.seed??{})}
   const api={baseUrl:'http://fake.invalid',state,async request(method,path,body){
     state.calls.push({method,path,body:clone(body)})
     if (state.fail?.({method,path,body,call:state.calls.length})) throw new Error('Injected API failure')
@@ -61,16 +61,28 @@ export function createFakeApi(options={}) {
       const name=body.target.newCompanyName??(state.companies.some(c=>c.name===requested)?`${requested} (2)`:requested)
       const company={id:options.companyId??`company-${++next}`,name,issuePrefix:`FB${next}`}
       state.companies.push(company)
-      const result={company:{...company,action:'created'},agents:[],warnings,envInputs:[]}
+      const result={company:{...company,action:'created'},agents:[],projects:[],warnings,envInputs:[]}
       for(const entry of entries) {
         const slug=entry.meta.slug??entry.path.split('/')[1],ext=extension.agents[slug]
         const config=clone(ext.adapter.config)
+        config.env??={}
+        for(const [key,input] of Object.entries(ext.inputs?.env??{}))if(input.kind==='plain' && input.default)config.env[key]={type:'plain',value:input.default}
         if(ext.adapter.type==='codex_local')config.extraArgs=[...new Set([...(config.extraArgs??[]),'--skip-git-repo-check'])]
         config.instructionsBundleMode='managed';config.instructionsRootPath=`/fake/managed/${next}`;config.instructionsEntryFile='AGENTS.md';config.paperclipSkillSync={desiredSkills:entry.meta.skills}
         const id=options.agentIds?.[slug]??`agent-${++next}`,prefix=`agents/${slug}/`
         const agent={id,companyId:company.id,name:entry.meta.name,urlKey:slugOf({name:entry.meta.name}),title:entry.meta.title,status:body.pauseAutomations?'paused':'idle',role:ext.role,icon:ext.icon,reportsTo:null,adapterType:ext.adapter.type,adapterConfig:config,runtimeConfig:{...ext.runtime,heartbeat:{...ext.runtime?.heartbeat,enabled:false}},permissions:{canCreateAgents:false,canCreateSkills:true,...ext.permissions},desiredSkills:entry.meta.skills,entryFile:'AGENTS.md',legacyPromptTemplateActive:false,legacyBootstrapPromptTemplateActive:false,files:Object.fromEntries(Object.entries(files).filter(([p])=>p.startsWith(prefix)).map(([p,text])=>[p.slice(prefix.length),p===entry.path?entry.body+'\n':text])),access:{canAssignTasks:true,taskAssignSource:'explicit_grant',grants:[{permissionKey:'tasks:assign'}]}}
         state.agents.push(agent);result.agents.push({id,slug,name:agent.name,action:'created'})
         if(options.partialImport && result.agents.length===1)throw new Error('Injected partial import failure')
+      }
+      if(body.include.projects)for(const [path,text] of Object.entries(files).filter(([p])=>/^projects\/[^/]+\/PROJECT.md$/.test(p))) {
+        const doc=parseMarkdown(text),slug=doc.meta.slug??slugOf(doc.meta),ext=extension.projects?.[slug]??{},workspaceExtensions=ext.workspaces
+        const project={id:`project-${++next}`,companyId:company.id,name:doc.meta.name,urlKey:slug,status:ext.status??'backlog',description:doc.meta.description??null,workspaces:[]}
+        // Native import ignores arrays: workspace extensions must be a keyed object.
+        if(workspaceExtensions && !Array.isArray(workspaceExtensions))for(const [key,w] of Object.entries(workspaceExtensions)) {
+          if(!w || typeof w!=='object' || Array.isArray(w))continue
+          project.workspaces.push({...clone(w),name:w.name??key,id:`workspace-${++next}`,projectId:project.id,companyId:company.id,isPrimary:w.isPrimary===true})
+        }
+        state.projects.push(project);result.projects.push({slug,id:project.id,name:project.name,action:'created'})
       }
       return send(result)
     }
@@ -79,6 +91,7 @@ export function createFakeApi(options={}) {
       if(tail.startsWith('/adapters/'))return send(state.models[tail.split('/')[2]]??[])
       const company=state.companies.find(c=>c.id===id);requireThat(company,'Unknown fake company')
       if(tail==='')return send(company)
+      if(tail==='/projects')return send(state.projects.filter(p=>p.companyId===id))
       if(tail==='/agents')return send(state.agents.filter(a=>a.companyId===id).map(({id,name,urlKey})=>({id,name,urlKey})))
       if(tail==='/routines')return state.triggers.filter(t=>t.companyId===id).map(t=>({id:t.routineId}))
       if(tail==='/secrets/catalog')return send(state.secrets.filter(s=>s.companyId===id).map(({id,name})=>({id,name,key:name,status:'active'})))
@@ -87,17 +100,31 @@ export function createFakeApi(options={}) {
     if(companyPath && method==='POST' && companyPath[2]==='/export') {
       requireThat(body.include?.issues===false && ['company','agents','projects','skills'].every(k=>body.include[k]===true),'Wrong export include flags')
       const company=state.companies.find(c=>c.id===companyPath[1]);requireThat(company,'Unknown export company')
-      const files={'COMPANY.md':markdown({name:company.name})},agents={},manifestAgents=[]
+      const files={'COMPANY.md':markdown({name:company.name})},agents={},manifestAgents=[],projects={},manifestProjects=[],warnings=[]
       for(const a of state.agents.filter(a=>a.companyId===company.id)) {
         const slug=slugOf(a),config=prune(a.adapterConfig),inputs={env:{}}
-        for(const [key,v] of Object.entries(config.env??{})) if(v?.type==='secret_ref') {inputs.env[key]={kind:'secret',requirement:'optional',default:''};delete config.env[key]}
+        for(const [key,v] of Object.entries(config.env??{})) {
+          if(v?.type==='secret_ref')inputs.env[key]={kind:'secret',requirement:'optional',default:''}
+          else if(key!=='PATH' && !['CLAUDE_CONFIG_DIR','CLAUDE_CODE_PLUGIN_CACHE_DIR'].includes(key))inputs.env[key]={kind:'plain',requirement:'optional',default:v?.type==='plain'?v.value:v}
+        }
+        for(const key of ['env','instructionsFilePath','instructionsRootPath','instructionsBundleMode','instructionsEntryFile','paperclipSkillSync'])delete config[key]
         for(const [path,text] of Object.entries(a.files))files[`agents/${slug}/${path}`]=path==='AGENTS.md'?markdown({name:a.name,title:a.title,skills:a.desiredSkills},text):text
         agents[slug]={role:a.role,icon:a.icon,adapter:{type:a.adapterType,config},runtime:prune(a.runtimeConfig),permissions:prune(a.permissions),inputs}
         manifestAgents.push({slug,adapterType:a.adapterType,adapterConfig:config,runtimeConfig:agents[slug].runtime,permissions:agents[slug].permissions})
       }
-      files['.paperclip.yaml']=yaml({schemaVersion:7,agents})
-      return {files,manifest:{agents:manifestAgents,company:{name:company.name}},paperclipExtensionPath:'.paperclip.yaml',warnings:[]}
+      for(const p of state.projects.filter(p=>p.companyId===company.id)) {
+        const slug=slugOf(p),workspaces={}
+        files[`projects/${slug}/PROJECT.md`]=markdown({name:p.name,description:p.description??null,owner:null},p.description??'')
+        for(const w of p.workspaces) {
+          if(!w.repoUrl){warnings.push(`Project ${slug} workspace ${w.name} was omitted from export because it does not have a portable repoUrl.`);continue}
+          const {id,companyId,projectId,...portable}=w;workspaces[w.name]=portable
+        }
+        projects[slug]={status:p.status,workspaces};manifestProjects.push({slug,name:p.name,workspaces:Object.entries(workspaces).map(([key,w])=>({key,...w}))})
+      }
+      files['.paperclip.yaml']=yaml({schemaVersion:7,agents,projects})
+      return {files,manifest:{agents:manifestAgents,projects:manifestProjects,company:{name:company.name}},paperclipExtensionPath:'.paperclip.yaml',warnings}
     }
+    if(method==='GET' && path.startsWith('/api/projects/')){const p=state.projects.find(p=>p.id===path.split('/').at(-1));requireThat(p,'Unknown fake project');return send(p)}
     if(method==='GET' && path.startsWith('/api/routines/'))return {triggers:send(state.triggers.filter(t=>t.routineId===path.split('/').at(-1)))}
     if(agentPath){
       const [,id,tail]=agentPath,a=state.agents.find(a=>a.id===id);requireThat(a,'Unknown fake agent')

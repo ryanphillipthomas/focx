@@ -26,5 +26,6 @@ export function corruptInvariant(n,live) {
   if(n===6)live.triggers.push({kind:'schedule',enabled:true})
   if(n===7)b.runtimeConfig.heartbeat.wakeOnDemand=true
   if(n===8)b.adapterConfig.dangerouslyBypassApprovalsAndSandbox=true
+  if(n===9)live.projects[0].workspaces=[]
   return live
 }

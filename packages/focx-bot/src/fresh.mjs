@@ -1,5 +1,5 @@
 import { isDeepStrictEqual as same } from 'node:util'
-import { requireThat, assertInvariants, accessReport, slugOf } from './invariants.mjs'
+import { requireThat, assertInvariants, accessReport, slugOf, projectReport } from './invariants.mjs'
 import { hash, approvalDigest } from './digest.mjs'
 import { renderFreshBundle, importOperation, secretInputs, composeEnv } from './bundle.mjs'
 import { list, models, readSnapshot, idMap } from './api.mjs'
@@ -56,7 +56,7 @@ function stateWriter(io,emit,state) {
   }
 }
 const describeFailure = (step,error,state) => {
-  const unmet=step===1?'import completeness, identity or imported configuration checks':step===2?'permissions revocation / invariant 8':step===3?'secret-link check / invariant 8':'preflight or host declaration checks'
+  const unmet=step===1?'import completeness, identity or imported configuration checks':step===2?'permissions revocation / invariant 8':step===3?'secret-link check / invariant 8':step==='restore-comparison'?'restore configuration parity / invariants 1–9':'preflight or host declaration checks'
   const failure=new Error(`STOP step ${step}; unmet: ${unmet}; job id: ${state.jobId??'none returned'}; company id: ${state.companyId??'unknown'}; created ids: ${JSON.stringify(state.ids??{})}; ${error.message}; never retry automatically`)
   failure.step=step;failure.state=structuredClone(state);failure.unmet=unmet
   return failure
@@ -104,7 +104,7 @@ export async function fresh(api, source, options={}) {
     await save()
     requireThat(state.companyId, 'Import has no completed company result; observe the job separately')
     let live=await readSnapshot(api,state.companyId)
-    state.ids=idMap(live);state.company=live.company
+    state.ids=idMap(live);state.company=live.company;state.projects=projectReport(live)
     options.validateImportedState?.(live)
     requireThat(live.company.name===state.expectedName, 'Imported company name mismatch')
     const effectiveContract={...source.contract,company:{name:state.expectedName}}
@@ -128,9 +128,11 @@ export async function fresh(api, source, options={}) {
     }
     state.phase=plan.secretInputs.length?'awaiting-secret-entry':'configured';state.step=3
     state.secretInputs=plan.secretInputs
+    if(options.finishState)step='restore-comparison'
+    const completion=await options.finishState?.(live,state)
     await save()
     emit({access:accessReport(live),status:state.phase,secretInputs:plan.secretInputs,prerequisite:'Ryan enters secret values by hand, then uses bind-secrets. Ryan must run codex login before the first Codex run.'})
-    return {digest,state,access:accessReport(live),complete:!plan.secretInputs.length}
+    return {digest,state,access:accessReport(live),complete:!plan.secretInputs.length,...completion}
   } catch (error) {
     // A failed import may have created rows before losing its HTTP response.
     // Read only: identify new rows by the unique requested name; never adopt,
