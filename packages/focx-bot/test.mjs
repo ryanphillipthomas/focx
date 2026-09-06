@@ -77,7 +77,7 @@ test('three-stage fake provisioning: born paused, explicit grant revoked, hand-e
   assert.equal(Object.keys(f.io.files).length,1)
   const r=await synchronize(f.api,source,{companyId:f.companyId});assert.deepEqual(r.changes,[])
 })
-for(let n=1;n<=8;n++)test(`invariant ${n} rejects its independent adversarial state`,async()=>{
+for(let n=1;n<=9;n++)test(`invariant ${n} rejects its independent adversarial state`,async()=>{
   const {live}=await fixture();corruptInvariant(n,live);assert(assess(source.contract,live).some(f=>f.invariant===n))
 })
 test('finite daily caps and stricter live policies survive apply and restore overlay',async()=>{
@@ -255,7 +255,7 @@ function knockout(label,file,transform,body) {
     console.log(`KNOCK-OUT ${label}: guard broken -> guard witness FAIL (1); restored -> PASS (1)`)
   })
 }
-for(let n=1;n<=8;n++)knockout(`invariant ${n}`,'src/invariants.mjs',s=>s.replace(`export function invariant${n}(contract, live) {`,`export function invariant${n}(contract, live) { return [];`),`const f=await fixture();corruptInvariant(${n},f.live);assert(subject.assess(source.contract,f.live).some(f=>f.invariant===${n}));`)
+for(let n=1;n<=9;n++)knockout(`invariant ${n}`,'src/invariants.mjs',s=>s.replace(`export function invariant${n}(contract, live) {`,`export function invariant${n}(contract, live) { return [];`),`const f=await fixture();corruptInvariant(${n},f.live);assert(subject.assess(source.contract,f.live).some(f=>f.invariant===${n}));`)
 for(const [label,needle,setup]of [
   ['fresh new-company gate',"requireThat(options.target?.mode==='new_company' && !options.target.companyId, 'fresh/restore requires a new company target')", "options.target={mode:'existing_company',companyId:'catalog-company'}"],
   ['fresh paused-import gate',"requireThat(plan.operations[0].body.pauseAutomations===true, 'Import must create agents paused')",'p.operations[0].body.pauseAutomations=false'],
@@ -269,7 +269,7 @@ for(const [label,needle,setup]of [
 knockout('approval digest binds rendered operations','src/digest.mjs',s=>s.replace('return hash({ operations, target:','return hash({ target:'),`const t={baseUrl:'http://fake.invalid',companyId:'c'};assert.notEqual(subject.approvalDigest([{body:{model:'a'}}],t,source.sha),subject.approvalDigest([{body:{model:'b'}}],t,source.sha));`)
 knockout('pinned:false installation selection','src/skills.mjs',s=>s.replace('.filter(entry=>entry.pinned===true)',''),`assert(subject.installPlan(source.contract.skills).every(o=>o.entry.pinned===true));`)
 knockout('pinned:false executor guard','src/skills.mjs',s=>s.replace("requireThat(op.kind==='install-pinned-plugin' && op.entry.pinned===true, 'Unpinned catalog entries are available only; never installed')",'/* knocked out */'),`const entry=subject.catalogEntries(source.contract.skills).find(e=>!e.pinned);await assert.rejects(subject.installPinned([{kind:'install-pinned-plugin',entry}],{installPinned:async()=>{}},()=>{}));`)
-knockout('restore overlay (pruned export must fail invariants 7/8 when guard removed)','src/portability.mjs',s=>s.replace('const bundle=overlayRestore(source.contract,record.bundle)','const bundle=record.bundle'),`const f=await fixture();const bundle=await f.api.request('POST', '/api/companies/'+f.companyId+'/export',{include:{company:true,agents:true,projects:true,skills:true,issues:false}});const record={bundle,fidelity:{},prunedFalseKeys:subject.prunedFalseKeys(f.live,bundle)},io=memoryIO(),opts={io,catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'Restore witness'}};const p=await subject.restore(f.api,source,record,opts);await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});`)
+knockout('restore overlay (pruned export must fail invariants 7/8 when guard removed)','src/portability.mjs',s=>s.replace('const bundle=overlayRestore(source.contract,record.bundle)','const bundle=record.bundle'),`const f=await fixture();const bundle=await f.api.request('POST', '/api/companies/'+f.companyId+'/export',{include:{company:true,agents:true,projects:true,skills:true,issues:false}});const snapshotOptions={companyId:f.companyId,outputPath:'/fake/snapshot.json',io:f.io};const preview=await subject.snapshot(f.api,source,snapshotOptions);const record=await subject.snapshot(f.api,source,{...snapshotOptions,apply:true,approvedDigest:preview.digest}),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'Restore witness'}};const p=await subject.restore(f.api,source,record,opts);await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});`)
 knockout('fresh approval digest gate','src/fresh.mjs',s=>s.replace("requireThat(options.approvedDigest===digest, 'Preview changed or not approved; obtain a fresh digest')",'/* knocked out */'),`const api=createFakeApi(),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company'};await assert.rejects(subject.fresh(api,source,{...opts,apply:true,approvedDigest:'unapproved'}));assert.equal(writes(api).length,0);`)
 knockout('fresh lock acquisition','src/fresh.mjs',s=>s.replace('const release=await io.acquire()','const release=async()=>{}'),`const api=createFakeApi(),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company'},p=await subject.fresh(api,source,opts);io.locked=true;await assert.rejects(subject.fresh(api,source,{...opts,apply:true,approvedDigest:p.digest}));assert.equal(writes(api).length,0);`)
 knockout('fresh prior-state refusal','src/fresh.mjs',s=>s.replace("if (await io.readState()) { await release(); throw new Error('Prior state exists; partial imports must be reviewed, never retried or adopted') }",'/* knocked out */'),`const api=createFakeApi(),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company'},p=await subject.fresh(api,source,opts);await io.save({phase:'failed',ids:{old:'old'}});await assert.rejects(subject.fresh(api,source,{...opts,apply:true,approvedDigest:p.digest}));assert.equal(writes(api).length,0);`)
@@ -510,4 +510,114 @@ test('F10 default source reader keeps permission declarations by roleKey; genera
   assert(r.agents.every(a=>!a.diffs.length));assert(!hasDiff(r,'declared-source-divergence'))
   assert.equal(r.ok,true);assert(r.lines.includes('declared: '+f10Sentence))
   assert.equal(f.host.writes.length,0);assert.equal(f.io.writes.length,0);assert(f.api.state.calls.every(c=>c.method==='GET'))
+})
+
+// FB9: native projects and configuration-only restore evidence.
+async function snapshotFixture(f,extra={}) {
+  const options={companyId:f.companyId,outputPath:'/fake/snapshot.json',io:f.io,instanceRoot:'/fake-instance',...extra}
+  const preview=await snapshot(f.api,source,options)
+  return snapshot(f.api,source,{...options,apply:true,approvedDigest:preview.digest})
+}
+async function roundTripFixture({bound=true}={}) {
+  const f=await fixture({bound,instanceRoot:'/fake-instance'}),record=await snapshotFixture(f),io=memoryIO()
+  const options={io,catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'FB9 restored'},instanceRoot:'/fake-instance'}
+  const p=await restore(f.api,source,record,options)
+  const result=await restore(f.api,source,record,{...options,apply:true,approvedDigest:p.digest})
+  return {...f,record,restoreIO:io,result}
+}
+test('FB9 project contract rejects ids, invalid primary sets and credential-bearing/non-HTTPS URLs',()=>{
+  for(const mutate of [c=>c.project.id='retained-id',c=>c.project.name='!!!',c=>c.project.workspaces=[],c=>c.project.workspaces.push({...c.project.workspaces[0]}),c=>c.project.workspaces[0].isPrimary=false,c=>c.project.workspaces[0].repoUrl='http://github.com/example/repo',c=>c.project.workspaces[0].repoUrl='https://user:password@example.com/repo',c=>c.project.workspaces[0].repoUrl='https://example.com/repo?token=example',c=>c.project.workspaces[0].repoRef='develop']){
+    const c=structuredClone(source.contract);mutate(c);assert.throws(()=>validateContract(c,source.schema))
+  }
+})
+test('FB9 project rendering is native keyed YAML with generated project/workspace IDs',async()=>{
+  const b=renderFreshBundle(source.contract,source.files),ext=bundleExtension(b).extension
+  assert.deepEqual(parseMarkdown(b.files['projects/connect/PROJECT.md']),{meta:{name:'Connect',description:null,owner:null},body:''})
+  assert.deepEqual(ext.projects,{connect:{status:'backlog',workspaces:{focx:{...source.contract.project.workspaces[0],visibility:null}}}})
+  const operation=freshPlan(source,{mode:'new_company'}).operations[0]
+  assert.equal(operation.body.source.expectedFileCount,Object.keys(b.files).length)
+  assert.equal(operation.body.include.projects,true)
+  const f=await fixture();assertInvariants(source.contract,f.live,[9]);const p=f.live.projects[0]
+  assert(p.id);assert(p.workspaces[0].id);assert.deepEqual((await f.io.readState()).projects[0].id,p.id)
+})
+for(const [label,mutate] of [
+  ['missing project',l=>l.projects=[]],['extra project',l=>l.projects.push({...l.projects[0],id:'extra',urlKey:'extra'})],['wrong project key',l=>l.projects[0].urlKey='other'],['wrong company',l=>l.projects[0].companyId='other'],['missing primary workspace',l=>l.projects[0].workspaces=[]],['wrong repoUrl',l=>l.projects[0].workspaces[0].repoUrl='https://example.com/wrong'],['two primaries',l=>l.projects[0].workspaces.push({...l.projects[0].workspaces[0],id:'second'})],['missing workspace id',l=>delete l.projects[0].workspaces[0].id],['wrong sourceType',l=>l.projects[0].workspaces[0].sourceType='local_path'],
+])test('FB9 invariant 9 rejects '+label,async()=>{const f=await fixture();mutate(f.live);assert(assess(source.contract,f.live).some(r=>r.invariant===9))})
+test('FB9 missing PROJECT.md and array workspace extension both fail fresh post-import assertion',async()=>{
+  for(const mutate of [b=>delete b.files['projects/connect/PROJECT.md'],b=>{const {extension}=bundleExtension(b);extension.projects.connect.workspaces=Object.values(extension.projects.connect.workspaces);b.files['.paperclip.yaml']=yaml(extension)}]){
+    const b=renderFreshBundle(source.contract,source.files);mutate(b)
+    const api=createFakeApi(),io=memoryIO(),options={io,bundle:b,catalogCompanyId:'catalog-company'},p=await fresh(api,source,options)
+    await assert.rejects(fresh(api,source,{...options,apply:true,approvedDigest:p.digest}),/Invariant 9/)
+    assert.equal(writes(api).filter(c=>c.method==='PATCH').length,0)
+  }
+})
+test('FB9 snapshot records source projects and warnings verbatim and overlay preserves all project bytes',async()=>{
+  const f=await fixture(),request=f.api.request.bind(f.api)
+  f.api.request=async(method,path,body)=>{const r=await request(method,path,body);if(path.endsWith('/export'))r.warnings.push('Native warning retained verbatim.');return r}
+  const r=await snapshotFixture(f),overlaid=overlayRestore(source.contract,r.bundle)
+  assert.deepEqual(r.exportWarnings,['Native warning retained verbatim.'])
+  assert.deepEqual(r.projects,[{slug:'connect',workspaces:[{name:'focx',repoUrl:source.contract.project.workspaces[0].repoUrl,isPrimary:true}]}])
+  assert.equal(overlaid.files['projects/connect/PROJECT.md'],r.bundle.files['projects/connect/PROJECT.md'])
+  assert.deepEqual(bundleExtension(overlaid).extension.projects,bundleExtension(r.bundle).extension.projects)
+  assert.deepEqual(overlaid.manifest.projects,r.bundle.manifest.projects)
+})
+test('FB9 snapshot refuses a workspace omitted by native export and writes no sidecar',async()=>{
+  const f=await fixture();f.api.state.projects[0].workspaces[0].repoUrl=null
+  await assert.rejects(snapshotFixture(f),/omitted a workspace/);assert.equal(f.io.snapshots.size,0)
+})
+test('FB9 omission of an extra nonportable workspace also refuses; warnings cannot be silently discarded',async()=>{
+  const f=await fixture();f.api.state.projects[0].workspaces.push({name:'local-only',repoUrl:null,isPrimary:false})
+  await assert.rejects(snapshotFixture(f),/omitted a workspace/)
+})
+test('FB9 restore refuses missing workspace with and without warning before any write',async()=>{
+  const f=await fixture(),record=await snapshotFixture(f)
+  for(const warnings of [[],['Project connect workspace focx was omitted from export because it does not have a portable repoUrl.']]){
+    const r=structuredClone(record),ext=bundleExtension(r.bundle).extension;delete ext.projects.connect.workspaces.focx;r.bundle.files['.paperclip.yaml']=yaml(ext);r.bundle.warnings=warnings;r.exportWarnings=warnings
+    const before=writes(f.api).length
+    await assert.rejects(restore(f.api,source,r,{io:memoryIO(),catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'Refused'}}),/omitted a workspace/)
+    assert.equal(writes(f.api).length,before)
+  }
+})
+for(const bound of [true,false])test('FB9 fresh → snapshot → restore → verify 1–9, empty compare; source secrets '+(bound?'bound':'unbound'),async()=>{
+  const f=await roundTripFixture({bound}),r=f.result
+  assert.deepEqual(r.compare.differences,[]);assert.equal(r.configurationParity,true)
+  assert.deepEqual(r.verify.changes,[]);assert.deepEqual(r.verify.invariants,[])
+  assert(r.expectedFindings.secretLinks.length);assert.equal(r.expectedFindings.plugins,'unprovisioned')
+  assert.deepEqual(r.compare.fidelity,f.record.fidelity);assert.deepEqual(r.compare.prunedFalseKeys,f.record.prunedFalseKeys)
+  for(const row of Object.values(r.compare.agents)){assert.deepEqual(row.adapterConfig,[]);assert.deepEqual(row.runtimeConfig,[])}
+  const dirs=r.compare.claudeConfigDirs['qa-engineer'];assert.notEqual(dirs.source.directory,dirs.restored.directory);assert.deepEqual(dirs.source.files,dirs.restored.files)
+  const live=await readSnapshot(f.api,r.state.companyId);assertInvariants(source.contract,live)
+  assert.notEqual(live.projects[0].id,f.live.projects[0].id);assert.notEqual(live.projects[0].workspaces[0].id,f.live.projects[0].workspaces[0].id)
+  assert.equal(live.secretCatalog.length,0);assert(live.agents.every(a=>!Object.values(a.adapterConfig.env).some(v=>v?.type==='secret_ref')))
+  const report=await synchronize(f.api,source,{companyId:r.state.companyId,expectedName:r.state.expectedName,io:f.restoreIO})
+  assert.equal(report.scope,'restored-configuration');assert.deepEqual(report.changes,[]);assert.deepEqual(report.invariants,[])
+})
+test('FB9 CLI verify succeeds for the restored company with expected secret/plugin findings; normal verify stays strict',async()=>{
+  const f=await roundTripFixture(),{main}=await import('./src/index.mjs'),{memoryHost}=await import('./src/fake-api.mjs')
+  const host=memoryHost(f.restoreIO.files),lines=[],log=console.log;console.log=v=>lines.push(v)
+  try{
+    const result=await main(['verify','--fake','--company-id',f.result.state.companyId],{api:f.api,io:f.restoreIO,host})
+    assert.equal(result.scope,'restored-configuration');assert.deepEqual(result.changes,[])
+    host.files[Object.keys(host.files)[0]]='{}'
+    await assert.rejects(main(['verify','--fake','--company-id',f.result.state.companyId],{api:f.api,io:f.restoreIO,host}),/Claude settings/)
+    const normal=await synchronize(f.api,source,{companyId:f.companyId,io:f.io});assert.equal(normal.scope,undefined)
+  }finally{console.log=log}
+})
+test('FB9 source configuration diff is real: an export-lost noncontract false is reported and restore fails',async()=>{
+  const f=await fixture();f.api.state.agents[0].adapterConfig.customFlag=false
+  const record=await snapshotFixture(f),io=memoryIO(),events=[],options={io,instanceRoot:'/fake-instance',catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'Lost flag'},emit:e=>events.push(e)}
+  const p=await restore(f.api,source,record,options)
+  await assert.rejects(restore(f.api,source,record,{...options,apply:true,approvedDigest:p.digest}),/differs from source/)
+  const compare=events.find(e=>e.compare)?.compare;assert(compare.differences.some(d=>d.path==='customFlag' && d.before===false))
+  assert.equal((await io.readState()).phase,'failed')
+})
+knockout('FB9 project rendering','src/bundle.mjs',s=>s.replace('files[`projects/${slug}/PROJECT.md`]=markdown({name:project.name,description:null,owner:null})','/* project rendering knocked out */'),`const api=createFakeApi(),bundle=subject.renderFreshBundle(source.contract,source.files),op=subject.importOperation(bundle,{mode:'new_company'});const r=await api.request(op.method,op.path,op.body);const live=await readSnapshot(api,r.company.id);const {assertInvariants}=await import(${JSON.stringify(url('src/invariants.mjs'))});assertInvariants(source.contract,live,[9]);`)
+knockout('FB9 missing-workspace snapshot refusal','src/portability.mjs',s=>s.replace('const projects=portableProjects(source.contract,bundle,projectSummary(live.projects))','const projects=projectSummary(live.projects)'),`const f=await fixture();f.api.state.projects[0].workspaces[0].repoUrl=null;const opts={companyId:f.companyId,io:f.io,outputPath:'/fake/snapshot.json'},p=await subject.snapshot(f.api,source,opts);await assert.rejects(subject.snapshot(f.api,source,{...opts,apply:true,approvedDigest:p.digest}),/omitted a workspace/);assert.equal(f.io.snapshots.size,0);`)
+test('FB9 compare detects loss of a secondary workspace even when invariant 9 still passes',async()=>{
+  const f=await fixture({instanceRoot:'/fake-instance'})
+  f.api.state.projects[0].workspaces.push({id:'secondary',name:'secondary',repoUrl:'https://example.com/secondary',sourceType:'git_repo',isPrimary:false})
+  const record=await snapshotFixture(f),live=await readSnapshot(f.api,f.companyId)
+  live.projects[0].workspaces.pop();assertInvariants(source.contract,live,[9])
+  const {compareRoundTrip}=await import('./src/roundtrip.mjs'),compare=compareRoundTrip(source.contract,record,live,'/fake-instance')
+  assert(compare.projects.length);assert(compare.differences.some(d=>d.kind==='projects'))
 })

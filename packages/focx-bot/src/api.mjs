@@ -52,7 +52,13 @@ export async function readSnapshot(api, companyId) {
     triggers.push(...rows.map(t=>({...t,routineId:r.id})))
   }
   const secretCatalog=list(await api.request('GET',`/api/companies/${companyId}/secrets/catalog`),'secrets').map(({id,name})=>({id,name}))
-  return {company,agents,triggers,secretCatalog}
+  const projects=[]
+  for (const row of list(await api.request('GET',`/api/companies/${companyId}/projects`),'projects')) {
+    const p=await api.request('GET',`/api/projects/${row.id}`)
+    requireThat(p?.id===row.id && p.companyId===companyId && Array.isArray(p.workspaces), 'Incomplete project/workspace readback')
+    projects.push(p)
+  }
+  return {company,agents,triggers,secretCatalog,projects}
 }
 export async function models(api, companyId, contract) {
   const reports=[]

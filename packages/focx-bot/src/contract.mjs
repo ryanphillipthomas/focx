@@ -46,6 +46,14 @@ export function validateContract(contract,schema) {
   requireThat(!errors.length,errors.join('\n'))
   requireThat(new Set(contract.agents.map(a=>a.slug)).size===contract.agents.length, 'Duplicate contract slug')
   requireThat(!('id' in contract.company) && contract.agents.every(a=>!('id' in a)), 'Company and agent ids are generated outputs')
+  requireThat(!('id' in contract.project) && slugOf(contract.project), 'Project ids are generated outputs; name must have a url-key')
+  requireThat(contract.project.workspaces.filter(w=>w.isPrimary===true).length===1, 'Project requires exactly one primary workspace')
+  for (const w of contract.project.workspaces) {
+    let url
+    try { url=new URL(w.repoUrl) } catch { throw new Error('Project workspace requires an HTTPS repoUrl') }
+    requireThat(url.protocol==='https:' && !url.username && !url.password && !url.search && !url.hash && w.repoUrl===url.href, 'Project repoUrl must be canonical HTTPS without credentials, query or fragment')
+    requireThat(slugOf(w)===w.name && !['__proto__','constructor','prototype'].includes(w.name), 'Workspace name must be a safe url-key')
+  }
   for (const a of contract.agents) {
     requireThat(slugOf(a)===a.slug, `${a.slug}: name must normalize to its slug`)
     requireThat(a.instructions===`.focx/roles/${a.roleKey}.md` && a.roleKey===a.slug, 'Isolated role source must match the slug')

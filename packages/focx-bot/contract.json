@@ -6,8 +6,17 @@
   },
   "activation": "paused",
   "project": {
-    "id": "60073b69-336b-4494-a549-e7dc6916eff5",
-    "name": "Connect"
+    "name": "Connect",
+    "workspaces": [
+      {
+        "name": "focx",
+        "sourceType": "git_repo",
+        "repoUrl": "https://github.com/ryanphillipthomas/focx",
+        "repoRef": null,
+        "defaultRef": null,
+        "isPrimary": true
+      }
+    ]
   },
   "instance": {
     "id": "default",
