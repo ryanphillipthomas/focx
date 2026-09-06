@@ -1802,6 +1802,32 @@ since #87 merged.
      `node tools/site-compose/index.mjs`, publishPath `dist`.
   No promotion PR was opened, and per the deploy role a human accepts one only on a `live` record with empty drift.
 
+- 2026-09-06 Ryan: **"i changed both main and staging branch protection try that again"** → attempt 3 SUCCEEDED;
+  the record pushed (`35cb0d9`). Record read: `infraDrift: []`, health 200/TLS valid/marker found, `staging.focx.ai`
+  verified + certificate issued, serving `61bce8e` as expected. The **only** blemish:
+  `unverified: ["promotion step failed: spawnSync gh ENOBUFS"]`.
+- 2026-09-06 Ryan (AskUserQuestion): **"Open the promotion PR by hand now"** → **PR #101** (staging → main) opened with
+  the recorded evidence quoted, drift gate green, and Ryan merged it. **focx.ai now serves the rolled-out tree** —
+  fetched read-only: 200, TLS valid, `CN=focx.ai`, `<title>Focx</title>`, byte-identical to staging.
+- 2026-09-06 17:17:13Z Claude: **The production verification came back `failed`, and it exposes a real drift — plus a correction to
+  something I told Ryan earlier.** Record `dep-daepfuuq1p3s73d9fmng.json` on `origin/main`:
+  `infraDrift: [{"setting":"branch","declared":"main","actual":"develop"}]` and
+  `unverified: ["serving e1380cc7582e instead of expected 3f780a80b30c — likely superseded"]`.
+  **The production Render service deploys from `develop`, not `main`.** The repo *declares* `main`
+  (`pipeline/deploy.config.json`) and the workflow triggers on `main`, but the live service tracks `develop`.
+  **Correction to my earlier claim:** I told Ryan that deleting `main` meant "no production deploy could run". That was
+  wrong. Production never deployed from `main`; it has been auto-deploying `develop` all along, which also means every
+  merge to develop today was already reaching focx.ai before the promotion. Restoring `main` was still right — the
+  workflow and the declared config both name it — but I overstated the impact and should have checked Render's actual
+  branch, which is exactly what this gate is for.
+  **No harm done:** the gate deliberately did **not** roll back (`index.mjs:183` — a live deploy of a different commit
+  usually means a newer push superseded it, and rolling back would fight that deploy), no issue was opened, and
+  focx.ai is healthy. **Open question for Ryan, not urgent:** either re-point the Render production service at `main`,
+  or change the declaration to `develop`. Right now the repo and the dashboard disagree, and that disagreement is the
+  only thing making production releases read `failed`.
+- 2026-09-06 Ryan: **"fix the buffer bug; i dont care about the branch protection untill i get close to release"** →
+  branch protection deliberately left loose; **F22 dispatched** for the ENOBUFS defect.
+
 ### FB3 log
 
 - 2026-09-05 Claude: **fragment written** → `~/Documents/focx-bot-FB3-skills-fragment.json`
