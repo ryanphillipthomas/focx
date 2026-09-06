@@ -17,6 +17,20 @@ export function memoryHost(files={}) {
   return host
 }
 
+// Provisioning metadata fixture: reads and installs stay entirely in memory.
+export function memoryPluginInventory({pin='manifestSha',version=null,manifest,records}={}) {
+  const key='skills-only@fixture',commit='e867fa4ae4516f644221cb04dcdf24008a43cb99'
+  const entry={key,adapter:'claude_local',pinned:true,pin,version,source:{sha:commit}}
+  const installPath='/fake-user/.claude/plugins/cache/fixture/skills-only/'+commit.slice(0,12)+'-32c1cf49'
+  const record={scope:'user',installPath,version:commit.slice(0,12)+'-32c1cf49',gitCommitSha:commit}
+  const inventoryPath='/fake-user/.claude/plugins/installed_plugins.json',manifestPath=installPath+'/.claude-plugin/plugin.json'
+  const host=memoryHost({[inventoryPath]:JSON.stringify({plugins:{[key]:records??[record]}}),...(manifest===undefined?{}:{[manifestPath]:manifest})})
+  const options={userHome:host.userHome,readJson:p=>{const text=host.readText(p);if(text===null)throw new Error('Missing fixture metadata');return JSON.parse(text)}}
+  const contract={skills:{claudePlugins:{[key]:entry}}}
+  const operation={kind:'install-pinned-plugin',entry,command:'/never-executed',args:[],env:{}}
+  return {contract,entry,record,host,options,operation,inventoryPath,manifestPath}
+}
+
 const bundledSlugs=['paperclip','paperclip-board','paperclip-converting-plans-to-tasks','paperclip-create-agent','para-memory-files']
 const clone=structuredClone
 const prune=value=>{
