@@ -238,7 +238,7 @@ const url=p=>pathToFileURL(resolve(PACKAGE,p)).href
 function moduleURL(file,transform) {
   const path=resolve(PACKAGE,file),original=readFileSync(path,'utf8'),changed=transform(original)
   assert.notEqual(changed,original,'Knock-out must actually change the source')
-  const absolute=changed.replace(/from '(\.\.?\/[^']+)'/g,(_,p)=>`from '${pathToFileURL(resolve(path,'..',p)).href}'`)
+  const absolute=changed.replace(/from '(\.\.?\/[^']+)'/g,(_,p)=>`from '${pathToFileURL(resolve(path,'..',p)).href}'`).replace(/import\('(\.\.?\/[^']+)'\)/g,(_,p)=>`import('${pathToFileURL(resolve(path,'..',p)).href}')`)
   return 'data:text/javascript;base64,'+Buffer.from(absolute).toString('base64')
 }
 function child(module,body) {
@@ -251,6 +251,9 @@ function knockout(label,file,transform,body) {
     const baseline=child(url(file),body);assert.equal(baseline.status,0,baseline.stdout+baseline.stderr)
     const broken=child(moduleURL(file,transform),body);assert.equal(broken.status,1,broken.stdout+broken.stderr);assert.match(broken.stdout,/not ok 1 - guard witness/)
     if(label.startsWith('restore overlay')){assert.match(broken.stdout,/Invariant 7:/);assert.match(broken.stdout,/Invariant 8:/)}
+    if(label.startsWith('F15 reserved strip'))assert.match(broken.stdout,/HTTP 422: unpinned_external_source/)
+    if(label==='F15 company de-duplication')assert.match(broken.stdout,/duplicate company skills imported/)
+    if(label==='F15 post-import singleton assertion')assert.match(broken.stdout,/Missing expected rejection/)
     const restored=child(url(file),body);assert.equal(restored.status,0,restored.stdout+restored.stderr)
     console.log(`KNOCK-OUT ${label}: guard broken -> guard witness FAIL (1); restored -> PASS (1)`)
   })
@@ -269,7 +272,7 @@ for(const [label,needle,setup]of [
 knockout('approval digest binds rendered operations','src/digest.mjs',s=>s.replace('return hash({ operations, target:','return hash({ target:'),`const t={baseUrl:'http://fake.invalid',companyId:'c'};assert.notEqual(subject.approvalDigest([{body:{model:'a'}}],t,source.sha),subject.approvalDigest([{body:{model:'b'}}],t,source.sha));`)
 knockout('pinned:false installation selection','src/skills.mjs',s=>s.replace('.filter(entry=>entry.pinned===true)',''),`assert(subject.installPlan(source.contract.skills).every(o=>o.entry.pinned===true));`)
 knockout('pinned:false executor guard','src/skills.mjs',s=>s.replace("requireThat(op.kind==='install-pinned-plugin' && op.entry.pinned===true, 'Unpinned catalog entries are available only; never installed')",'/* knocked out */'),`const entry=subject.catalogEntries(source.contract.skills).find(e=>!e.pinned);await assert.rejects(subject.installPinned([{kind:'install-pinned-plugin',entry}],{installPinned:async()=>{}},()=>{}));`)
-knockout('restore overlay (pruned export must fail invariants 7/8 when guard removed)','src/portability.mjs',s=>s.replace('const bundle=overlayRestore(source.contract,record.bundle)','const bundle=record.bundle'),`const f=await fixture();const bundle=await f.api.request('POST', '/api/companies/'+f.companyId+'/export',{include:{company:true,agents:true,projects:true,skills:true,issues:false}});const snapshotOptions={companyId:f.companyId,outputPath:'/fake/snapshot.json',io:f.io};const preview=await subject.snapshot(f.api,source,snapshotOptions);const record=await subject.snapshot(f.api,source,{...snapshotOptions,apply:true,approvedDigest:preview.digest}),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'Restore witness'}};const p=await subject.restore(f.api,source,record,opts);await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});`)
+knockout('restore overlay (pruned export must fail invariants 7/8 when guard removed)','src/portability.mjs',s=>s.replace('const bundle=overlayRestore(source.contract,record.bundle)','const bundle=stripRestoreSkills(source.contract,record.bundle)'),`const f=await fixture();const bundle=await f.api.request('POST', '/api/companies/'+f.companyId+'/export',{include:{company:true,agents:true,projects:true,skills:true,issues:false}});const snapshotOptions={companyId:f.companyId,outputPath:'/fake/snapshot.json',io:f.io};const preview=await subject.snapshot(f.api,source,snapshotOptions);const record=await subject.snapshot(f.api,source,{...snapshotOptions,apply:true,approvedDigest:preview.digest}),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'Restore witness'}};const p=await subject.restore(f.api,source,record,opts);await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});`)
 knockout('fresh approval digest gate','src/fresh.mjs',s=>s.replace("requireThat(options.approvedDigest===digest, 'Preview changed or not approved; obtain a fresh digest')",'/* knocked out */'),`const api=createFakeApi(),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company'};await assert.rejects(subject.fresh(api,source,{...opts,apply:true,approvedDigest:'unapproved'}));assert.equal(writes(api).length,0);`)
 knockout('fresh lock acquisition','src/fresh.mjs',s=>s.replace('const release=await io.acquire()','const release=async()=>{}'),`const api=createFakeApi(),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company'},p=await subject.fresh(api,source,opts);io.locked=true;await assert.rejects(subject.fresh(api,source,{...opts,apply:true,approvedDigest:p.digest}));assert.equal(writes(api).length,0);`)
 knockout('fresh prior-state refusal','src/fresh.mjs',s=>s.replace("if (await io.readState()) { await release(); throw new Error('Prior state exists; partial imports must be reviewed, never retried or adopted') }",'/* knocked out */'),`const api=createFakeApi(),io=memoryIO(),opts={io,catalogCompanyId:'catalog-company'},p=await subject.fresh(api,source,opts);await io.save({phase:'failed',ids:{old:'old'}});await assert.rejects(subject.fresh(api,source,{...opts,apply:true,approvedDigest:p.digest}));assert.equal(writes(api).length,0);`)
@@ -621,3 +624,110 @@ test('FB9 compare detects loss of a secondary workspace even when invariant 9 st
   const {compareRoundTrip}=await import('./src/roundtrip.mjs'),compare=compareRoundTrip(source.contract,record,live,'/fake-instance')
   assert(compare.projects.length);assert(compare.differences.some(d=>d.kind==='projects'))
 })
+
+// F15: export/apply asymmetry, reserved provenance and company inventory.
+import { importOperation, RESERVED_SKILL_PREFIX, markdown } from './src/bundle.mjs'
+import { expectedSkillWarning } from './src/fresh.mjs'
+import { assertRestoredSkills } from './src/roundtrip.mjs'
+const reservedFiles=b=>Object.keys(b.files).filter(p=>p.startsWith('skills/'+RESERVED_SKILL_PREFIX))
+test('F15 fake native export has five null-commit bundled skills and two company aliases; preview passes but raw apply returns 422 after company creation',async()=>{
+  const f=await fixture(),r=await snapshotFixture(f),skills=r.bundle.manifest.skills
+  assert.equal(reservedFiles(r.bundle).length,5)
+  for(const path of reservedFiles(r.bundle)) {
+    const doc=parseMarkdown(r.bundle.files[path]),entry=skills.find(s=>s.path===path)
+    assert.equal(doc.meta.metadata.sources[0].commit,null)
+    assert.equal(entry.sourceType,'github');assert.equal(entry.sourceRef,null);assert.equal(entry.metadata.sourceKind,'paperclip_bundled')
+  }
+  for(const name of ['focx-implement-task','focx-verify-change'])assert.deepEqual(skills.filter(s=>s.slug===name).map(s=>s.key),[name,'company/'+f.companyId+'/'+name])
+  const op=importOperation(r.bundle,{mode:'new_company',newCompanyName:'Raw export rejected'})
+  const preview=await f.api.request('POST','/api/companies/import/preview',op.body)
+  assert.deepEqual(preview.errors,[]);assert.deepEqual(preview.warnings,[])
+  await assert.rejects(f.api.request(op.method,op.path,op.body),e=>e.status===422 && /unpinned_external_source/.test(e.message))
+  const created=f.api.state.companies.find(c=>c.name==='Raw export rejected');assert(created)
+  assert.equal(f.api.state.agents.filter(a=>a.companyId===created.id).length,0)
+})
+test('F15 restore strips files and manifest keys immutably, preserves instruction bytes and recomputes import count',async()=>{
+  const f=await fixture(),r=await snapshotFixture(f),original=structuredClone(r.bundle)
+  r.bundle.files['skills/'+RESERVED_SKILL_PREFIX+'paperclip/references/extra.md']='reserved support file'
+  r.bundle.manifest.skills.push({key:RESERVED_SKILL_PREFIX+'manifest-only',path:'absent/SKILL.md'})
+  const before=structuredClone(r.bundle),b=overlayRestore(source.contract,r.bundle)
+  assert.deepEqual(r.bundle,before);assert.deepEqual(reservedFiles(b),[])
+  assert.equal(b.strippedReservedSkills.length,6);assert.equal(b.deduplicatedCompanySkills.length,2)
+  assert(!b.manifest.skills.some(s=>s.key.startsWith(RESERVED_SKILL_PREFIX)||s.key.startsWith('company/')))
+  for(const [path,text] of Object.entries(original.files).filter(([p])=>p.startsWith('agents/')))assert.equal(b.files[path],text)
+  const op=importOperation(b,{mode:'new_company'})
+  assert.equal(op.body.source.expectedFileCount,Object.keys(before.files).length-8)
+  assert.equal(op.body.source.expectedFileCount,Object.keys(op.body.source.files).length)
+})
+test('F15 company copies with divergent bodies, metadata, extra files or absent agent copies fail before import',async()=>{
+  const f=await fixture(),r=await snapshotFixture(f),path=Object.keys(r.bundle.files).find(p=>p.startsWith('skills/company/'))
+  for(const mutate of [b=>b.files[path]+='\nDivergent content',b=>{const doc=parseMarkdown(b.files[path]);doc.meta.metadata.version='different';b.files[path]=markdown(doc.meta,doc.body)},b=>b.files[path.replace('SKILL.md','unknown.md')]='extra',b=>delete b.files['agents/implementation-engineer/skills/focx-implement-task/SKILL.md'],b=>b.manifest.skills.push({key:'company/old/unknown',path:'missing/SKILL.md'})]) {
+    const b=structuredClone(r.bundle);mutate(b)
+    assert.throws(()=>overlayRestore(source.contract,b),/Company skill copy differs|Unmatched company skill manifest/)
+  }
+})
+test('F15 strips affected embedded assets in both indexes, preserves shared blobs and owners',async()=>{
+  const f=await fixture(),r=await snapshotFixture(f),b=r.bundle,{extension}=bundleExtension(b),path=reservedFiles(b)[0]
+  const ids=['11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','33333333-3333-3333-3333-333333333333']
+  const hashes=['a'.repeat(64),'b'.repeat(64)]
+  const assets=ids.map((assetId,i)=>({assetId,sha256:hashes[i===0?0:1],ownedBy:i===1?['projects','skills']:['skills']}))
+  const blobs=hashes.map(sha256=>({sha256,byteSize:1,contentType:'application/octet-stream'}))
+  b.files[path]+=ids.map(id=>'\n/api/assets/'+id+'/content').join('')
+  b.files['projects/connect/PROJECT.md']+='\n/api/assets/'+ids[1]+'/content'
+  for(const hash of hashes)b.files['blobs/'+hash]={encoding:'base64',data:'YQ=='}
+  for(const index of [extension,b.manifest]){index.blobs=structuredClone(blobs);index.embeddedAssets=structuredClone(assets)}
+  b.files['.paperclip.yaml']=yaml(extension)
+  const stripped=overlayRestore(source.contract,b)
+  for(const index of [stripped.manifest,bundleExtension(stripped).extension]) {
+    assert.deepEqual(index.embeddedAssets,[{...assets[1],ownedBy:['projects']}])
+    assert.deepEqual(index.blobs,[blobs[1]])
+  }
+  assert(!Object.hasOwn(stripped.files,'blobs/'+hashes[0]));assert(Object.hasOwn(stripped.files,'blobs/'+hashes[1]))
+})
+test('F15 restored preview expects only singleton warnings; other warnings still fail before import',async()=>{
+  const f=await fixture(),record=await snapshotFixture(f),io=memoryIO(),events=[]
+  const opts={io,catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'Warning refused'},emit:e=>events.push(e)}
+  const p=await restore(f.api,source,record,opts)
+  f.api.state.extraWarnings=['Unexpected skill warning']
+  const before=f.api.state.calls.filter(c=>c.path==='/api/companies/import').length
+  await assert.rejects(restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest}),/Unexpected native import preview warning/)
+  assert.equal(f.api.state.calls.filter(c=>c.path==='/api/companies/import').length,before)
+  f.api.state.extraWarnings=[]
+  const preview=await f.api.request('POST','/api/companies/import/preview',p.changes[0].body)
+  assert.deepEqual(preview.warnings,source.contract.agents.map(a=>expectedSkillWarning(a.slug)))
+})
+test('F15 restored inventory has only two package company skills, seeded reserved skills, exact desiredSkills and reported stripping',async()=>{
+  const f=await roundTripFixture(),r=f.result,live=await readSnapshot(f.api,r.state.companyId)
+  const skills=f.api.state.skills.filter(s=>s.companyId===r.state.companyId),imported=skills.filter(s=>s.origin==='package')
+  assert.equal(imported.length,2);assert.equal(new Set(imported.map(s=>s.slug)).size,2)
+  assert(imported.every(s=>s.key==='company/'+r.state.companyId+'/'+s.slug && s.packagePath.startsWith('agents/')))
+  assert.equal(skills.filter(s=>s.origin==='bundled').length,5)
+  assertInvariants(source.contract,live,[4,5])
+  assert.equal(r.strippedReservedSkills.length,5);assert.equal(r.deduplicatedCompanySkills.length,2)
+  assert.deepEqual((await f.restoreIO.readState()).restoration.strippedReservedSkills,r.strippedReservedSkills)
+  const submitted=f.api.state.calls.filter(c=>c.path==='/api/companies/import').at(-1).body.source
+  assert(!Object.keys(submitted.files).some(p=>p.startsWith('skills/company/')||p.startsWith('skills/'+RESERVED_SKILL_PREFIX)))
+  assert.equal(submitted.expectedFileCount,Object.keys(submitted.files).length)
+})
+test('F15 final skill assertion rejects empty, additional and duplicated selections and reserved package files',async()=>{
+  const f=await fixture(),record=await snapshotFixture(f),bundle=overlayRestore(source.contract,record.bundle)
+  for(const desiredSkills of [[],['paperclipai/paperclip/paperclip','extra'],['paperclipai/paperclip/paperclip','paperclipai/paperclip/paperclip']]) {
+    const live=structuredClone(f.live);live.agents[0].desiredSkills=desiredSkills
+    assert.throws(()=>assertRestoredSkills(source.contract,live,bundle),/Invariant 5/)
+  }
+  assert.throws(()=>assertRestoredSkills(source.contract,f.live,record.bundle),/must not be imported/)
+})
+const f15Setup=[
+  'const f=await fixture(),snapshotOpts={companyId:f.companyId,outputPath:"/fake/snapshot.json",io:f.io};',
+  'const sp=await subject.snapshot(f.api,source,snapshotOpts),record=await subject.snapshot(f.api,source,{...snapshotOpts,apply:true,approvedDigest:sp.digest});',
+  'const io=memoryIO(),opts={io,catalogCompanyId:"catalog-company",target:{mode:"new_company",newCompanyName:"F15 witness"}};',
+  'const p=await subject.restore(f.api,source,record,opts);',
+].join('\n')
+knockout('F15 reserved strip: raw apply must be rejected','src/portability.mjs',s=>s.replace('removeSkillFiles(result,reservedFiles,s=>s.key?.startsWith(RESERVED_SKILL_PREFIX) || reservedFiles.includes(s.path))','/* reserved strip knocked out */'),f15Setup+'await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});')
+knockout('F15 company de-duplication','src/portability.mjs',s=>s.replace('  deduplicateCompanySkills(contract,result)','  /* company de-duplication knocked out */'),f15Setup+'const r=await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});assert.equal(f.api.state.skills.filter(s=>s.companyId===r.state.companyId && s.origin==="package").length,2,"duplicate company skills imported");')
+knockout('F15 post-import singleton assertion','src/portability.mjs',s=>s.replace('    assertRestoredSkills(source.contract,live,bundle)','    /* final skill assertion knocked out */'),f15Setup+[
+  'const request=f.api.request.bind(f.api);let injected=false;',
+  'f.api.request=async(m,p,b)=>{const r=await request(m,p,b);if(p.includes("/adapters/claude_local/models") && !p.includes("/catalog-company/")){f.api.state.agents.find(a=>a.companyId!==f.companyId).desiredSkills=[];injected=true}return r};',
+  'await assert.rejects(subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest}),/Invariant 5/);',
+  'assert(injected);assert.equal((await io.readState()).failedStep,"restore-comparison");',
+].join('\n'))

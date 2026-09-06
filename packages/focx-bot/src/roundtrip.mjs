@@ -1,6 +1,6 @@
 import { isDeepStrictEqual as same } from 'node:util'
 import { requireThat, slugOf, assertInvariants } from './invariants.mjs'
-import { bundleExtension, parseMarkdown, composeEnv } from './bundle.mjs'
+import { bundleExtension, parseMarkdown, composeEnv, RESERVED_SKILL_PREFIX } from './bundle.mjs'
 import { renderSkillHomes } from './skills.mjs'
 
 export const projectSummary = projects => projects.map(p=>({slug:slugOf(p),workspaces:(p.workspaces??[]).map(w=>({name:w.name,repoUrl:w.repoUrl,isPrimary:w.isPrimary===true})).sort((a,b)=>a.name.localeCompare(b.name))})).sort((a,b)=>a.slug.localeCompare(b.slug))
@@ -54,4 +54,11 @@ export function compareRoundTrip(contract,record,live,root) {
   const projects=configDiff(record.projects,projectSummary(live.projects))
   const differences=[...projects.map(d=>({kind:'projects',...d})),...Object.entries(agents).flatMap(([slug,configs])=>Object.entries(configs).flatMap(([kind,rows])=>rows.map(d=>({slug,kind,...d})))),...Object.entries(claudeConfigDirs).flatMap(([slug,r])=>r.diff.map(d=>({slug,kind:'renderedClaudeConfig',...d})))]
   return {fidelity:record.fidelity,prunedFalseKeys:record.prunedFalseKeys,exportWarnings:record.exportWarnings,exclusions:comparisonExclusions,projects,agents,claudeConfigDirs,differences}
+}
+
+// Read back the registry selection after verification, independently of adapter
+// config parity. Package provenance is evidenced by the exact submitted files.
+export function assertRestoredSkills(contract,live,bundle) {
+  assertInvariants(contract,live,[5])
+  requireThat(!Object.keys(bundle.files).some(p=>p.startsWith('skills/'+RESERVED_SKILL_PREFIX)) && !(bundle.manifest?.skills??[]).some(s=>s.key?.startsWith(RESERVED_SKILL_PREFIX)), 'Reserved Paperclip skill files must not be imported from the package')
 }
