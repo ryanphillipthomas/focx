@@ -28,21 +28,42 @@ export function mergeSettings(existing, rules, cwd, denyRules) {
   requireThat(p.allow.every(x => vendor.includes(x) || rules.includes(x)), 'Unknown or stale local permission rule; review required')
   return {...existing, permissions:{...p, allow:[...new Set([...vendor, ...rules])].sort(), deny:[...new Set([...(p.deny ?? []), ...denyRules])].sort()}}
 }
-export function validateContext({source, env, cwd, root, branch, commonDir}) {
+export function validateContext(resolvedAgent, {source, env, cwd, root, branch, commonDir}) {
   const qa = source.manifest.agents.find(a => a.roleKey === 'qa-engineer')
   requireThat(qa?.adapterLocal?.permissionDelivery === 'qa-worktree-local', 'QA permission delivery is not declared')
-  requireThat(env.PAPERCLIP_AGENT_ID === qa.id && env.PAPERCLIP_COMPANY_ID === source.manifest.companyId, 'Launcher is restricted to the assigned QA agent and company')
+  requireThat(object(resolvedAgent) && ['id','urlKey','companyId','adapterType','name'].every(key => typeof resolvedAgent[key] === 'string' && resolvedAgent[key].trim()), 'Paperclip agent identity is incomplete')
+  requireThat(resolvedAgent.urlKey === 'qa-engineer' && resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && resolvedAgent.adapterType === 'claude_local' && resolvedAgent.id === env.PAPERCLIP_AGENT_ID, 'Paperclip agent identity does not match the assigned QA role, company and adapter')
   requireThat(/^[0-9a-f-]{36}$/.test(env.PAPERCLIP_RUN_ID ?? '') && /^[0-9a-f-]{36}$/.test(env.PAPERCLIP_TASK_ID ?? ''), 'A bound Paperclip task and run are required')
   requireThat(cwd === root && /^FOC-\d+-/.test(branch), 'QA must run at its FOC issue worktree root')
   const parent = resolve(commonDir, '..')
   requireThat(cwd.startsWith(join(parent, '.paperclip/worktrees') + '/') && commonDir !== join(cwd, '.git'), 'Refusing to write settings outside an isolated Paperclip worktree')
   return qa.adapterLocal.permissionsAllow
 }
-export function prepare({env=process.env, cwd=realpathSync(process.cwd()), root=resolve(dirname(fileURLToPath(import.meta.url)), '../..')}={}) {
+async function resolveAgent(env, fetch) {
+  for (const key of ['PAPERCLIP_API_URL','PAPERCLIP_API_KEY','PAPERCLIP_AGENT_ID','PAPERCLIP_COMPANY_ID']) requireThat(typeof env[key] === 'string' && env[key].trim(), key + ' is required')
+  requireThat(/^[0-9a-f-]{36}$/.test(env.PAPERCLIP_RUN_ID ?? '') && /^[0-9a-f-]{36}$/.test(env.PAPERCLIP_TASK_ID ?? ''), 'A bound Paperclip task and run are required')
+  let response
+  try {
+    response = await fetch(env.PAPERCLIP_API_URL.replace(/\/$/, '') + '/api/agents/' + encodeURIComponent(env.PAPERCLIP_AGENT_ID), {
+      method:'GET', redirect:'error', signal:AbortSignal.timeout(10000),
+      headers:{Authorization:'Bearer ' + env.PAPERCLIP_API_KEY, 'X-Paperclip-Run-Id':env.PAPERCLIP_RUN_ID}
+    })
+  } catch { throw Error('Paperclip agent identity request failed') }
+  requireThat(response?.status === 200, 'Paperclip agent identity request did not return HTTP 200')
+  try {
+    const body = await response.json()
+    requireThat(object(body), 'Invalid agent record')
+    // Select only identity metadata; never expose the response or upstream errors.
+    const {id, urlKey, companyId, adapterType, name} = body
+    return {id, urlKey, companyId, adapterType, name}
+  } catch { throw Error('Paperclip agent identity response is not a JSON object') }
+}
+export async function prepare({env=process.env, cwd=realpathSync(process.cwd()), root=resolve(dirname(fileURLToPath(import.meta.url)), '../..'), fetch=globalThis.fetch}={}) {
+  const resolvedAgent = await resolveAgent(env, fetch)
   cwd = realpathSync(cwd)
   const git = (...args) => execFileSync('git', args, {cwd, encoding:'utf8', stdio:['ignore','pipe','pipe']}).trim()
   const source = loadSource(root)
-  const rules = validateContext({source, env, cwd, root:realpathSync(root), branch:git('branch','--show-current'), commonDir:realpathSync(resolve(cwd, git('rev-parse','--git-common-dir')))})
+  const rules = validateContext(resolvedAgent, {source, env, cwd, root:realpathSync(root), branch:git('branch','--show-current'), commonDir:realpathSync(resolve(cwd, git('rev-parse','--git-common-dir')))})
   requireThat(!lstatSync(join(cwd,'.claude')).isSymbolicLink(), 'Refusing symlinked .claude directory')
   const settingsPath = join(cwd,'.claude/settings.local.json')
   requireThat(lstatSync(settingsPath).isFile() && !lstatSync(settingsPath).isSymbolicLink(), 'Local settings must be a regular file')
@@ -58,7 +79,7 @@ export function prepare({env=process.env, cwd=realpathSync(process.cwd()), root=
 }
 async function main() {
   const target = realpathSync(entrypoint()) // No installs, PATH fallback, or vendor edits.
-  const evidence = prepare()
+  const evidence = await prepare()
   console.error(`[focx-qa-permissions] local settings ready rules=${evidence.rules} sha256=${evidence.digest}`)
   const child = spawn(process.execPath,[target,...process.argv.slice(2)],{stdio:'inherit',env:process.env})
   for(const signal of ['SIGTERM','SIGINT','SIGHUP']) process.on(signal,()=>child.kill(signal))

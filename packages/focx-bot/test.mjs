@@ -292,8 +292,8 @@ import { readPluginInventory } from './src/plugins.mjs'
 const f1Sentence='codex_local: reported only — declared permissions and plugin sets do not bound Codex behavior (F1); the Claude lane is bounded by its settings and permission rules.'
 import { loadSource as loadPilotSource } from '../../tools/pilot-org/index.mjs'
 const pilotManifest=loadPilotSource().manifest
-async function grantFixture({matchingIds=true}={}) {
-  const api=createFakeApi(matchingIds?{companyId:pilotManifest.companyId,agentIds:Object.fromEntries(source.contract.agents.map(a=>[a.slug,pilotManifest.agents.find(p=>p.roleKey===a.roleKey).id]))}:{})
+async function grantFixture() {
+  const api=createFakeApi()
   const f=await fixture({api,instanceRoot:'/fake-instance'}),c=source.contract
   const homes=renderSkillHomes(c,'/fake-instance',f.companyId,idMap(f.live)),files={...homes.files},plugins={}
   for(const pin of catalogEntries(c.skills).filter(p=>p.pinned)){
@@ -382,19 +382,20 @@ for(const kind of ['delivery-command-missing','delivery-env-missing','declared-s
   }
   const r=f.report();assert(hasDiff(r,kind));assert.equal(r.ok,false)
 })
-const f10Sentence="F10: QA permission delivery is bound to .focx/agents.json ids; a provisioned company cannot launch QA until the launcher's binding is redesigned (FB2 rev 2.7, Ryan)"
-test('FB5 generated ids fail F10; matching ids supplied to the fake are clean; either id alone is fatal',async()=>{
-  const generated=await grantFixture({matchingIds:false}),r=generated.report()
-  assert.equal(r.ok,false);assert(hasDiff(r,'delivery-binding-mismatch'));assert(r.lines.some(l=>l.includes(f10Sentence)))
-  assert.throws(()=>assertGrantReport(r),/Claude/)
-  const f=await grantFixture();assert.equal(f.report().ok,true)
-  for(const field of ['agent','company']){
-    const live=structuredClone(f.live)
-    if(field==='agent')live.agents.find(a=>a.adapterType==='claude_local').id='different'
-    else live.company.id='different'
-    const r=grantReport(source.contract,live,f.homes,f.host,{pilotManifest})
-    assert.equal(r.ok,false);assert(hasDiff(r,'delivery-binding-mismatch'))
+const f10Sentence="F10 resolved (rev 2.7): the launcher resolves QA through Paperclip by url-key and company; no ids in source."
+test('F10 generated ids are clean; wrong or absent live QA role, adapter or company is fatal',async()=>{
+  const f=await grantFixture(),r=f.report()
+  assert.equal(r.ok,true);assert(r.agents.every(a=>!a.diffs.length));assertGrantReport(r)
+  assert(r.lines.includes('declared: '+f10Sentence))
+  assert.notEqual(f.live.company.id,pilotManifest.companyId)
+  assert.notEqual(f.live.agents.find(a=>a.urlKey==='qa-engineer').id,pilotManifest.agents.find(a=>a.roleKey==='qa-engineer').id)
+  for(const field of ['urlKey','adapterType','companyId'])for(const value of ['wrong',undefined]){
+    const live=structuredClone(f.live);live.agents.find(a=>a.urlKey==='qa-engineer')[field]=value
+    const report=grantReport(source.contract,live,f.homes,f.host,{pilotManifest})
+    assert.equal(report.ok,false);assert(hasDiff(report,'delivery-identity-mismatch'));assert.throws(()=>assertGrantReport(report),/Claude/)
   }
+  const manifest=structuredClone(pilotManifest);delete manifest.companyId;for(const a of manifest.agents)delete a.id
+  assert.equal(grantReport(source.contract,f.live,f.homes,f.host,{pilotManifest:manifest}).ok,true)
 })
 test('FB5 Codex diffs are reported only, including wrong source identity and unknown enablement',async()=>{
   const f=await grantFixture(),key=f.homes.codex.plugins[0],config=`${f.homes.codex.home}/config.toml`
@@ -487,12 +488,12 @@ knockout('FB5 zero non-GET API calls witness','src/grants.mjs',s=>s.replace('con
 const grantDiffWitness=`const f=await fixture({instanceRoot:'/fake-instance'});const {memoryHost}=await import(${JSON.stringify(url('src/fake-api.mjs'))});const {renderSkillHomes}=await import(${JSON.stringify(url('src/skills.mjs'))});const {idMap}=await import(${JSON.stringify(url('src/api.mjs'))});const c=structuredClone(source.contract),qa=c.agents.find(a=>a.adapterType==='claude_local'),homes=renderSkillHomes(c,'/fake-instance',f.companyId,idMap(f.live)),settingsPath=Object.keys(homes.files)[0],key=qa.grants.claudePlugins[0],pinPath='/fake-user/.claude/plugins/cache/'+key.split('@').reverse().join('/')+'/wrong',files={...homes.files};const settings=JSON.parse(files[settingsPath]);settings.enabledPlugins['extra@market']=true;files[settingsPath]=JSON.stringify(settings);files[pinPath+'/.claude-plugin/plugin.json']=JSON.stringify({version:'wrong'});files['/fake-user/.claude/plugins/installed_plugins.json']=JSON.stringify({plugins:{[key]:[{installPath:pinPath,version:'wrong'}]}});const host=memoryHost(files),manifest={companyId:f.companyId,agents:c.agents.map(a=>({...a,id:f.live.agents.find(b=>b.urlKey===a.slug).id}))};const report=subject.grantReport(c,f.live,homes,host,{pilotManifest:manifest});`
 for(const kind of ['enabled-but-not-granted','enabled-but-not-installed','installed-at-wrong-pin'])knockout(`FB5 ${kind} detector`,'src/grants.mjs',s=>s.replace(`diff(${kind==='enabled-but-not-granted'?'surface':"'installed plugins'"},'${kind}',key`, `diff(${kind==='enabled-but-not-granted'?'surface':"'installed plugins'"},'knocked-out',key`),grantDiffWitness+`assert(report.agents.some(a=>a.adapter==='claude_local'&&a.diffs.some(d=>d.kind===${JSON.stringify(kind)})));`)
 knockout('FB5 Codex findings cannot become fatal','src/grants.mjs',s=>s.replace("const fatal=a.adapterType==='claude_local' && diffs.length>0",'const fatal=diffs.length>0'),grantDiffWitness+`const codex=report.agents.find(a=>a.adapter==='codex_local');assert(codex.diffs.length>0);assert.equal(codex.fatal,false);`)
-for(const kind of ['delivery-command-missing','delivery-env-missing','declared-source-divergence','delivery-binding-mismatch','permission-mode-unexpected']){
-  const setup=kind==='permission-mode-unexpected'?"const {dirname:dn}=await import('node:path');const wt='/fake-instance/projects/'+f.companyId+'/proj/focx/.paperclip/worktrees/QA';host.files[wt+'/.claude/settings.local.json']=JSON.stringify({permissions:{defaultMode:'bypassPermissions',allow:subject.vendorBaseline(wt)}});for(let d=wt+'/.claude';d!==dn(d);d=dn(d))host.dirs.add(d);":kind==='delivery-command-missing'?"delete f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig.agentCommand;":kind==='delivery-env-missing'?"delete f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig.env.CLAUDE_CONFIG_DIR;":kind==='declared-source-divergence'?"manifest.agents.find(a=>a.roleKey===qa.roleKey).adapterLocal={};":"manifest.companyId='wrong';"
+for(const kind of ['delivery-command-missing','delivery-env-missing','declared-source-divergence','delivery-identity-mismatch','permission-mode-unexpected']){
+  const setup=kind==='permission-mode-unexpected'?"const {dirname:dn}=await import('node:path');const wt='/fake-instance/projects/'+f.companyId+'/proj/focx/.paperclip/worktrees/QA';host.files[wt+'/.claude/settings.local.json']=JSON.stringify({permissions:{defaultMode:'bypassPermissions',allow:subject.vendorBaseline(wt)}});for(let d=wt+'/.claude';d!==dn(d);d=dn(d))host.dirs.add(d);":kind==='delivery-command-missing'?"delete f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig.agentCommand;":kind==='delivery-env-missing'?"delete f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig.env.CLAUDE_CONFIG_DIR;":kind==='declared-source-divergence'?"manifest.agents.find(a=>a.roleKey===qa.roleKey).adapterLocal={};":"f.live.agents.find(a=>a.urlKey==='qa-engineer').companyId='wrong';"
   const witness=grantDiffWitness.replace('const report=subject.grantReport',setup+'const report=subject.grantReport')
   knockout(`FB5 ${kind} detector`,'src/grants.mjs',s=>s.replace(`'${kind}'`,"'knocked-out'"),witness+`assert(report.agents.some(a=>a.diffs.some(d=>d.kind===${JSON.stringify(kind)})));`)
 }
-knockout('FB5 F10 explanation cannot be silenced','src/grants.mjs',s=>s.replace('lines.push(`declared: ${F10}`)','/* knocked out */'),grantDiffWitness.replace('const report=subject.grantReport',"manifest.companyId='wrong';const report=subject.grantReport")+`assert(report.lines.some(l=>l.includes(${JSON.stringify(f10Sentence)})));`)
+knockout('F10 resolution declaration cannot be silenced','src/grants.mjs',s=>s.replace('lines.push(`declared: ${F10}`)','/* knocked out */'),grantDiffWitness+`assert(report.lines.some(l=>l.includes(${JSON.stringify(f10Sentence)})));`)
 knockout('FB5 zero io writes witness','src/grants.mjs',s=>s.replace('const live=await readSnapshot(api,options.companyId)','const live=await readSnapshot(api,options.companyId); await options.io.save({mutation:true})'),grantWitness+`assert.equal(f.io.writes.length,0);`)
 test('FB5 worktree reader opens only settings metadata and skips symlinked trees',()=>{
   const root='/instance',path=root+'/projects/C/P/focx/.paperclip/worktrees/QA/.claude/settings.local.json',host=memoryHost({[path]:JSON.stringify({permissions:{allow:['Read'],deny:['Edit']}}),[root+'/projects/C/P/focx/.paperclip/worktrees/QA/.claude/auth.json']:'FORBIDDEN',[root+'/projects/C/P/focx/.paperclip/worktrees/QA/plugin/SKILL.md']:'FORBIDDEN',[root+'/projects/C/P/focx/.paperclip/worktrees/linked/.claude/settings.local.json']:'FORBIDDEN'})
@@ -503,10 +504,10 @@ test('FB5 worktree reader opens only settings metadata and skips symlinked trees
   assert.equal(readWorktreeSettings(host,root,'OTHER').length,0,'other companies are out of scope')
 })
 
-test('FB5 default source reader checks the real launcher manifest; generated fake ids still fail F10',async()=>{
-  const f=await grantFixture({matchingIds:false}),options={...f.options};delete options.pilotManifest
+test('F10 default source reader keeps permission declarations by roleKey; generated fake ids are clean',async()=>{
+  const f=await grantFixture(),options={...f.options};delete options.pilotManifest
   const r=await grants(f.api,source,options)
-  assert(hasDiff(r,'delivery-binding-mismatch'));assert(!hasDiff(r,'declared-source-divergence'))
-  assert.equal(r.ok,false);assert(r.lines.some(l=>l.includes(f10Sentence)))
+  assert(r.agents.every(a=>!a.diffs.length));assert(!hasDiff(r,'declared-source-divergence'))
+  assert.equal(r.ok,true);assert(r.lines.includes('declared: '+f10Sentence))
   assert.equal(f.host.writes.length,0);assert.equal(f.io.writes.length,0);assert(f.api.state.calls.every(c=>c.method==='GET'))
 })
