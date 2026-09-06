@@ -7,7 +7,7 @@ import {homedir} from 'node:os'
 import {fileURLToPath} from 'node:url'
 import {spawn, execFileSync} from 'node:child_process'
 import {createHash} from 'node:crypto'
-import {loadSource} from '../pilot-org/index.mjs'
+import {loadRoleSource} from '../../packages/focx-bot/src/roles.mjs'
 
 export const COMMAND = 'node tools/qa-claude-agent-acp/index.mjs'
 export const entrypoint = () => join(homedir(), '.paperclip/cli/current/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js')
@@ -62,7 +62,7 @@ export async function prepare({env=process.env, cwd=realpathSync(process.cwd()),
   const resolvedAgent = await resolveAgent(env, fetch)
   cwd = realpathSync(cwd)
   const git = (...args) => execFileSync('git', args, {cwd, encoding:'utf8', stdio:['ignore','pipe','pipe']}).trim()
-  const source = loadSource(root)
+  const source = loadRoleSource(root)
   const rules = validateContext(resolvedAgent, {source, env, cwd, root:realpathSync(root), branch:git('branch','--show-current'), commonDir:realpathSync(resolve(cwd, git('rev-parse','--git-common-dir')))})
   requireThat(!lstatSync(join(cwd,'.claude')).isSymbolicLink(), 'Refusing symlinked .claude directory')
   const settingsPath = join(cwd,'.claude/settings.local.json')

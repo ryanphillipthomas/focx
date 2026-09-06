@@ -124,17 +124,22 @@ export async function main(argv=process.argv.slice(2),runtime={}) {
   else if(flags.verb==='restore'){requireThat(flags['snapshot-file'],'restore requires --snapshot-file');result=await restore(api,source,JSON.parse(readFileSync(flags['snapshot-file'],'utf8')),options)}
   else {
     requireThat(state?.companyId,'bind-secrets requires import state')
-    const homes=renderSkillHomes(source.contract,instanceRoot(source.contract),state.companyId,state.ids)
-    const inventory=readPluginInventory(source.contract,homes.codex.home)
+    const homes=renderSkillHomes(source.contract,options.instanceRoot,state.companyId,state.ids)
+    const pluginHost=flags.fake?fakeHost:options.host
+    const checkPluginAuth=()=>requireThat(pluginHost.exists(homes.codex.authLink),`Ryan must complete codex login for CODEX_HOME=${homes.codex.home} before native plugin installation`)
+    // Plan/apply preflight must refuse before the lock, env PATCHes or state save.
+    checkPluginAuth()
+    const inventory=flags.fake?(runtime.pluginInventory??[]):readPluginInventory(source.contract,homes.codex.home)
     const claude=pluginOperations(source.contract,inventory,homes.codex.home,{adapter:'claude_local'})
     const codex=nativePluginPlan(source.contract,homes.codex.home)
     const command=resolve(instanceRoot(source.contract),'../../cli/current/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex')
     const manager={method:'START_PLUGIN_MANAGER',command,args:['app-server'],home:homes.codex.home}
     result=await bindSecrets(api,source,{...options,agentEnv:homes.agentEnv,pluginOperations:[...claude,manager,...codex],provisionPlugins:async()=>{
-      requireThat(defaultHost(source.contract).exists(homes.codex.authLink),`Ryan must complete codex login for CODEX_HOME=${homes.codex.home} before native plugin installation`)
+      checkPluginAuth()
+      if(flags.fake){requireThat(runtime.provisionPlugins,'Fake plugin provisioning requires an injected runtime');return runtime.provisionPlugins()}
       await executePluginOperations(claude,{readInventory:()=>readPluginInventory(source.contract,homes.codex.home),emit})
-      const runtime=new NativePluginRuntime(command,homes.codex.home,emit)
-      try{await runtime.open();return await installNativePlugins(codex,runtime,emit)}finally{runtime.close()}
+      const nativeRuntime=new NativePluginRuntime(command,homes.codex.home,emit)
+      try{await nativeRuntime.open();return await installNativePlugins(codex,nativeRuntime,emit)}finally{nativeRuntime.close()}
     }})
   }
   emit(result)

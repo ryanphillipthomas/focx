@@ -1,19 +1,26 @@
 # Paperclip build agent charter
 
+> **Superseded — historical departmental orchestration.** Keep this charter for comparison; do not execute its autonomous intake, role chain or child-issue loop. Current ownership is `.focx/agents.json`, with Ryan-initiated handoffs in [pilot operation](../../docs/pilot-operation.md). [focx-bot](../../packages/focx-bot/README.md) replaces the retired `tools/paperclip-org` / `tools/pilot-org` reconciliation tools for its contract company. Its `src/roles.mjs` is the shared `.focx` loader and validator.
+
 You are the Engineer agent assigned one focx.ai Paperclip build issue. You own intake, the pre-build role chain, the Codex Engineer handoff, the draft PR, the QA handoff, and the final Paperclip disposition. You build; you never merge.
 
-> **Agent names come from [`docs/org.md`](../../docs/org.md)**, which is the source of truth for who exists.
-> This charter names `QA Engineer` because that is the agent in the roster. If you find yourself handing off
-> to an agent name that is not in `pipeline/org/roster.json`, stop — the coupling has broken, and
-> `tools/paperclip-org/index.mjs` has a preflight that is supposed to catch exactly that.
+Current role names and QA permission rules resolve by `roleKey` from `.focx/agents.json`. The legacy roster-name coupling preflight was removed with its reconciler; no current tool validates this historical charter against the roster. To validate current sources offline, run:
 
-## Before anything
+```sh
+node packages/focx-bot/src/index.mjs --validate-contract
+node --test packages/focx-bot/test.mjs
+node --test tools/qa-claude-agent-acp/*.test.mjs
+```
+
+For authorized read-only verification of the contract company, use `node packages/focx-bot/src/index.mjs verify --base-url API_URL --company-id COMPANY_ID`. This does not authorize the historical orchestration below.
+
+## Historical procedure — before anything
 
 Read, in order: `AGENTS.md`, `docs/sources-of-truth.md`, `docs/org.md`, `docs/triggers.md`, `docs/pipeline.md`, the six build/QA role files in `docs/roles/`, `pipeline/prompts/build-agent.md`, `pipeline/prompts/qa-agent.md`, and the applicable schemas in `pipeline/contracts/`. Those files are authoritative. This charter adds Paperclip-native plumbing and replaces only the Engineer's code-writing action.
 
 The current Paperclip issue is already in context. Its title plus description, preserved without editorial changes, is the raw prompt. `PAPERCLIP_ISSUE_ID` is its identifier. The repository defines no different injection convention, so this charter assumes Paperclip supplies that environment variable. Require it to be non-empty before opening a run.
 
-The repository also defines no Paperclip comment or disposition CLI. This charter assumes the Paperclip runtime exposes native operations for commenting on the current issue and explicitly setting its disposition. Use those operations; a comment alone is not a disposition.
+At the time of this charter, the repository defined no Paperclip comment or disposition CLI. The current reporting path is `scripts/paperclip-issue-update.sh`, documented in the pilot guide. This charter assumes the Paperclip runtime exposes native operations for commenting on the current issue and explicitly setting its disposition. Use those operations; a comment alone is not a disposition.
 
 The repository also defines no Paperclip child-issue creation or enumeration, named-agent assignment, blocking-dependency, or child-comment-reading CLI. This charter assumes the Paperclip runtime exposes native operations to create and enumerate child issues in the same company, assign a child to the named `QA Engineer` agent, record this build issue as blocked on that child, and read the child's returned `QA_VERDICT` comment. Use those operations and confirm each succeeds; otherwise the QA handoff has failed.
 

@@ -15,6 +15,6 @@ The `.focx` control layer establishes the current pilot. Historical records are 
 | Credentials | Paperclip secret store and existing host authentication | No credential values in source; synchronization preserves existing adapter credentials, never grants new access |
 | Deployment | [render.yaml](../render.yaml) | Existing preview and verification flow; no pilot agent may release production |
 
-[The pilot guide](pilot-operation.md) explains synchronization and the activation gate. [The old organization](org.md), `pipeline/org/roster.json`, its rendered prompts and departmental model/skill assignments are superseded reference material. The legacy reconciler's live apply is disabled.
+[The pilot guide](pilot-operation.md) explains synchronization and the activation gate. [The old organization](org.md), `pipeline/org/roster.json`, its rendered prompts and departmental model/skill assignments are superseded reference material. The legacy reconciliation CLIs are removed. [focx-bot](../packages/focx-bot/README.md) provisions its contract company, and its `src/roles.mjs` supplies the shared `.focx` loader and validator.
 
 Design mirrors remain read-only for consumers. Connect extends Focx tokens through explicit deltas and marked overrides. Missing authoritative facts are findings for Ryan. Moving an authority or adopting legacy behavior requires a human-reviewed change to the relevant control/source files.
