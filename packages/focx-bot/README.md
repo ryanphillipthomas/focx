@@ -102,7 +102,7 @@ agent. It is also included in `verify`. `grants` never writes or invokes a CLI;
 API target and company id (or saved instance state) are required.
 
 Claude mismatches exit nonzero: grant/enablement/installation/pin differences,
-launcher command or environment presence, source divergence, launcher id binding,
+launcher command or environment presence, source divergence, launcher role/company/adapter identity,
 worktree permission deltas and H7's dead temp rule. Permissions are rendered with
 the launcher's `mergeSettings` and its five vendor baseline rules. The source
 validator is imported from `tools/pilot-org`; it reads repository `.focx` role and
@@ -121,8 +121,12 @@ works. No worktree settings is unobserved until an authorised FB8 run. Directory
 mtimes after the matching pin's recorded `installedAt` are labelled unattributed;
 when that metadata is absent, the timestamp baseline is unavailable.
 
-F10: QA permission delivery is bound to .focx/agents.json ids; a provisioned company cannot launch QA until the launcher's binding is redesigned (FB2 rev 2.7, Ryan)
+F10 resolved (rev 2.7): the launcher resolves QA through Paperclip by url-key and company; no ids in source.
 
-The fake API supports explicit company/agent ids for the clean binding fixture;
-its ordinary generated ids fail the F10 check. These fixtures prove metadata
-comparison and read-only behavior offline, not runtime permission enforcement.
+Generated company and agent ids pass when the live QA agent has url-key
+`qa-engineer`, adapter `claude_local`, and the live company id. The launcher
+resolves that identity through an authenticated, run-bound Paperclip self-read;
+HTTP errors (including a denied trust preset) and incomplete restricted views
+fail closed. Permission values still come from `.focx/agents.json` by roleKey.
+These fixtures prove metadata comparison and read-only behavior offline, not
+runtime permission enforcement.

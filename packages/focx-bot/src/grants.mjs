@@ -9,7 +9,7 @@ import { catalogEntries, renderSkillHomes } from './skills.mjs'
 import { readPluginInventory, readClaudePluginRecords, pluginReadbackMatches, metadataReadable } from './plugins.mjs'
 
 export const F1 = 'codex_local: reported only — declared permissions and plugin sets do not bound Codex behavior (F1); the Claude lane is bounded by its settings and permission rules.'
-export const F10 = "F10: QA permission delivery is bound to .focx/agents.json ids; a provisioned company cannot launch QA until the launcher's binding is redesigned (FB2 rev 2.7, Ryan)"
+export const F10 = "F10 resolved (rev 2.7): the launcher resolves QA through Paperclip by url-key and company; no ids in source."
 const sorted=values=>[...new Set(values)].sort()
 const strings=value=>Array.isArray(value)&&value.every(v=>typeof v==='string')
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)
@@ -111,13 +111,10 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadPilotSou
         say('observed on disk','live API readSnapshot delivery (API metadata)',{agentCommand:adapter.agentCommand??null,envPresent:present,valueComparison:'verifySkills claude-env compares values against renderSkillHomes agentEnv'})
         if(adapter.agentCommand!==COMMAND)diff('live API delivery','delivery-command-missing','agentCommand',{expected:COMMAND})
         for(const [key,exists]of Object.entries(present))if(!exists)diff('live API delivery','delivery-env-missing',key)
-        const qa=pilotManifest?.agents.find(s=>s.roleKey==='qa-engineer')
-        say('declared','launcher binding',{agentId:qa?.id,companyId:pilotManifest?.companyId})
-        say('observed on disk','live API readSnapshot binding (API metadata)',{agentId:b?.id,companyId:live.company.id})
-        if(b?.id!==qa?.id || live.company.id!==pilotManifest?.companyId){
-          diff('live API delivery','delivery-binding-mismatch',a.roleKey)
-          lines.push(`declared: ${F10}`)
-        }
+        say('declared','launcher identity',{urlKey:'qa-engineer',adapterType:'claude_local',company:'live company'})
+        say('observed on disk','live API readSnapshot identity (API metadata)',{urlKey:b?.urlKey,adapterType:b?.adapterType,companyId:b?.companyId})
+        if(b?.urlKey!=='qa-engineer' || b?.adapterType!=='claude_local' || b?.companyId!==live.company.id)diff('live API delivery','delivery-identity-mismatch',a.roleKey)
+        lines.push(`declared: ${F10}`)
         const placeholder=join(root,'projects',live.company.id,'<projectId>','<checkout>','.paperclip','worktrees','<QA-worktree>')
         const permissions=renderPermissions(a.adapterLocal,placeholder)
         say('rendered','QA settings.local.json permissions',{cwd:placeholder,...permissions})
@@ -125,10 +122,13 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadPilotSou
         if(!worktrees.length)lines.push('observed on disk: no QA worktree settings yet — unobserved until an authorised run (FB8)')
         for(const row of worktrees){
           const expected=renderPermissions(a.adapterLocal,row.cwd)
-          const observed={allow:strings(row.permissions?.allow)?row.permissions.allow:null,deny:strings(row.permissions?.deny)?row.permissions.deny:null}
-          // Paperclip's writer seeds every Claude worktree with the five vendor rules and no deny before
-          // the launcher merges QA's rules: that file is a pre-launch baseline, evidence of nothing.
-          if(observed.allow&&isDeepStrictEqual(sorted(observed.allow),sorted(vendorBaseline(row.cwd)))&&!(observed.deny??[]).length){say('observed on disk','QA settings.local.json pre-launch baseline (Paperclip writer only; launcher has not merged rules) — not evidence',{path:row.path});continue}
+          const observed={allow:strings(row.permissions?.allow)?row.permissions.allow:null,deny:strings(row.permissions?.deny)?row.permissions.deny:null,defaultMode:typeof row.permissions?.defaultMode==='string'?row.permissions.defaultMode:null}
+          // Paperclip's writer keeps any pre-existing defaultMode other than dontAsk (acpx-engine/execute.js:815-816),
+          // so a worktree can carry bypassPermissions; the launcher refuses anything but 'default' (mergeSettings) and so does this check.
+          if(observed.defaultMode!=='default')diff('worktree permissions','permission-mode-unexpected',row.path,{defaultMode:observed.defaultMode,expected:'default',launcher:'mergeSettings refuses any other mode'})
+          // Paperclip's writer seeds every Claude worktree with the five vendor rules, defaultMode 'default' and no deny
+          // before the launcher merges QA's rules: that file is a pre-launch baseline, evidence of nothing.
+          if(observed.defaultMode==='default'&&observed.allow&&isDeepStrictEqual(sorted(observed.allow),sorted(vendorBaseline(row.cwd)))&&!(observed.deny??[]).length){say('observed on disk','QA settings.local.json pre-launch baseline (Paperclip writer only; launcher has not merged rules) — not evidence',{path:row.path});continue}
           say('observed on disk','QA settings.local.json',{path:row.path,permissions:observed})
           for(const field of ['allow','deny']){
             if(observed[field]===null)diff('worktree permissions','metadata-unavailable',row.path,field)
