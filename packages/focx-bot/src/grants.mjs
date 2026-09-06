@@ -45,25 +45,23 @@ export function readCodexEnablement(host,home) {
 
 // Mirror only the five vendor baseline rules accepted by mergeSettings (:26).
 export function renderPermissions(local,cwd) {
-  const allow=['Bash(curl:*)','Bash(env:*)','Bash(env)',`Bash(${cwd}/scripts/paperclip-issue-update.sh:*)`,`Bash(${cwd}/scripts/paperclip:*)`]
-  return mergeSettings({permissions:{defaultMode:'default',allow}},local.permissionsAllow??[],cwd,local.permissionsDeny).permissions
+  return mergeSettings({permissions:{defaultMode:'default',allow:vendorBaseline(cwd)}},local.permissionsAllow??[],cwd,local.permissionsDeny).permissions
 }
 
-export function readWorktreeSettings(host,root) {
+export const vendorBaseline = cwd => ['Bash(curl:*)','Bash(env:*)','Bash(env)',`Bash(${cwd}/scripts/paperclip-issue-update.sh:*)`,`Bash(${cwd}/scripts/paperclip:*)`]
+
+// Paperclip keeps each company's project checkouts under
+// <instanceRoot>/projects/<companyId>/<projectId>/<checkout>/ and per-issue
+// worktrees under <checkout>/.paperclip/worktrees/<issue>/ — the location the
+// QA launcher enforces (tools/qa-claude-agent-acp/index.mjs:36-38). Bounded
+// walk, scoped to the live company; no recursion into checkouts.
+export function readWorktreeSettings(host,root,companyId) {
   const rows=[]
-  const walk=dir=>{
-    if(!metadataReadable(host,dir)||!host.isDirectory(dir))return
-    for(const name of host.entries(dir).sort()){
-      if(name==='.'||name==='..'||name.includes('/'))continue
-      const path=join(dir,name)
-      if(!metadataReadable(host,path)||!host.isDirectory(path))continue
-      if(name==='.claude'){
-        const settingsPath=join(path,'settings.local.json')
-        if(host.exists(settingsPath))rows.push({path:settingsPath,cwd:dir,permissions:metadataReadable(host,settingsPath)?host.readJson(settingsPath)?.permissions:null})
-      }else walk(path)
-    }
+  const dirs=p=>metadataReadable(host,p)&&host.isDirectory(p)?host.entries(p).filter(n=>n!=='.'&&n!=='..'&&!n.includes('/')).sort().map(n=>join(p,n)).filter(d=>metadataReadable(host,d)&&host.isDirectory(d)):[]
+  for(const project of dirs(join(root,'projects',companyId)))for(const checkout of dirs(project))for(const cwd of dirs(join(checkout,'.paperclip','worktrees'))){
+    const settingsPath=join(cwd,'.claude','settings.local.json')
+    if(host.exists(settingsPath))rows.push({path:settingsPath,cwd,permissions:metadataReadable(host,settingsPath)?host.readJson(settingsPath)?.permissions:null})
   }
-  walk(join(root,'worktrees'))
   return rows
 }
 
@@ -71,7 +69,7 @@ export function readWorktreeSettings(host,root) {
 // Runtime host readers above never open plugin payloads, auth or catalogs.
 export function grantReport(contract,live,homes,host,{pilotManifest=loadPilotSource().manifest,instanceRoot:root=dirname(dirname(dirname(homes.codex.home)))}={}) {
   const lines=[`declared: ${F1}`, 'observed on disk: effect evidence is reported by verifySkills: runtime-skills/ presence and run-log injection failures; grants checks metadata only.'],agents=[]
-  const worktrees=readWorktreeSettings(host,root)
+  const worktrees=readWorktreeSettings(host,root,live.company.id)
   const inventory=readPluginInventory(contract,homes.codex.home,{metadataOnly:true,host,userHome:host.userHome})
   const claudeIndex=readClaudePluginRecords(host,host.userHome),codex=readCodexEnablement(host,homes.codex.home),pins=catalogEntries(contract.skills).filter(e=>e.pinned)
   for(const a of contract.agents){
@@ -120,7 +118,7 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadPilotSou
           diff('live API delivery','delivery-binding-mismatch',a.roleKey)
           lines.push(`declared: ${F10}`)
         }
-        const placeholder=join(root,'worktrees','<QA-worktree>')
+        const placeholder=join(root,'projects',live.company.id,'<projectId>','<checkout>','.paperclip','worktrees','<QA-worktree>')
         const permissions=renderPermissions(a.adapterLocal,placeholder)
         say('rendered','QA settings.local.json permissions',{cwd:placeholder,...permissions})
         for(const dead of deadTempRules(permissions.allow,host.tempDir))diff('rendered permissions','dead-rule',dead.rule,dead.reason)
@@ -128,6 +126,9 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadPilotSou
         for(const row of worktrees){
           const expected=renderPermissions(a.adapterLocal,row.cwd)
           const observed={allow:strings(row.permissions?.allow)?row.permissions.allow:null,deny:strings(row.permissions?.deny)?row.permissions.deny:null}
+          // Paperclip's writer seeds every Claude worktree with the five vendor rules and no deny before
+          // the launcher merges QA's rules: that file is a pre-launch baseline, evidence of nothing.
+          if(observed.allow&&isDeepStrictEqual(sorted(observed.allow),sorted(vendorBaseline(row.cwd)))&&!(observed.deny??[]).length){say('observed on disk','QA settings.local.json pre-launch baseline (Paperclip writer only; launcher has not merged rules) — not evidence',{path:row.path});continue}
           say('observed on disk','QA settings.local.json',{path:row.path,permissions:observed})
           for(const field of ['allow','deny']){
             if(observed[field]===null)diff('worktree permissions','metadata-unavailable',row.path,field)

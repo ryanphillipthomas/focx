@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { source,fixture,writes,corruptInvariant } from './test-support.mjs'
@@ -284,7 +284,7 @@ knockout('native source identity guard','src/native-plugins.mjs',s=>s.replace("r
 knockout('native version pin guard','src/native-plugins.mjs',s=>s.replace("requireThat(version===entry.version,`${entry.key}: native pin version mismatch`)",'/* knocked out */'),`assert.throws(()=>subject.assertNativePin({key:'pin@market',sourceId:'expected',version:'1'},{plugin:{summary:{remotePluginId:'expected',version:'2'}}}));`)
 
 // FB5: metadata-only grant checks, using the existing fake and an in-memory host.
-import { grantReport, grants, assertGrantReport, deadTempRules, readCodexEnablement, renderPermissions, readWorktreeSettings } from './src/grants.mjs'
+import { grantReport, grants, assertGrantReport, deadTempRules, readCodexEnablement, renderPermissions, readWorktreeSettings, vendorBaseline } from './src/grants.mjs'
 import { memoryHost } from './src/fake-api.mjs'
 import { idMap } from './src/api.mjs'
 import { main } from './src/index.mjs'
@@ -315,6 +315,8 @@ async function grantFixture({matchingIds=true}={}) {
   return {...f,pilotManifest,host,homes,claude,settingsPath,indexPath,plugins,report,options:{companyId:f.companyId,instanceRoot:'/fake-instance',host,io:f.io,pilotManifest}}
 }
 const hasDiff=(r,kind,adapter='claude_local')=>r.agents.some(a=>a.adapter===adapter&&a.diffs.some(d=>d.kind===kind))
+const worktreeOf=(f,name)=>`/fake-instance/projects/${f.companyId}/proj/focx/.paperclip/worktrees/${name}`
+const addDirs=(host,p)=>{for(let d=p;d!==dirname(d);d=dirname(d))host.dirs.add(d)}
 
 test('FB5 clean grants: canonical declarations, both rendered surfaces, launcher delivery and disk pins agree',async()=>{
   const f=await grantFixture(),r=f.report()
@@ -335,11 +337,11 @@ for(const kind of ['granted-but-not-enabled','enabled-but-not-granted','enabled-
   const r=f.report();assert(hasDiff(r,kind));assert.equal(r.ok,false);assert.throws(()=>assertGrantReport(r),/Claude/)
 })
 test('FB5 worktree permission deltas and H7 are independently checked',async()=>{
-  const f=await grantFixture(),cwd='/fake-instance/worktrees/nested/QA',path=`${cwd}/.claude/settings.local.json`
+  const f=await grantFixture(),cwd=worktreeOf(f,'QA'),path=`${cwd}/.claude/settings.local.json`
   const permissions=renderPermissions(f.claude.adapterLocal,cwd)
   permissions.allow.push('Write(/tmp/**)');permissions.deny=[]
   f.host.files[path]=JSON.stringify({permissions})
-  for(const p of ['/fake-instance/worktrees','/fake-instance/worktrees/nested',cwd,`${cwd}/.claude`])f.host.dirs.add(p)
+  addDirs(f.host,`${cwd}/.claude`)
   const r=f.report()
   for(const kind of ['permission-extra','permission-missing','dead-rule'])assert(hasDiff(r,kind))
   assert(r.lines.some(l=>l.includes('/tmp/**')&&l.includes(f.host.tempDir)))
@@ -348,11 +350,17 @@ test('FB5 worktree permission deltas and H7 are independently checked',async()=>
 test('FB5 no worktree settings is one nonfatal unobserved line; vendor baseline is not an extra grant',async()=>{
   const f=await grantFixture(),line='observed on disk: no QA worktree settings yet — unobserved until an authorised run (FB8)'
   assert.equal(f.report().lines.filter(l=>l===line).length,1);assert.equal(f.report().ok,true)
-  const cwd='/fake-instance/worktrees/QA',path=`${cwd}/.claude/settings.local.json`
+  const cwd=worktreeOf(f,'QA'),path=`${cwd}/.claude/settings.local.json`
   f.host.files[path]=JSON.stringify({permissions:renderPermissions(f.claude.adapterLocal,cwd)})
-  for(const p of ['/fake-instance/worktrees',cwd,`${cwd}/.claude`])f.host.dirs.add(p)
+  addDirs(f.host,`${cwd}/.claude`)
   assert.equal(f.report().ok,true);assert(!f.report().lines.includes(line))
   f.host.files[path]='not JSON';assert(hasDiff(f.report(),'metadata-unavailable'))
+})
+test('FB5 a worktree holding only Paperclip\'s five vendor rules is the pre-launch baseline, not a permission diff',async()=>{
+  const f=await grantFixture(),cwd=worktreeOf(f,'FOC-1-fresh'),path=`${cwd}/.claude/settings.local.json`
+  f.host.files[path]=JSON.stringify({permissions:{defaultMode:'default',allow:vendorBaseline(cwd),additionalDirectories:[]}});addDirs(f.host,`${cwd}/.claude`)
+  const r=f.report();assert.equal(r.ok,true);assert(!hasDiff(r,'permission-missing'))
+  assert(r.lines.some(l=>l.includes('pre-launch baseline')&&l.includes(path)))
 })
 for(const kind of ['delivery-command-missing','delivery-env-missing','declared-source-divergence'])test(`FB5 ${kind} is fatal`,async()=>{
   const f=await grantFixture(),adapter=f.live.agents.find(a=>a.adapterType==='claude_local').adapterConfig
@@ -479,11 +487,12 @@ for(const kind of ['delivery-command-missing','delivery-env-missing','declared-s
 knockout('FB5 F10 explanation cannot be silenced','src/grants.mjs',s=>s.replace('lines.push(`declared: ${F10}`)','/* knocked out */'),grantDiffWitness.replace('const report=subject.grantReport',"manifest.companyId='wrong';const report=subject.grantReport")+`assert(report.lines.some(l=>l.includes(${JSON.stringify(f10Sentence)})));`)
 knockout('FB5 zero io writes witness','src/grants.mjs',s=>s.replace('const live=await readSnapshot(api,options.companyId)','const live=await readSnapshot(api,options.companyId); await options.io.save({mutation:true})'),grantWitness+`assert.equal(f.io.writes.length,0);`)
 test('FB5 worktree reader opens only settings metadata and skips symlinked trees',()=>{
-  const root='/instance',path=root+'/worktrees/QA/.claude/settings.local.json',host=memoryHost({[path]:JSON.stringify({permissions:{allow:['Read'],deny:['Edit']}}),[root+'/worktrees/QA/.claude/auth.json']:'FORBIDDEN',[root+'/worktrees/QA/plugin/SKILL.md']:'FORBIDDEN',[root+'/worktrees/linked/.claude/settings.local.json']:'FORBIDDEN'})
-  host.symlinks.add(root+'/worktrees/linked')
-  assert.equal(readWorktreeSettings(host,root).length,1);assert.deepEqual(host.reads,[path]);assert.equal(host.writes.length,0)
+  const root='/instance',path=root+'/projects/C/P/focx/.paperclip/worktrees/QA/.claude/settings.local.json',host=memoryHost({[path]:JSON.stringify({permissions:{allow:['Read'],deny:['Edit']}}),[root+'/projects/C/P/focx/.paperclip/worktrees/QA/.claude/auth.json']:'FORBIDDEN',[root+'/projects/C/P/focx/.paperclip/worktrees/QA/plugin/SKILL.md']:'FORBIDDEN',[root+'/projects/C/P/focx/.paperclip/worktrees/linked/.claude/settings.local.json']:'FORBIDDEN'})
+  host.symlinks.add(root+'/projects/C/P/focx/.paperclip/worktrees/linked')
+  assert.equal(readWorktreeSettings(host,root,'C').length,1);assert.deepEqual(host.reads,[path]);assert.equal(host.writes.length,0)
   host.symlinks.add(path);host.reads.length=0
-  assert.equal(readWorktreeSettings(host,root)[0].permissions,null);assert.deepEqual(host.reads,[])
+  assert.equal(readWorktreeSettings(host,root,'C')[0].permissions,null);assert.deepEqual(host.reads,[])
+  assert.equal(readWorktreeSettings(host,root,'OTHER').length,0,'other companies are out of scope')
 })
 
 test('FB5 default source reader checks the real launcher manifest; generated fake ids still fail F10',async()=>{
