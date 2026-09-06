@@ -1740,6 +1740,14 @@ since #87 merged.
   develop with four merge-only commits. Removing it needs a branch-protection change, which is Ryan's to make and which
   the guardrails forbid Claude from touching.
 
+- 2026-09-06 Ryan: **"i updated main, commit the leger"** — he enabled deletions in `main`'s branch protection
+  (`allow_deletions: false → true`), which is what the earlier "Delete it" needed.
+- 2026-09-06 16:31:23Z Claude: **`main` deleted** (tip recorded first: `aca99bdc2706798aec4a1919feed2a6d5e1d99ed`; `git ls-remote`
+  confirms it is gone), so develop is now unambiguously the only trunk. **This ledger committed** on
+  `chore/orchestration-ledger` → PR #99, drift gate green. From here it is a tracked file: later entries are ordinary
+  commits, not an untracked file on one machine. `handoff.md` deliberately left untracked — it marks itself retired and
+  superseded by this ledger. Remote branches: 55.
+
 ### FB3 log
 
 - 2026-09-05 Claude: **fragment written** → `~/Documents/focx-bot-FB3-skills-fragment.json`
