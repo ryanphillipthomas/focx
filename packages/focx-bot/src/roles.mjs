@@ -7,12 +7,19 @@ import { isDeepStrictEqual } from 'node:util'
 export const ROLE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const same = isDeepStrictEqual
 const requireThat = (ok, message) => { if (!ok) throw new Error(message) }
-const pilotKeys = ['qa-engineer', 'architecture-documentation-steward', 'implementation-engineer']
+// Pilot roles are whatever the manifest declares. The count is asserted from the
+// manifest's own `expectedPilotRoles`, so adding a role is a reviewed manifest
+// change rather than an edit to this file — but it still cannot happen silently.
 const ADAPTERS = ['claude_local', 'codex_local']
 // Claude Code's own key shape for an installed plugin: <plugin>@<marketplace>.
 const PLUGIN_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*@[a-z0-9]+(?:-[a-z0-9]+)*$/
 // A Claude Code permission rule: `Tool` or `Tool(pattern)`.
 const PERMISSION_RULE = /^[A-Z][A-Za-z]*(?:\(.+\))?$/
+// An MCP tool rule names one exact tool on one exact server. A role may reach an
+// external service only by listing every tool it needs by name: no wildcard, no
+// server-wide grant, so the blast radius of an MCP grant is always readable in
+// the manifest. `mcp__<server>__<tool>`.
+const MCP_RULE = /^mcp__[a-z0-9]+(?:_[a-z0-9]+)*__[a-z0-9]+(?:_[a-z0-9]+)*$/
 const PROCEDURE_VERSION = /^\s*version: "\d+\.\d+\.\d+"$/m
 
 export function loadRoleSource(root = ROLE_ROOT) {
@@ -48,11 +55,23 @@ function validateAdapterLocal(a) {
   const plugins = l.claudeCodePlugins ?? []
   requireThat(Array.isArray(plugins) && plugins.every(k => typeof k === 'string' && PLUGIN_KEY.test(k)) && new Set(plugins).size === plugins.length, `${a.name}: claudeCodePlugins must be unique '<plugin>@<marketplace>' keys`)
   const pluginNames = new Set(plugins.map(k => k.split('@')[0]))
-  requireThat(l.permissionDelivery === 'qa-worktree-local' && a.roleKey === 'qa-engineer', 'QA permissions require the worktree-local launcher')
+  // Any role may declare worktree-local delivery. The check is on shape and, below,
+  // on uniqueness -- not on one role's literal id. Hardcoding a single identity
+  // here is what finding F23 cost us in the QA launcher. QA's own id predates this
+  // rule and is pinned in the provisioning contract, so it is matched by shape.
+  requireThat(typeof l.permissionDelivery === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*-worktree-local$/.test(l.permissionDelivery), `${a.name}: permissionDelivery must be a '<role>-worktree-local' id`)
   const rules = l.permissionsAllow ?? []
-  requireThat(Array.isArray(rules) && rules.every(r => typeof r === 'string' && PERMISSION_RULE.test(r)) && new Set(rules).size === rules.length, `${a.name}: permissionsAllow must be unique Claude Code permission rules`)
+  requireThat(Array.isArray(rules) && rules.every(r => typeof r === 'string' && (PERMISSION_RULE.test(r) || MCP_RULE.test(r))) && new Set(rules).size === rules.length, `${a.name}: permissionsAllow must be unique Claude Code permission or exact MCP tool rules`)
   requireThat(same(l.permissionsDeny, ['Edit','NotebookEdit','Skill']), `${a.name}: deny actual Edit, NotebookEdit and Skill tools while allowing scoped Write via the Edit path rule`)
   for (const r of rules) {
+    if (MCP_RULE.test(r)) {
+      requireThat(!r.includes('*'), `${a.name}: ${r} must name one exact MCP tool`)
+      // An MCP server reaches outside this machine. Only grant tools on a server
+      // carried by a plugin this role has actually declared.
+      const server = r.split('__')[1]
+      requireThat([...pluginNames].some(n => server === n || server.startsWith(`plugin_${n}_`) || server.endsWith(`_${n}`)), `${a.name}: ${r} names an MCP server outside the declared plugins`)
+      continue
+    }
     const tool = r.split('(')[0]
     requireThat(tool !== 'Edit' || r === 'Edit(/pipeline/runs/**)', `${a.name}: file modifications must be anchored to pipeline/runs`)
     requireThat(tool !== 'Write', `${a.name}: Write(path) rules are ineffective; use the scoped Edit path rule`)
@@ -70,7 +89,11 @@ export function buildRoleSource({manifest, invariants, baseline, read}) {
   requireThat(invariants.company === 'Focx' && same(invariants.activeProducts, ['Connect']) && invariants.controlPlane === 'Paperclip', 'Locked Focx baseline changed')
   requireThat(manifest.version === '0.1.0' && manifest.activation === 'paused' && manifest.expectedAgentCount === 26 && manifest.agents.length === 26, 'All 26 retained identities are required')
   requireThat(new Set(manifest.agents.map(a => a.id)).size === 26, 'Duplicate agent identity')
-  requireThat(same(manifest.agents.filter(a => a.disposition === 'pilot').map(a => a.roleKey).sort(), [...pilotKeys].sort()), 'Exactly the three pilot roles are required')
+  const pilots = manifest.agents.filter(a => a.disposition === 'pilot').map(a => a.roleKey).sort()
+  requireThat(Array.isArray(manifest.expectedPilotRoles) && same(pilots, [...manifest.expectedPilotRoles].sort()), 'Pilot roles must match the manifest declaration exactly')
+  requireThat(new Set(pilots).size === pilots.length, 'Duplicate pilot roleKey')
+  const deliveries = manifest.agents.map(a => a.adapterLocal?.permissionDelivery).filter(Boolean)
+  requireThat(new Set(deliveries).size === deliveries.length, 'Two roles share a permissionDelivery id')
   const files = {}
   for (const a of manifest.agents) {
     requireThat(/^[0-9a-f-]{36}$/.test(a.id) && a.status === 'paused' && ['pilot','disabled-candidate'].includes(a.disposition), 'Invalid retained identity or disposition')
@@ -94,10 +117,12 @@ export function buildRoleSource({manifest, invariants, baseline, read}) {
     }
     requireThat(files[a.id]['AGENTS.md'].trim(), 'Empty role instructions')
   }
-  const qa = manifest.agents.find(a => a.roleKey === 'qa-engineer')
+  // Every plugin any worktree-local role declares, and nothing else.
+  const declared = manifest.agents.filter(a => a.disposition === 'pilot' && a.adapterLocal?.claudeCodePlugins)
+    .flatMap(a => a.adapterLocal.claudeCodePlugins)
   const projectSettings = JSON.parse(read('.claude/settings.json'))
-  requireThat(same(projectSettings, {enabledPlugins:Object.fromEntries(qa.adapterLocal.claudeCodePlugins.map(k=>[k,true]))}), 'Project settings must mirror only the declared plugins')
+  requireThat(same(projectSettings, {enabledPlugins:Object.fromEntries([...new Set(declared)].sort().map(k=>[k,true]))}), 'Project settings must mirror exactly the declared plugins')
   const runtimeFiles = {'tools/qa-claude-agent-acp/index.mjs':read('tools/qa-claude-agent-acp/index.mjs')}
-  requireThat(runtimeFiles['tools/qa-claude-agent-acp/index.mjs'].trim(), 'Missing QA permission launcher')
+  requireThat(runtimeFiles['tools/qa-claude-agent-acp/index.mjs'].trim(), 'Missing the worktree-local permission launcher')
   return {manifest,invariants,baseline,files,runtimeFiles}
 }

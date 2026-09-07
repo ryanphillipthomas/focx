@@ -740,7 +740,7 @@ knockout('F15 post-import singleton assertion','src/portability.mjs',s=>s.replac
 
 // F16: retained .focx loader coverage and source mutations.
 const roleSource=loadRoleSource()
-test('all retained identities and role procedures load offline',()=>{assert.equal(roleSource.manifest.agents.length,26);assert.equal(Object.keys(roleSource.files).length,3)})
+test('all retained identities and role procedures load offline',()=>{assert.equal(roleSource.manifest.agents.length,26);assert.equal(Object.keys(roleSource.files).length,roleSource.manifest.expectedPilotRoles.length)})
 // Rebuild the source from the real files with one mutation applied, so every
 // rejection below exercises the same validation the CLI runs.
 const readRepo=p=>readFileSync(resolve(ROLE_ROOT,p),'utf8')
@@ -790,7 +790,7 @@ const roleGuardCases=[
   ['adapterMigration needs approvedBy',({qa})=>{qa.adapterMigration.approvedBy=' '}],
   ['adapterLocal is only meaningful',({qa})=>{qa.adapterType='codex_local';delete qa.adapterMigration}],
   ['claudeCodePlugins must be unique',({qa})=>{qa.adapterLocal.claudeCodePlugins.push(qa.adapterLocal.claudeCodePlugins[0])}],
-  ['QA permissions require',({qa})=>{qa.adapterLocal.permissionDelivery='user-settings'}],
+  ['permissionDelivery must be a',({qa})=>{qa.adapterLocal.permissionDelivery='user-settings'}],
   ['permissionsAllow must be unique',({qa})=>{qa.adapterLocal.permissionsAllow.push('Read')}],
   ['deny actual Edit',({qa})=>{qa.adapterLocal.permissionsDeny=['NotebookEdit','Skill']}],
   ['file modifications must be anchored',({qa})=>{qa.adapterLocal.permissionsAllow.push('Edit(/src/**)')}],
@@ -802,7 +802,7 @@ const roleGuardCases=[
   ['Locked Focx baseline changed',({invariants})=>{invariants.activeProducts.push('Unapproved')}],
   ['All 26 retained identities',({manifest})=>{manifest.expectedAgentCount=25}],
   ['Duplicate agent identity',({manifest})=>{const disabled=manifest.agents.filter(a=>a.disposition==='disabled-candidate');disabled[0].id=disabled[1].id}],
-  ['Exactly the three pilot roles',({manifest,overrides})=>{const a=manifest.agents.find(a=>a.roleKey==='implementation-engineer');const body=readRepo(a.instructions);a.roleKey='other-engineer';a.instructions='.focx/roles/other-engineer.md';overrides[a.instructions]=body}],
+  ['Pilot roles must match the manifest declaration exactly',({manifest,overrides})=>{const a=manifest.agents.find(a=>a.roleKey==='implementation-engineer');const body=readRepo(a.instructions);a.roleKey='other-engineer';a.instructions='.focx/roles/other-engineer.md';overrides[a.instructions]=body}],
   ['Invalid retained identity or disposition',({manifest})=>{manifest.agents.find(a=>a.disposition==='disabled-candidate').status='active'}],
   ['Pilot must have human ownership',({qa})=>{qa.permissions.canAssignTasks=true}],
   ['Per-run timeout cannot be relaxed',({qa})=>{qa.timeoutSec=901}],
@@ -815,7 +815,7 @@ const roleGuardCases=[
   ['Procedure must be versioned',({qa,overrides})=>{overrides['.focx/skills/'+qa.skills[0]+'/SKILL.md']='version: "0.1"'}],
   ['Empty role instructions',({qa,overrides})=>{overrides[qa.instructions]=' \n'}],
   ['Project settings must mirror',({overrides})=>{overrides['.claude/settings.json']='{}'}],
-  ['Missing QA permission launcher',({overrides})=>{overrides['tools/qa-claude-agent-acp/index.mjs']='\n'}],
+  ['Missing the worktree-local permission launcher',({overrides})=>{overrides['tools/qa-claude-agent-acp/index.mjs']='\n'}],
 ]
 const roleInput=mutate=>{
   const manifest=structuredClone(roleSource.manifest),invariants=structuredClone(roleSource.invariants),overrides={}

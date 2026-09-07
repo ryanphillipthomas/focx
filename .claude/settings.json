@@ -1,6 +1,7 @@
 {
   "enabledPlugins": {
     "differential-review@trailofbits": true,
+    "figma@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "spec-to-code-compliance@trailofbits": true
   }
