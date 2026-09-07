@@ -111,16 +111,27 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadRoleSour
         say('observed on disk','live API readSnapshot delivery (API metadata)',{agentCommand:adapter.agentCommand??null,envPresent:present,valueComparison:'verifySkills claude-env compares values against renderSkillHomes agentEnv'})
         if(adapter.agentCommand!==COMMAND)diff('live API delivery','delivery-command-missing','agentCommand',{expected:COMMAND})
         for(const [key,exists]of Object.entries(present))if(!exists)diff('live API delivery','delivery-env-missing',key)
-        say('declared','launcher identity',{urlKey:'qa-engineer',adapterType:'claude_local',company:'live company'})
+        say('declared','launcher identity',{urlKey:a.roleKey,adapterType:'claude_local',company:'live company'})
         say('observed on disk','live API readSnapshot identity (API metadata)',{urlKey:b?.urlKey,adapterType:b?.adapterType,companyId:b?.companyId})
-        if(b?.urlKey!=='qa-engineer' || b?.adapterType!=='claude_local' || b?.companyId!==live.company.id)diff('live API delivery','delivery-identity-mismatch',a.roleKey)
+        // Compare each agent against its OWN declared role, not one role's literal.
+        if(b?.urlKey!==a.roleKey || b?.adapterType!=='claude_local' || b?.companyId!==live.company.id)diff('live API delivery','delivery-identity-mismatch',a.roleKey)
         lines.push(`declared: ${F10}`)
-        const placeholder=join(root,'projects',live.company.id,'<projectId>','<checkout>','.paperclip','worktrees','<QA-worktree>')
+        const placeholder=join(root,'projects',live.company.id,'<projectId>','<checkout>','.paperclip','worktrees',`<${a.roleKey}-worktree>`)
         const permissions=renderPermissions(a.adapterLocal,placeholder)
-        say('rendered','QA settings.local.json permissions',{cwd:placeholder,...permissions})
+        say('rendered',`${a.roleKey} settings.local.json permissions`,{cwd:placeholder,...permissions})
         for(const dead of deadTempRules(permissions.allow,host.tempDir))diff('rendered permissions','dead-rule',dead.rule,dead.reason)
-        if(!worktrees.length)lines.push('observed on disk: no QA worktree settings yet — unobserved until an authorised run (FB8)')
+        if(!worktrees.length)lines.push(`observed on disk: no ${a.roleKey} worktree settings yet — unobserved until an authorised run (FB8)`)
+        // A worktree carries the rules of the one role that ran there. With more than
+        // one worktree-local role, comparing every role against every worktree makes
+        // each role's own worktree look wrong to the others. So attribute the file
+        // first, and skip the ones that demonstrably belong to another declared role.
+        // A worktree matching no declared role is still compared here, so an
+        // unrecognised settings file cannot pass silently.
+        const localRoles=contract.agents.filter(x=>x.adapterLocal?.permissionDelivery?.endsWith('-worktree-local'))
+        const ownerOf=row=>localRoles.find(r=>isDeepStrictEqual(sorted(renderPermissions(r.adapterLocal,row.cwd).allow),sorted(row.permissions?.allow??[])))
         for(const row of worktrees){
+          const owner=ownerOf(row)
+          if(owner&&owner.roleKey!==a.roleKey)continue
           const expected=renderPermissions(a.adapterLocal,row.cwd)
           const observed={allow:strings(row.permissions?.allow)?row.permissions.allow:null,deny:strings(row.permissions?.deny)?row.permissions.deny:null,defaultMode:typeof row.permissions?.defaultMode==='string'?row.permissions.defaultMode:null}
           // Paperclip's writer keeps any pre-existing defaultMode other than dontAsk (acpx-engine/execute.js:815-816),
@@ -128,8 +139,8 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadRoleSour
           if(observed.defaultMode!=='default')diff('worktree permissions','permission-mode-unexpected',row.path,{defaultMode:observed.defaultMode,expected:'default',launcher:'mergeSettings refuses any other mode'})
           // Paperclip's writer seeds every Claude worktree with the five vendor rules, defaultMode 'default' and no deny
           // before the launcher merges QA's rules: that file is a pre-launch baseline, evidence of nothing.
-          if(observed.defaultMode==='default'&&observed.allow&&isDeepStrictEqual(sorted(observed.allow),sorted(vendorBaseline(row.cwd)))&&!(observed.deny??[]).length){say('observed on disk','QA settings.local.json pre-launch baseline (Paperclip writer only; launcher has not merged rules) — not evidence',{path:row.path});continue}
-          say('observed on disk','QA settings.local.json',{path:row.path,permissions:observed})
+          if(observed.defaultMode==='default'&&observed.allow&&isDeepStrictEqual(sorted(observed.allow),sorted(vendorBaseline(row.cwd)))&&!(observed.deny??[]).length){say('observed on disk',`${a.roleKey} settings.local.json pre-launch baseline (Paperclip writer only; launcher has not merged rules) — not evidence`,{path:row.path});continue}
+          say('observed on disk',`${a.roleKey} settings.local.json`,{path:row.path,permissions:observed})
           for(const field of ['allow','deny']){
             if(observed[field]===null)diff('worktree permissions','metadata-unavailable',row.path,field)
             // Vendor rules are rendered delivery plumbing; compare agent rules

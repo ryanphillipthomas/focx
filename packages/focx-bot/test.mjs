@@ -91,7 +91,7 @@ test('three-stage fake provisioning: born paused, explicit grant revoked, hand-e
   assert.equal(calls.filter(c=>c.path.endsWith('/permissions')).length,source.contract.agents.length)
   for(const c of calls.filter(c=>c.body?.adapterConfig?.env)){assert(!('replaceAdapterConfig' in c.body));assert.equal(Object.keys(c.body.adapterConfig).length,1)}
   assert(f.live.agents.every(a=>a.access.canAssignTasks===true && a.access.taskAssignSource==='simple_default'))
-  assert.equal(Object.keys(f.io.files).length,1)
+  assert.equal(Object.keys(f.io.files).length,source.contract.agents.filter(a=>a.adapterType==='claude_local').length)
   const r=await synchronize(f.api,source,{companyId:f.companyId});assert.deepEqual(r.changes,[])
 })
 for(let n=1;n<=9;n++)test(`invariant ${n} rejects its independent adversarial state`,async()=>{
@@ -197,8 +197,10 @@ test('unpinned entries only appear as available; install executor refuses them e
 })
 test('Claude settings and adapterLocal derive from grants; materialization reports injection failures without log text',()=>{
   const c=structuredClone(source.contract);c.agents[1].adapterLocal.claudeCodePlugins=[]
-  const homes=renderSkillHomes(c,'/fake/.paperclip/instances/default','company',{'implementation-engineer':'impl','qa-engineer':'qa'})
-  const text=Object.values(homes.files)[0];assert(Object.keys(JSON.parse(text).enabledPlugins).length===3);assert.equal(homes.adapterLocal['qa-engineer'].claudeCodePlugins.length,3)
+  const homes=renderSkillHomes(c,'/fake/.paperclip/instances/default','company',{'implementation-engineer':'impl','qa-engineer':'qa','product-designer':'design'})
+  // Select QA's own settings file: with more than one Claude agent, index 0 is
+  // whichever happened to render first, which is not what this test is about.
+  const text=homes.files[Object.keys(homes.files).find(k=>k.includes('qa'))];assert(Object.keys(JSON.parse(text).enabledPlugins).length===3);assert.equal(homes.adapterLocal['qa-engineer'].claudeCodePlugins.length,3)
   const host={readText:p=>homes.files[p]??null,exists:()=>true,entries:()=>['paperclip'],isSymlink:()=>true,runLogs:()=>[{path:'/fake/run.log',text:'Failed to inject sensitive log content'}]}
   const result=verifySkills(c,homes,host);assert.equal(result.injectionFailures.length,1);assert.equal(result.executionProven,false);assert(!JSON.stringify(result).includes('sensitive log content'));assert(result.available.length>0)
 })
@@ -374,8 +376,9 @@ test('FB5 worktree permission deltas and H7 are independently checked',async()=>
   assert.equal(r.ok,false)
 })
 test('FB5 no worktree settings is one nonfatal unobserved line; vendor baseline is not an extra grant',async()=>{
-  const f=await grantFixture(),line='observed on disk: no QA worktree settings yet — unobserved until an authorised run (FB8)'
-  assert.equal(f.report().lines.filter(l=>l===line).length,1);assert.equal(f.report().ok,true)
+  const f=await grantFixture(),line=r=>`observed on disk: no ${r} worktree settings yet — unobserved until an authorised run (FB8)`
+  // One line per worktree-local role, each naming that role.
+  for(const a of source.contract.agents.filter(a=>a.adapterLocal))assert.equal(f.report().lines.filter(l=>l===line(a.roleKey)).length,1);assert.equal(f.report().ok,true)
   const cwd=worktreeOf(f,'QA'),path=`${cwd}/.claude/settings.local.json`
   f.host.files[path]=JSON.stringify({permissions:renderPermissions(f.claude.adapterLocal,cwd)})
   addDirs(f.host,`${cwd}/.claude`)
@@ -475,7 +478,8 @@ test('FB5 readers never open auth files, plugin payloads, marketplace snapshots 
   f.host.files[f.indexPath]=JSON.stringify({plugins:f.plugins})
   f.report()
   assert(!f.host.reads.includes(`${pluginPath}/.claude-plugin/plugin.json`))
-  assert(f.host.reads.every(p=>p===f.settingsPath||p===f.indexPath||p===`${f.homes.codex.home}/config.toml`||p.endsWith('/.claude-plugin/plugin.json')||p.endsWith('/.codex-plugin/plugin.json')))
+  // One settings file per Claude agent, so accept any rendered settings path.
+  assert(f.host.reads.every(p=>Object.keys(f.homes.files).includes(p)||p===f.indexPath||p===`${f.homes.codex.home}/config.toml`||p.endsWith('/.claude-plugin/plugin.json')||p.endsWith('/.codex-plugin/plugin.json')))
   assert(f.host.reads.every(p=>!p.includes('/auth.json')&&!p.includes('/marketplaces/')&&!p.endsWith('SKILL.md')))
 })
 test('FB5 grants is idempotent and ignores apply: zero host/io writes and exclusively GET API calls',async()=>{
@@ -675,11 +679,12 @@ test('F15 restore strips files and manifest keys immutably, preserves instructio
   r.bundle.manifest.skills.push({key:RESERVED_SKILL_PREFIX+'manifest-only',path:'absent/SKILL.md'})
   const before=structuredClone(r.bundle),b=overlayRestore(source.contract,r.bundle)
   assert.deepEqual(r.bundle,before);assert.deepEqual(reservedFiles(b),[])
-  assert.equal(b.strippedReservedSkills.length,6);assert.equal(b.deduplicatedCompanySkills.length,2)
+  assert.equal(b.strippedReservedSkills.length,6);assert.equal(b.deduplicatedCompanySkills.length,new Set(source.contract.agents.flatMap(a=>a.skills)).size)
   assert(!b.manifest.skills.some(s=>s.key.startsWith(RESERVED_SKILL_PREFIX)||s.key.startsWith('company/')))
   for(const [path,text] of Object.entries(original.files).filter(([p])=>p.startsWith('agents/')))assert.equal(b.files[path],text)
   const op=importOperation(b,{mode:'new_company'})
-  assert.equal(op.body.source.expectedFileCount,Object.keys(before.files).length-8)
+  // Stripped = the reserved skills plus one company duplicate per declared procedure.
+  assert.equal(op.body.source.expectedFileCount,Object.keys(before.files).length-(b.strippedReservedSkills.length+b.deduplicatedCompanySkills.length))
   assert.equal(op.body.source.expectedFileCount,Object.keys(op.body.source.files).length)
 })
 test('F15 company copies with divergent bodies, metadata, extra files or absent agent copies fail before import',async()=>{
@@ -719,14 +724,14 @@ test('F15 restored preview expects only singleton warnings; other warnings still
   const preview=await f.api.request('POST','/api/companies/import/preview',p.changes[0].body)
   assert.deepEqual(preview.warnings,source.contract.agents.map(a=>expectedSkillWarning(a.slug)))
 })
-test('F15 restored inventory has only two package company skills, seeded reserved skills, exact desiredSkills and reported stripping',async()=>{
+test('F15 restored inventory has one package company skill per declared procedure, seeded reserved skills, exact desiredSkills and reported stripping',async()=>{
   const f=await roundTripFixture(),r=f.result,live=await readSnapshot(f.api,r.state.companyId)
   const skills=f.api.state.skills.filter(s=>s.companyId===r.state.companyId),imported=skills.filter(s=>s.origin==='package')
-  assert.equal(imported.length,2);assert.equal(new Set(imported.map(s=>s.slug)).size,2)
+  assert.equal(imported.length,new Set(source.contract.agents.flatMap(a=>a.skills)).size);assert.equal(new Set(imported.map(s=>s.slug)).size,new Set(source.contract.agents.flatMap(a=>a.skills)).size)
   assert(imported.every(s=>s.key==='company/'+r.state.companyId+'/'+s.slug && s.packagePath.startsWith('agents/')))
   assert.equal(skills.filter(s=>s.origin==='bundled').length,5)
   assertInvariants(source.contract,live,[4,5])
-  assert.equal(r.strippedReservedSkills.length,5);assert.equal(r.deduplicatedCompanySkills.length,2)
+  assert.equal(r.strippedReservedSkills.length,5);assert.equal(r.deduplicatedCompanySkills.length,new Set(source.contract.agents.flatMap(a=>a.skills)).size)
   assert.deepEqual((await f.restoreIO.readState()).restoration.strippedReservedSkills,r.strippedReservedSkills)
   const submitted=f.api.state.calls.filter(c=>c.path==='/api/companies/import').at(-1).body.source
   assert(!Object.keys(submitted.files).some(p=>p.startsWith('skills/company/')||p.startsWith('skills/'+RESERVED_SKILL_PREFIX)))
@@ -747,7 +752,7 @@ const f15Setup=[
   'const p=await subject.restore(f.api,source,record,opts);',
 ].join('\n')
 knockout('F15 reserved strip: raw apply must be rejected','src/portability.mjs',s=>s.replace('removeSkillFiles(result,reservedFiles,s=>s.key?.startsWith(RESERVED_SKILL_PREFIX) || reservedFiles.includes(s.path))','/* reserved strip knocked out */'),f15Setup+'await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});')
-knockout('F15 company de-duplication','src/portability.mjs',s=>s.replace('  deduplicateCompanySkills(contract,result)','  /* company de-duplication knocked out */'),f15Setup+'const r=await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});assert.equal(f.api.state.skills.filter(s=>s.companyId===r.state.companyId && s.origin==="package").length,2,"duplicate company skills imported");')
+knockout('F15 company de-duplication','src/portability.mjs',s=>s.replace('  deduplicateCompanySkills(contract,result)','  /* company de-duplication knocked out */'),f15Setup+'const r=await subject.restore(f.api,source,record,{...opts,apply:true,approvedDigest:p.digest});assert.equal(f.api.state.skills.filter(s=>s.companyId===r.state.companyId && s.origin==="package").length,new Set(source.contract.agents.flatMap(a=>a.skills)).size,"duplicate company skills imported");')
 knockout('F15 post-import singleton assertion','src/portability.mjs',s=>s.replace('    assertRestoredSkills(source.contract,live,bundle)','    /* final skill assertion knocked out */'),f15Setup+[
   'const request=f.api.request.bind(f.api);let injected=false;',
   'f.api.request=async(m,p,b)=>{const r=await request(m,p,b);if(p.includes("/adapters/claude_local/models") && !p.includes("/catalog-company/")){f.api.state.agents.find(a=>a.companyId!==f.companyId).desiredSkills=[];injected=true}return r};',
@@ -1013,7 +1018,8 @@ async function resumeGuardWitness(bind,kind) {
   await assert.rejects(bind(f.api,source,{...opts,apply:true,approvedDigest:kind==='digest'?'wrong':next.digest,provisionPlugins:async()=>{pluginCalls++;return {needsAuth:[]}}}),kind==='ids'?/Persisted generated ids differ/:undefined)
   assert.equal(pluginCalls,0)
   const patches=f.api.state.calls.filter(c=>c.method==='PATCH').length
-  assert.equal(patches,kind==='readback'?2:['between-operations','post-operation'].includes(kind)?1:0)
+  // One PATCH per agent when binding reaches readback.
+  assert.equal(patches,kind==='readback'?source.contract.agents.length:['between-operations','post-operation'].includes(kind)?1:0)
   if(['state-race','live-race','readback','between-operations','post-operation'].includes(kind)){
     const failed=await f.io.readState();assert.equal(failed.phase,'failed');assert.equal(failed.failedStep,3)
     await assert.rejects(bind(f.api,source,opts),/failed jobs are not retried/)
@@ -1164,7 +1170,8 @@ async function nativeSeedWitness(install=installNativePlugins,plan=nativePluginP
   assert.deepEqual(runtime.calls.find(c=>c.method==='plugin/list').params,{marketplaceKinds:['local'],forceRefetch:false})
   assert.deepEqual(runtime.calls.filter(c=>c.method==='plugin/install').map(c=>c.params.pluginName),['first','last'])
   assert.equal(result.oauthPerformed,false);assert.equal(result.needsAuth.length,0)
-  assert.equal(emitted.filter(e=>e.write).length,source.contract.agents.length)
+  // Two plugin installs (first@shared, last@shared) — not an agent count.
+  assert.equal(emitted.filter(e=>e.write).length,2)
 }
 test('F20 reserved verified / seeded-missing / failed findings continue to installed entries',()=>nativeSeedWitness())
 test('F20 classification follows normalized home containment, not a marketplace name',()=>{

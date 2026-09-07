@@ -1,12 +1,11 @@
 ---
 name: focx-design-extract
-version: "0.1.0"
 description: Turn an existing interface into a proposed token set — from served source where it exists, from screenshots only where it does not — and stop for a human before anything is written to Figma.
+metadata:
+  version: "0.1.0"
 ---
 
 # focx-design-extract
-
-version: "0.1.0"
 
 The intake flow. It produces a **proposal**, never a Figma write. `focx-design-figma` is the flow that writes, and it runs only after a human has accepted what this one produced.
 
