@@ -21,6 +21,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      # Pin the runtime for every step below. This previously sat two thirds of
+      # the way down the job, so the contract, QA-launcher and reporting suites
+      # ran on whatever Node the runner image happened to ship while only the
+      # focx-bot steps were pinned — the gate was testing two runtimes and
+      # saying so nowhere.
+      - name: Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: drift-check
         uses: ryanphillipthomas/drift-check@v1
       - name: contract validation
@@ -44,10 +53,6 @@ jobs:
         run: node --test tools/deploy-verify/test.mjs
       - name: claude fallback suite
         run: node --test tools/claude-fallback/test.mjs
-      - name: focx-bot Node runtime
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - name: focx-bot contract schema
         run: node packages/focx-bot/src/index.mjs --validate-contract
       - name: focx-bot provisioning safeguards
