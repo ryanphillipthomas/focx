@@ -389,8 +389,8 @@ test('token never occurs in responses or log lines, even in fields or upstream e
 });
 
 test('binds only IPv4 loopback and transport blocks foreign hosts/origins without a socket', async () => {
-  let binding;
-  start({ port: 4174, listen: () => ({ listen: (...args) => { binding = args; } }) });
+  let binding, server;
+  server = start({ port: 4174, listen: () => (server = { listen: (...args) => { binding = args; } }) });
   assert.deepEqual(binding, [4174, '127.0.0.1']);
   for (const port of [0, NaN, 65536]) assert.throws(() => start({ port }));
   const app = createConsole();
@@ -401,4 +401,30 @@ test('binds only IPv4 loopback and transport blocks foreign hosts/origins withou
   }
   assert.equal((await app.dispatch('GET', '/../package.json')).status, 404);
   assert.equal((await app.dispatch('GET', '/')).type, 'text/html');
+});
+
+test('outlives a reverse proxy idle connection, and names the local console when Origin is foreign', async () => {
+  // cloudflared reuses an idle origin connection for 90s. Closing first makes the
+  // proxy report a 503 on whichever asset raced us, so this is a floor, not a knob.
+  let server;
+  start({ port: 4174, listen: () => (server = { listen: () => {} }) });
+  assert.ok(server.keepAliveTimeout > 90000, 'keep-alive must outlive the proxy idle timeout');
+  assert.ok(server.headersTimeout > server.keepAliveTimeout, 'headersTimeout must exceed keepAliveTimeout');
+
+  // A proxy may assert the loopback Host; it cannot forge a browser's Origin.
+  const app = createConsole();
+  const call = async headers => {
+    let status, body;
+    await app.handler({ headers, socket: { localPort: 4174 } }, { writeHead: s => { status = s; }, end: b => { body = b; } });
+    return { status, body };
+  };
+  const proxiedRead = await call({ host: '127.0.0.1:4174' });
+  assert.notEqual(proxiedRead.status, 403, 'a proxied read must not be refused');
+  const proxiedWrite = await call({ host: '127.0.0.1:4174', origin: 'https://console.focx.ai' });
+  assert.equal(proxiedWrite.status, 403);
+  assert.match(proxiedWrite.body, /plan and apply must be run at http:\/\/127\.0\.0\.1:4174/);
+  // The rebinding refusal stays bare — a different failure with a different fix.
+  const foreignHost = await call({ host: 'console.focx.ai' });
+  assert.equal(foreignHost.status, 403);
+  assert.doesNotMatch(foreignHost.body, /plan and apply/);
 });

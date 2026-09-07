@@ -8,6 +8,8 @@ import { resolve } from 'node:path';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const execute = promisify(execFile);
 const timeout = 30000;
+// Above cloudflared's 90s idle keep-alive; see start().
+const proxyIdleTimeout = 120000;
 const unavailable = reason => ({ unavailable: true, reason });
 const noCredential = 'No board credential available.';
 const controlPlaneUnavailable = 'Control plane unreachable or refused.';
@@ -271,8 +273,15 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
       res.end(result.type ? result.body : JSON.stringify(result.body));
     };
     const expected = `127.0.0.1:${req.socket.localPort}`;
-    if (req.headers.host !== expected || (req.headers.origin && req.headers.origin !== `http://${expected}`)) {
+    // A reverse proxy may assert the loopback Host on a request's behalf, so a
+    // proxied session reads normally. It cannot forge the Origin a browser sends,
+    // which is what keeps plan and apply local. Say so rather than repeating the
+    // bare refusal: the two failures need different fixes from whoever hit them.
+    if (req.headers.host !== expected) {
       send({ status: 403, body: { error: 'Local same-origin requests only' } }); return;
+    }
+    if (req.headers.origin && req.headers.origin !== `http://${expected}`) {
+      send({ status: 403, body: { error: `Local same-origin requests only. A proxied session may read; plan and apply must be run at http://${expected}.` } }); return;
     }
     try {
       let body;
@@ -292,6 +301,13 @@ export function start({ port = Number(process.env.PORT ?? 4174), listen = create
   if (!Number.isInteger(port) || port < 1 || port > 65535) invalid();
   const server = listen(createConsole().handler);
   server.requestTimeout = timeout;
+  // Node closes an idle keep-alive connection after 5s; cloudflared holds and
+  // reuses one for up to 90s (its --proxy-keepalive-timeout default). Whoever
+  // closes first loses the race, and a request sent down a socket we are closing
+  // surfaces to the browser as a 503 on whichever asset lost. Outlive the proxy
+  // so closing is always its decision. headersTimeout must stay above it.
+  server.keepAliveTimeout = proxyIdleTimeout;
+  server.headersTimeout = proxyIdleTimeout + 5000;
   server.listen(port, '127.0.0.1');
   return server;
 }
