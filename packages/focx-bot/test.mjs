@@ -79,9 +79,15 @@ test('fresh reports the same five digest operations in preview and return',async
   assert.equal(result.digest,approvalDigest(digestOperations,{baseUrl:api.baseUrl,companyId:null},source.sha))
   assert.equal(emitted[0].digest,result.digest)
 })
-test('fresh console-demo digest is unchanged from before the reporting refactor',async()=>{
+// A pinned digest, deliberately. approvalDigest binds contractSha, so this value
+// moves whenever contract.json changes — and that is the point: a human must
+// confirm the move was intended, because every digest a human already approved
+// stops matching. It has moved exactly once, on 2026-09-07, when F24(c) replaced
+// QA's git-push grant with Bash(scripts/qa-push.sh) in contract.json. It must not
+// move for a change that only alters how operations are *reported*.
+test('fresh console-demo digest is pinned; it moves only when the contract does',async()=>{
   const result=await fresh(createFakeApi(),source,{io:memoryIO(),instanceRoot:'/fake-instance',catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'console-demo'}})
-  assert.equal(result.digest,'eafdfcf7d13b79031c15d6f535c164911dc967f231523e2cdb5e7d8ae95ff09c')
+  assert.equal(result.digest,'008c17bb88f100acba12378638ae28125de09f5c40238cda40fa464ad8826c32')
 })
 test('three-stage fake provisioning: born paused, explicit grant revoked, hand-entry pause, merge-only refs, zero changes',async()=>{
   const f=await fixture({instanceRoot:'/fake-instance'})
