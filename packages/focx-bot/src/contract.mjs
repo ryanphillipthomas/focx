@@ -5,6 +5,10 @@ import { isDeepStrictEqual as same } from 'node:util'
 import { requireThat, slugOf, instructionPaths } from './invariants.mjs'
 import { sha256 } from './digest.mjs'
 import { validateGrants } from './skills.mjs'
+// One definition of the permission grammar, shared with the role validator.
+// It lived in both files, and a fix applied to only one of them is how an MCP
+// grant would pass role validation and then be rejected by the contract.
+import { PERMISSION_RULE, MCP_RULE } from './roles.mjs'
 
 export const PACKAGE=resolve(dirname(fileURLToPath(import.meta.url)),'..')
 export const ROOT=resolve(PACKAGE,'../..')
@@ -61,9 +65,17 @@ export function validateContract(contract,schema) {
     requireThat(contract.adapters[a.adapterType]?.reasoningKey===(a.adapterType==='codex_local'?'modelReasoningEffort':'effort'), 'Wrong adapter reasoning key')
     if (a.adapterMigration) requireThat(a.adapterMigration.to===a.adapterType && a.adapterMigration.from!==a.adapterType, 'Migration evidence must describe the performed adapter change')
     if (a.adapterLocal) {
-      requireThat(a.adapterType==='claude_local' && a.adapterLocal.permissionDelivery==='qa-worktree-local' && same(a.adapterLocal.permissionsDeny,['Edit','NotebookEdit','Skill']), 'QA must preserve its worktree launcher and deny triple')
+      requireThat(a.adapterType==='claude_local' && /^[a-z0-9]+(?:-[a-z0-9]+)*-worktree-local$/.test(a.adapterLocal.permissionDelivery ?? '') && same(a.adapterLocal.permissionsDeny,['Edit','NotebookEdit','Skill']), `${a.slug}: worktree launcher and deny triple must be preserved`)
       for (const rule of a.adapterLocal.permissionsAllow) {
-        requireThat(/^[A-Z][A-Za-z]*(?:\(.+\))?$/.test(rule), 'Malformed Claude permission rule')
+        if (MCP_RULE.test(rule)) {
+          // An MCP grant reaches off this machine. Exact tool only, and only on a
+          // server carried by a plugin this agent is actually granted.
+          requireThat(!rule.includes('*'), `${a.slug}: ${rule} must name one exact MCP tool`)
+          const server=rule.split('__')[1]
+          requireThat(a.grants.claudePlugins.some(k=>{const n=k.split('@')[0];return server===n||server.startsWith(`plugin_${n}_`)||server.endsWith(`_${n}`)}), `${a.slug}: ${rule} names an MCP server outside the canonical Claude grants`)
+          continue
+        }
+        requireThat(PERMISSION_RULE.test(rule), 'Malformed Claude permission rule')
         requireThat(!['Bash','Write','Skill'].includes(rule.split('(')[0]) || rule.startsWith('Bash('), 'Blanket write/skill permissions are forbidden')
         requireThat(!rule.startsWith('Edit') || rule==='Edit(/pipeline/runs/**)', 'Edit permissions must remain scoped to evidence')
         if(rule.startsWith('Task('))requireThat(a.grants.claudePlugins.some(k=>k.split('@')[0]===rule.slice(5).split(':')[0]),'Task tooling must come from canonical Claude grants')
