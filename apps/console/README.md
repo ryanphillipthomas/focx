@@ -1,12 +1,12 @@
-# Focx Console · stage 1
+# Focx Console · stage 2
 
-One local Developer detail screen. Run `npm run console`, then open
+One card per pilot role the contract declares. A role added to `.focx/agents.json` appears here with no console change; a role declared but absent from the company is shown as unresolved rather than hidden. Run `npm run console`, then open
 `http://127.0.0.1:4174`. Set `PORT` to change the port. Run `npm run test:console`
 for offline server tests. No dependencies, build, remote fonts or deployment.
 
 The server binds only 127.0.0.1 and accepts that host and same-origin requests.
-Identity is read on page load from an already-running Paperclip API at
-127.0.0.1:3100. The company id comes from `.focx/agents.json`; the company name
+Identities are read on page load from an already-running Paperclip API at
+127.0.0.1:3100, one per declared pilot role. The company id comes from `.focx/agents.json`; the company name
 and issue prefix come from the API. The board token is read from the Mac Keychain
 service `paperclip-board-token`, account `$USER`, and used only in the server's
 Authorization header. Missing credentials/API/identity produce an unavailable

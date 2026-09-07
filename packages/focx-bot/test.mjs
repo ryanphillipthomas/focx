@@ -81,13 +81,18 @@ test('fresh reports the same digest operations in preview and return',async()=>{
   assert.equal(result.digest,approvalDigest(digestOperations,{baseUrl:api.baseUrl,companyId:null},source.sha))
   assert.equal(emitted[0].digest,result.digest)
 })
-// The digest binds the rendered operation list, so it is expected to change when
-// the contract gains an agent — that is the digest working, not drifting. Re-pin
-// it deliberately when a role is added, and never to make a red test go green.
-// eafdfcf7… was the two-agent value before product-designer (PR #118).
-test('fresh console-demo digest changes only when the operation list does',async()=>{
+// A pinned digest, deliberately. approvalDigest binds contractSha, so this value
+// moves whenever contract.json changes — and that is the point: a human must
+// confirm the move was intended, because every digest a human already approved
+// stops matching. Re-pin it deliberately when the contract changes, and never to
+// make a red test go green. It must NOT move for a change that only alters how
+// operations are reported.
+// History: eafdfcf7… two agents, before F24. 008c17bb… after F24(c) replaced
+// QA's git-push grant with Bash(scripts/qa-push.sh). The value below is this
+// merge: F24's rule change plus the product-designer agent (PR #118).
+test('fresh console-demo digest is pinned; it moves only when the contract does',async()=>{
   const result=await fresh(createFakeApi(),source,{io:memoryIO(),instanceRoot:'/fake-instance',catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'console-demo'}})
-  assert.equal(result.digest,'5b3f091930f2c16af94fb57f1912a4838d99d73ca5864fbfc8543f362736da23')
+  assert.equal(result.digest,'34fecf7ac04415c8e47a2f52a4853f1f045bd53eab0297fe4a542194e9494e6e')
 })
 test('three-stage fake provisioning: born paused, explicit grant revoked, hand-entry pause, merge-only refs, zero changes',async()=>{
   const f=await fixture({instanceRoot:'/fake-instance'})
