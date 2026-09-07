@@ -109,6 +109,7 @@ States as section 3. Same protocol, same constraints.
 | F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open** — needs Ryan's decision; it widens a permission | F23 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
+| **D1** | focx-bot-desktop mockup extraction → `design/mockup/` (source, copy, components, every layout value) | Claude | **review** — [#106](https://github.com/ryanphillipthomas/focx/pull/106) open, drift gate passed; captured 2026-09-06; not a token source | — |
 
 ### Dispositions of the H workstream
 
@@ -180,6 +181,51 @@ Recorded here rather than silently rescoped, per section 3.
 
 Also stale and corrected here: section 6 states `develop` at `bf30840`. It is `252349a`
 since #87 merged.
+
+### D1 log — focx-bot-desktop mockup extraction
+
+**2026-09-06 · Claude.** Ryan asked for a repo-ready extraction of the mockup at
+`focx-bot-desktop.rpt4k.chatgpt.site`. Note this is the **desktop UI mockup**, unrelated to
+Workstream FB's `focx-bot` provisioning product despite the shared name — D1 is a separate,
+design-side lane and does not touch FB.
+
+Delivered on `docs/focx-bot-desktop-mockup` under `design/mockup/`:
+
+- `source/` — `index.html`, `styles.css`, `app.js`, `assets/fox-avatar-atlas.png` as served.
+  Byte-identical except the Cloudflare bot-challenge script stripped from `index.html`.
+  Checksums recorded in `design/mockup/README.md`.
+- `copy.md` — verbatim copy of 7 screens, 13 modals, 4 empty states, 11 placeholders, 16 toasts.
+- `components.md` — component inventory and state-coverage matrix.
+- `design-values.md` — every colour, type, spacing, radius, shadow, motion and breakpoint value,
+  parsed from 1,397 CSS declarations across 354 selectors; §10 is the scale-vs-one-off verdict.
+
+**Scope boundary.** `design/mockup/` is a captured record and an input to tokenisation, **not** a
+design-value source. `design/tokens/` remains the only home for published values per `AGENTS.md`,
+and values reach it via the Design role's Figma sync. The drift gate's raw-value scan covers
+`apps/`, `src/`, `packages/` only (`docs/drift-gate.md` §19), so the raw hex in these documents is
+out of its scope by design. Verified locally: `tools/contracts/validate.mjs` 48/48,
+`focx-bot --validate-contract` exit 0.
+
+**Findings for Ryan, not acted on:**
+
+1. `--surface`, `--muted`, `--green` are declared in the mockup's `:root` and used nowhere at all.
+   Do not publish them on the assumption they are live.
+2. The mockup has no error, loading, disabled or pressed state anywhere in its product UI.
+   If the Figma library expects those, the mockup cannot supply them.
+3. Spacing has no scale: every integer 1–30px is used, with no skipped step. Type has no modular
+   ratio. 148 opaque colours collapse to 58 perceptually distinct ones. These need re-deciding,
+   not mapping.
+
+**2026-09-06 · Claude.** Pushed `docs/focx-bot-desktop-mockup` and opened
+[#106](https://github.com/ryanphillipthomas/focx/pull/106) against `develop` at Ryan's
+instruction. Drift gate **passed** (42s), confirming `design/mockup/` is outside the
+raw-value scan as `docs/drift-gate.md` §19 describes. Awaiting Ryan's review; not merged.
+
+**Open, needs Ryan's decision:** whether `design/mockup/` is the right permanent home, given
+`AGENTS.md`'s one-source-of-truth rule. The README states the non-authoritative framing explicitly;
+if that is not sufficient, the alternative is to keep the extraction outside the repo entirely.
+
+---
 
 ### FB4 log
 
