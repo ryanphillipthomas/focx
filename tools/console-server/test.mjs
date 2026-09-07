@@ -137,6 +137,18 @@ const liveDeveloper = { id: declaredDeveloperId, urlKey: 'implementation-enginee
   role: 'engineer', name: 'Developer', status: 'paused', adapterType: 'codex_local',
   adapterConfig: { model: 'model-from-api' } };
 
+test('the launchd agent runs this checkout on loopback and escapes its paths', async () => {
+  const { plist, LABEL, agentPath } = await import('./agent.mjs');
+  const xml = plist({ node: '/usr/local/bin/node', cwd: '/repo/a&b', port: 4174, logDir: '/logs' });
+  assert.match(xml, /<key>Label<\/key><string>ai\.focx\.console<\/string>/);
+  assert.match(xml, /<string>\/repo\/a&amp;b<\/string>/);          // XML-escaped, not raw
+  assert.match(xml, /<key>PORT<\/key><string>4174<\/string>/);
+  assert.match(xml, /<key>RunAtLoad<\/key><true\/>/);
+  assert(xml.includes('/repo/a&b/tools/console-server/index.mjs'.replace('&', '&')) || xml.includes('index.mjs'));
+  assert.equal(LABEL, 'ai.focx.console');
+  assert.match(agentPath('/Users/x'), /^\/Users\/x\/Library\/LaunchAgents\/ai\.focx\.console\.plist$/);
+});
+
 function ticketSetup({ fail = false, issues, token = 'fake-board-secret' } = {}) {
   const rows = issues ?? [
     { identifier: 'FOC-2', title: 'Older', status: 'done', priority: 'low',

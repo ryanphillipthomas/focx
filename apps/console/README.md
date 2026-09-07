@@ -83,3 +83,15 @@ Authored CSS contains no colour literals, pixel literals or drift exceptions.
 Structural values such as `0`, `100%`, `auto` and `60rem` remain unchanged.
 Tokens are read afresh for every `/api/tokens.css` request; their values are not
 copied into this app. The drift gate remains an independent required check.
+
+## Always running
+
+`npm run console:install` registers a per-user launchd agent (`ai.focx.console`)
+that starts the console at login and restarts it if it exits, so the bookmark is
+simply there. `console:status` reports it; `console:uninstall` removes it. The
+plist is generated from this checkout at install time rather than committed,
+because a plist naming one machine's paths is not shared configuration.
+
+Installing it changes nothing about reachability: the server still binds
+127.0.0.1 and still refuses any request whose Host is not loopback. It survives a
+closed terminal; it does not become reachable from anywhere new.
