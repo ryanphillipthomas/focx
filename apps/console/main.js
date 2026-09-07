@@ -51,7 +51,9 @@ element('plan-form').addEventListener('submit', async event => {
       return row;
     }));
     element('digest').textContent = data.digest;
-    element('coverage').textContent = data.digestCoversUnlistedOperations ? data.reason : '';
+    element('coverage').textContent = data.digestCoversUnlistedOperations
+      ? `${data.reason} This screen shows the emitted preview; it does not combine the lists.` : '';
+    element('coverage').hidden = !data.digestCoversUnlistedOperations;
     element('preflight').textContent = JSON.stringify(data.preflight, null, 2);
     element('preview').hidden = false;
     stage('planned', 'Review the operations and digest, then confirm to apply.');

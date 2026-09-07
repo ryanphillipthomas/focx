@@ -68,10 +68,11 @@ export async function fresh(api, source, options={}) {
   const templateHomes=options.instanceRoot?renderSkillHomes(source.contract,options.instanceRoot,'<created-company-id>',Object.fromEntries(source.contract.agents.map(a=>[a.slug,`<id:${a.slug}>`]))):null
   const hostOperations=templateHomes?Object.entries(templateHomes.files).map(([path,body])=>({method:'WRITE_FILE',path,body})):[]
   const boundTarget={baseUrl:api.baseUrl,companyId:null}
-  const digest=approvalDigest([...plan.operations,...hostOperations,{method:'WRITE_STATE',path:io?.statePath??'<instance-local-state>'}],boundTarget,source.sha)
-  emit({digest,changes:[...plan.operations,...hostOperations],later:plan.later,secretInputs:plan.secretInputs,window:'Import grants tasks:assign until step 2; agents are born paused with all wake paths closed.'})
+  const operations=[...plan.operations,...hostOperations,{method:'WRITE_STATE',path:io?.statePath??'<instance-local-state>'}]
+  const digest=approvalDigest(operations,boundTarget,source.sha)
+  emit({digest,changes:operations,later:plan.later,secretInputs:plan.secretInputs,window:'Import grants tasks:assign until step 2; agents are born paused with all wake paths closed.'})
   const preflight=await preflightFresh(api,source,{...options,target},plan)
-  if (!apply) return {digest,changes:plan.operations,secretInputs:plan.secretInputs,preflight}
+  if (!apply) return {digest,changes:operations,secretInputs:plan.secretInputs,preflight}
   requireThat(options.approvedDigest===digest, 'Preview changed or not approved; obtain a fresh digest')
   requireThat(io, 'Instance-local state and single-writer lock are required')
   announce(emit,{method:'LOCK',path:io.lockPath})
