@@ -178,7 +178,7 @@ test('balanced stream parsing preserves nested and escaped content and rejects m
   for (const value of ['', '[]', stream + 'garbage', stream + '{', '{"bad":}', stream + '"']) assert.throws(() => parseObjects(value));
 });
 
-test('plan retains fuller preview without reconstructing operations and flags unlisted state write', async () => {
+test('plan retains fuller preview without reconstructing operations and reports the observed list difference', async () => {
   const app = createConsole({ run: async () => ({ stdout: stream }) });
   const { status, body } = await plan(app);
   assert.equal(status, 200);
@@ -186,7 +186,26 @@ test('plan retains fuller preview without reconstructing operations and flags un
   assert.deepEqual(body.preflight, second.preflight);
   assert.equal(body.digest, digest);
   assert.equal(body.digestCoversUnlistedOperations, true);
-  assert.match(body.reason, /instance-local state/);
+  assert.equal(body.reason, 'The emitted preview lists 4 operations; the returned result lists 3. The lists first differ at operation 4.');
+});
+
+test('agreeing operation lists omit the coverage warning regardless of object key order', async () => {
+  const returned = { ...second, changes: changes.map(({ method, path, body }) => ({ body, path, method })) };
+  const app = createConsole({ run: async () => ({ stdout: JSON.stringify(first) + JSON.stringify(returned) }) });
+  const { status, body } = await plan(app);
+  assert.equal(status, 200);
+  assert.equal(body.digestCoversUnlistedOperations, false);
+  assert.equal(Object.hasOwn(body, 'reason'), false);
+});
+
+test('equal-length lists with different operation bodies still report a discrepancy', async () => {
+  const returned = structuredClone({ ...second, changes });
+  returned.changes[0].body.text = 'different';
+  const app = createConsole({ run: async () => ({ stdout: JSON.stringify(first) + JSON.stringify(returned) }) });
+  const { status, body } = await plan(app);
+  assert.equal(status, 200);
+  assert.equal(body.digestCoversUnlistedOperations, true);
+  assert.equal(body.reason, 'The emitted preview lists 4 operations; the returned result lists 4. The lists first differ at operation 1.');
 });
 
 test('single object, conflicting digest, missing digest or preflight are refused', async () => {

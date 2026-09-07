@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { promisify, isDeepStrictEqual } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
@@ -151,10 +151,16 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
         return clean({ result });
       }
       if (objects.length < 2 || objects.some(o => typeof o.digest !== 'string' || !/^[a-f0-9]{64}$/.test(o.digest) || o.digest !== objects[0].digest)) invalid();
-      if (!Array.isArray(objects[0].changes) || !objects[1].preflight) invalid();
+      if (!Array.isArray(objects[0].changes) || !Array.isArray(objects[1].changes) || !objects[1].preflight) invalid();
+      const digestCoversUnlistedOperations = !isDeepStrictEqual(objects[0].changes, objects[1].changes);
       const response = { preview: objects[0], preflight: objects[1].preflight, digest: objects[0].digest,
-        digestCoversUnlistedOperations: true,
-        reason: 'The digest binds at least one operation this list does not show: a write to instance-local state.' };
+        digestCoversUnlistedOperations };
+      if (digestCoversUnlistedOperations) {
+        const preview = objects[0].changes, returned = objects[1].changes;
+        const firstDifference = Array.from({ length: Math.max(preview.length, returned.length) }, (_, i) => i)
+          .find(i => !isDeepStrictEqual(preview[i], returned[i]));
+        response.reason = `The emitted preview lists ${preview.length} operations; the returned result lists ${returned.length}. The lists first differ at operation ${firstDifference + 1}.`;
+      }
       pending = { name: body.name, digest: response.digest };
       return clean(response);
     });

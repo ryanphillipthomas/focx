@@ -47,10 +47,9 @@
         <h3>Review artifact</h3>
         <p id="digest" class="digest"></p>
         <p>This deterministic SHA covers planned operations, target and contract SHA. Any caller can compute it; it identifies what was planned against this state.</p>
-        <p id="coverage"></p>
-        <p>The preview is the fuller emitted list. The returned result has fewer operations; this screen does not combine the lists.</p>
+        <p id="coverage" hidden></p>
         <details><summary>Preflight returned by focx-bot</summary><pre id="preflight"></pre></details>
-        <label><input id="confirm" type="checkbox"> I have reviewed the fake plan and the unlisted state-write notice.</label>
+        <label><input id="confirm" type="checkbox"> I have reviewed the fake plan, its listed operations and its digest.</label>
         <button id="apply" type="button" disabled>Confirm and apply fake plan</button>
       </div>
       <div id="result" hidden><h3>Result</h3><p id="verification"></p><pre id="result-data"></pre></div>

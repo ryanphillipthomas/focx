@@ -66,6 +66,23 @@ test('fresh is dry-run by default and names all three stages without using creat
   assert.equal(writes(api).length,0);assert.equal(io.writes.length,0)
   assert.equal(emitted[0].later.length,2);assert.match(emitted[0].window,/tasks:assign/)
 })
+test('fresh reports the same five digest operations in preview and return',async()=>{
+  const api=createFakeApi(),io=memoryIO(),emitted=[],target={mode:'new_company',newCompanyName:'console-demo'}
+  const result=await fresh(api,source,{io,target,instanceRoot:'/fake-instance',catalogCompanyId:'catalog-company',emit:e=>emitted.push(e)})
+  const homes=renderSkillHomes(source.contract,'/fake-instance','<created-company-id>',Object.fromEntries(source.contract.agents.map(a=>[a.slug,`<id:${a.slug}>`])))
+  const digestOperations=[...freshPlan(source,target).operations,...Object.entries(homes.files).map(([path,body])=>({method:'WRITE_FILE',path,body})),{method:'WRITE_STATE',path:io.statePath}]
+  assert.deepEqual(emitted[0].changes,result.changes)
+  assert.equal(result.changes.length,5)
+  assert.deepEqual(result.changes,digestOperations)
+  assert.equal(result.changes.length,digestOperations.length)
+  assert.deepEqual(result.changes.at(-1),{method:'WRITE_STATE',path:io.statePath})
+  assert.equal(result.digest,approvalDigest(digestOperations,{baseUrl:api.baseUrl,companyId:null},source.sha))
+  assert.equal(emitted[0].digest,result.digest)
+})
+test('fresh console-demo digest is unchanged from before the reporting refactor',async()=>{
+  const result=await fresh(createFakeApi(),source,{io:memoryIO(),instanceRoot:'/fake-instance',catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'console-demo'}})
+  assert.equal(result.digest,'eafdfcf7d13b79031c15d6f535c164911dc967f231523e2cdb5e7d8ae95ff09c')
+})
 test('three-stage fake provisioning: born paused, explicit grant revoked, hand-entry pause, merge-only refs, zero changes',async()=>{
   const f=await fixture({instanceRoot:'/fake-instance'})
   assertInvariants(source.contract,f.live)
