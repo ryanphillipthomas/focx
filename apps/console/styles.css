@@ -39,3 +39,7 @@ th { font-weight: var(--focx-bot-type-weight-medium); }
 }
 .agent h3 { font-size: var(--focx-bot-type-size-lg); margin: 0 0 var(--focx-bot-space-sm); }
 .agent dl { margin: 0; }
+.agent details { margin-top: var(--focx-bot-space-sm); }
+.agent summary { cursor: pointer; color: var(--focx-bot-color-text-muted); }
+.agent details ul { margin: var(--focx-bot-space-sm) 0 0; padding-left: var(--focx-bot-space-xl);
+  max-height: 240px; overflow-y: auto; font-size: var(--focx-bot-type-size-sm); }
