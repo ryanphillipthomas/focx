@@ -13,6 +13,8 @@ trigger ──▶ Chief ──▶ Product ──▶ Research ──▶ Design �
 
 The Chief opens and closes every run and is the only role that routes between roles. Any role that is blocked escalates to the Chief; the Chief may loop a stage (e.g., send a failed QA verdict back to the Engineer) at most twice before halting the run and reporting on the originating issue/PR.
 
+A looped stage is re-run with **fresh context**. The re-verification must not inherit the previous round's verdict: a reviewer that can see its own earlier judgement defends it instead of re-reading the work. Under the GitHub Actions path this holds by construction, because QA is a separate invocation each time; anywhere a run keeps one session across a loop, it has to be preserved deliberately.
+
 ## Stages and artifacts
 
 Every stage commits its artifact to `pipeline/runs/<run-id>/` **before** handing off. Artifacts are JSON, validated against the schemas in [`pipeline/contracts/`](../pipeline/contracts/). An artifact that fails validation is an incomplete handoff.
