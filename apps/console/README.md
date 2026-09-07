@@ -92,6 +92,33 @@ simply there. `console:status` reports it; `console:uninstall` removes it. The
 plist is generated from this checkout at install time rather than committed,
 because a plist naming one machine's paths is not shared configuration.
 
-Installing it changes nothing about reachability: the server still binds
-127.0.0.1 and still refuses any request whose Host is not loopback. It survives a
-closed terminal; it does not become reachable from anywhere new.
+Installing it changes nothing about reachability by itself: the server still
+binds 127.0.0.1 and still refuses any request whose Host is not loopback. It
+survives a closed terminal. Reachability is a separate decision, below.
+
+## Reachable at console.focx.ai
+
+The console is published at `https://console.focx.ai` without being hosted: the
+same Cloudflare Tunnel that already serves `ops.focx.ai` carries a second route
+to `127.0.0.1:4174` on this Mac. Nothing is deployed, and `render.yaml` is not
+involved. If this machine is off, the hostname is down.
+
+Three settings make that work, and each is load-bearing:
+
+- **Cloudflare Access** guards the hostname — policy `Allow → emails ending in
+  jaqlinmedlock.com`. The console has no authentication of its own, so Access is
+  the whole of it. Never publish a route to this server without it. Access is
+  created before the route, so a half-finished setup is closed, not open.
+- **HTTP Host Header `127.0.0.1:4174`** on the tunnel route. The server refuses
+  any other Host as a DNS-rebinding defence. Rewriting at the proxy keeps that
+  assertion truthful; widening the check in code would weaken it for every
+  caller, permanently, and must not be the fix.
+- **Path left empty.** A path would scope the route to a subset of URLs, and the
+  asset paths here are root-absolute.
+
+Reads work through this route. `plan` and `apply` do not: a browser sends an
+`Origin` of `https://console.focx.ai`, which the server refuses and cannot be
+forged by the proxy. That is deliberate — provisioning requires being at the
+machine — and the refusal names the local URL so the cause is obvious.
+
+`ops.focx.ai` is untouched by any of this, and Paperclip keeps its own login.
