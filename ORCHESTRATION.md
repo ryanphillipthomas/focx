@@ -106,7 +106,7 @@ States as section 3. Same protocol, same constraints.
 | F20 | Native Codex plugins: `openai-bundled` is reserved and cannot be installed by path; `openai-curated-remote` needs network + sign-in | Claude (found) | **done** — PR #96 merged (`431eced`) | F17 |
 | F21 | `bind-secrets` must not report `configured` while pinned plugins are unseeded | Codex | **done** — landed on develop via PR #98 (`93ceec7`) | F20 |
 | F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **done and PROVEN LIVE** — PR #103 merged (`7a49b9c`); the gate no longer fires in a provisioned company | F17 |
-| F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open** — needs Ryan's decision; it widens a permission | F23 |
+| F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open — direction accepted, deferred.** Ryan 2026-09-07: script-mediated push (option c), sequenced after `contract.json` is unpinned. Still a permission change; not on stage 1's path | F23, contract-sha |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
 | **D1** | focx-bot-desktop mockup extraction → `design/mockup/` (source, copy, components, every layout value) | Claude | **merged** — [#106](https://github.com/ryanphillipthomas/focx/pull/106) merged by Ryan 2026-09-07 00:26:00Z as `3ba04cd`; drift gate passed | — |
@@ -1945,6 +1945,42 @@ if that is not sufficient, the alternative is to keep the extraction outside the
   evidence file are left in place so a retry resumes at step 2. Task `FOCAAA-1` still reads `blocked`; the agent could
   not update it because that write went through the same denied channel — worth knowing, since the board will show a
   stale status whenever this happens.
+
+- 2026-09-07 01:20Z Claude: **F24 re-analysed; my "narrowing" framing was WRONG; direction decided and deferred.**
+  A Codex dispatch (`gpt-6-astra`, medium) was briefed to bind QA's push rule to the run's branch in
+  `validateContext`, on my claim that this was a *narrowing* and so needed no permission decision. **Codex confirmed all
+  five premises, then stopped without editing anything, on the brief's own stop condition, and it was right.**
+  - **The framing error.** `Bash(git push origin run/:*)` permits commands prefixed `git push origin run/`.
+    `Bash(git push origin FOC-92-smoke:*)` permits `git push origin FOC-92-smoke…`, which was **not permitted before**.
+    Fewer branches are eligible, but a previously-refused command becomes allowed: the new set is **not a subset**, it is
+    a replacement of authority. F24 therefore remains a permission change and Ryan's call — which is what the original
+    finding said before I argued myself out of it.
+  - **A second property, found by Codex and worth more than the correction.** A command-prefix rule cannot constrain
+    trailing arguments. `git push origin FOC-92-smoke develop:main` matches the prefix and pushes `main`. **This hole
+    exists in today's rule too** (`git push origin run/x develop:main`), so it is not introduced by any proposed change —
+    but it means *no* `git push` prefix rule can honestly claim "this branch only". Two wrong conclusions in this task
+    came from treating a prefix match as a specification. Do not reason about these rules that way again.
+  - **The contract constraint, proven rather than quoted.** The rule string lives in **two** places:
+    `.focx/agents.json:280` and **`packages/focx-bot/contract.json:368`**. The live state file
+    `~/.paperclip/instances/default/focx-bot/restore-f15-state.json` records
+    `contractSha = f5a54cf1ff0530131b5c0207c6ec5ecfa2a18daaffe26fbe704b20aee4fa4ea2`, which matches the file on disk,
+    and that restore is parked at phase `awaiting-plugin-auth`. `approvalDigest()` binds `contractSha`. So editing the
+    declared rule moves the sha and strands a live company.
+  - **Accepted direction (Ryan, 2026-09-07): option (c), script-mediated push.** Replace the `git push` grant with
+    `Bash(scripts/qa-push.sh)` — **no `:*`**, exact command match, no arguments accepted — the script deriving the branch
+    from `PAPERCLIP_WORKSPACE_BRANCH` and asserting it against the company prefix as the launcher already does. This is
+    the only option where the granted authority and the intended authority are the same sentence, and it closes the
+    trailing-argument hole that today's rule leaves open. Precedent: `scripts/paperclip-issue-update.sh` is already the
+    script-mediated route for the reporting call.
+  - **Rejected: the launcher-side substitution as a stopgap.** It is a permission change buying a lane stage 1 does not
+    use (stage 1 is Developer-only, by Ryan's scope decision), and it would be reversed when (c) lands — a permission
+    change with a scheduled reversal.
+  - **Sequencing.** (c) changes the declared rule, so it is blocked until `contract.json` is unpinned. The parked restore
+    is what pins it, and its purpose is already served — the F15 round trip PASSED and `focx-bot-4a-restore-2` is a
+    disposable company, not the retained `Focx.ai`. Finishing or abandoning it deliberately also unblocks widening
+    `agents: {minItems: 2, maxItems: 2}` and any future contract work, so it is worth doing on its own merits.
+  - **State:** nothing was edited, no commit, push or network call, `contract.json` sha unchanged and re-verified.
+    Branch `run/run-20260907-011750-f24` carries this record only.
 
 ### FB3 log
 
