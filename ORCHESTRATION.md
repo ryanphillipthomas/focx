@@ -106,7 +106,7 @@ States as section 3. Same protocol, same constraints.
 | F20 | Native Codex plugins: `openai-bundled` is reserved and cannot be installed by path; `openai-curated-remote` needs network + sign-in | Claude (found) | **done** — PR #96 merged (`431eced`) | F17 |
 | F21 | `bind-secrets` must not report `configured` while pinned plugins are unseeded | Codex | **done** — landed on develop via PR #98 (`93ceec7`) | F20 |
 | F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **done and PROVEN LIVE** — PR #103 merged (`7a49b9c`); the gate no longer fires in a provisioned company | F17 |
-| F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open — direction accepted, deferred.** Ryan 2026-09-07: script-mediated push (option c), sequenced after `contract.json` is unpinned. Still a permission change; not on stage 1's path | F23, contract-sha |
+| F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open — direction accepted, NOT blocked.** Ryan 2026-09-07: script-mediated push (option c). An earlier note said this waited on `contract.json` being unpinned; that was wrong — see the 2026-09-07 correction. Still a permission change; not on stage 1's path | F23 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
 | **D1** | focx-bot-desktop mockup extraction → `design/mockup/` (source, copy, components, every layout value) | Claude | **merged** — [#106](https://github.com/ryanphillipthomas/focx/pull/106) merged by Ryan 2026-09-07 00:26:00Z as `3ba04cd`; drift gate passed | — |
@@ -1965,7 +1965,7 @@ if that is not sufficient, the alternative is to keep the extraction outside the
     `~/.paperclip/instances/default/focx-bot/restore-f15-state.json` records
     `contractSha = f5a54cf1ff0530131b5c0207c6ec5ecfa2a18daaffe26fbe704b20aee4fa4ea2`, which matches the file on disk,
     and that restore is parked at phase `awaiting-plugin-auth`. `approvalDigest()` binds `contractSha`. So editing the
-    declared rule moves the sha and strands a live company.
+    declared rule moves the sha. **Corrected 2026-09-07 — see the entry below: this does not block a contract change.**
   - **Accepted direction (Ryan, 2026-09-07): option (c), script-mediated push.** Replace the `git push` grant with
     `Bash(scripts/qa-push.sh)` — **no `:*`**, exact command match, no arguments accepted — the script deriving the branch
     from `PAPERCLIP_WORKSPACE_BRANCH` and asserting it against the company prefix as the launcher already does. This is
@@ -1981,6 +1981,26 @@ if that is not sufficient, the alternative is to keep the extraction outside the
     `agents: {minItems: 2, maxItems: 2}` and any future contract work, so it is worth doing on its own merits.
   - **State:** nothing was edited, no commit, push or network call, `contract.json` sha unchanged and re-verified.
     Branch `run/run-20260907-011750-f24` carries this record only.
+
+- 2026-09-07 01:00Z Claude: **CORRECTION — `contract.json` was never pinned; and the two stale restore states are archived.**
+  I told Ryan a contract change was blocked until the parked restore was cleared, and wrote that into the F24 entry
+  above. Reading the code rather than re-asserting it: `fresh.mjs:156` requires `state.contractSha === source.sha` only
+  to **resume** a parked restore. A contract change therefore makes that one restore unresumable; it breaks nothing
+  else. Proof it had already happened: the **default** `state.json` (`focx-bot-4a`, `awaiting-secret-entry`) was already
+  at `shaMatchesContract = false`, so the contract had moved before with no consequence.
+  **The real cost of a contract change, which I had missed:** `snapshot-fb9.json` also carries the matching
+  `contractSha`, and `portability.mjs:123` requires it to match for a parity restore. So a contract change invalidates
+  that snapshot and a fresh one must be taken. That, not the state file, is the thing to plan around.
+  **Consequence:** F24 option (c) and widening `agents: {minItems: 2, maxItems: 2}` were never blocked by this.
+  **Archived (local files only, no API writes, nothing deleted, byte-identical, hashes recorded before and after):**
+  `~/.paperclip/instances/default/focx-bot/` → `archived-2026-09-07/`
+  `restore-f15-state.json` (`awaiting-plugin-auth`) sha256 `6a549c90b1d894aa0bd2f9d0d962825f9728b04e07a3a3b516dceee164b6fc41`;
+  `restore-state.json` (`failed`) sha256 `b87fa104b7b70d6d9e4df9b0ac8baca567a9d589747ab2eccdf7b9726f36dd2e`.
+  Undo by moving both back up one directory. `state.json` and `snapshot-fb9.json` untouched; no company or agent was
+  deleted (`agentDeletionAllowed: false`), and `focx-bot-4a-restore-2`'s two agents remain paused. Verified after:
+  four companies present, focx-bot 282/282, `--validate-contract` 0.
+  Note for anyone following a reference to `restore-f15-state.json` in `focx-frontend-handoff.md`'s estate table or
+  above: it is in `archived-2026-09-07/`, not lost.
 
 ### FB3 log
 
