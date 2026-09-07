@@ -40,17 +40,26 @@ export function parseObjects(source) {
   return objects;
 }
 
-export function tokenLeaves(value) {
+function tokenEntries(value, path = []) {
   if (!value || typeof value !== 'object') return [];
-  if (Object.hasOwn(value, 'value')) return [value];
-  return Object.values(value).flatMap(tokenLeaves);
+  if (Object.hasOwn(value, 'value')) return [{ path, token: value }];
+  return Object.entries(value).filter(([key]) => !key.startsWith('_'))
+    .flatMap(([key, child]) => tokenEntries(child, [...path, key]));
+}
+
+export function tokenLeaves(value) {
+  return tokenEntries(value).map(({ token }) => token);
 }
 
 export function tokensCSS(tokens) {
-  // Escape Figma style names as CSS identifiers; retain their spelling and values.
-  const identifier = name => (name.startsWith('--') ? name : `--${name}`)
-    .replace(/[^a-zA-Z0-9_-]/g, c => `\\${c.codePointAt(0).toString(16)} `);
-  return `:root {\n${tokenLeaves(tokens).map(t => `  ${identifier(t.figmaName)}: ${t.value};`).join('\n')}\n}\n`;
+  const names = new Set();
+  const declarations = tokenEntries(tokens).map(({ path, token }) => {
+    const name = `--${path.join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+    if (names.has(name)) throw new Error(`Duplicate token property: ${name}`);
+    names.add(name);
+    return `  ${name}: ${token.value};`;
+  });
+  return `:root {\n${declarations.join('\n')}\n}\n`;
 }
 
 function validate(body, apply) {
@@ -153,7 +162,14 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
   // Transport-independent routing permits offline tests without opening a socket.
   async function dispatch(method, path, body) {
     try {
-      if (method === 'GET' && path === '/api/tokens.css') return { status: 200, type: 'text/css', body: tokensCSS(JSON.parse(await read(resolve(root, 'design/tokens/focx/tokens.json'), 'utf8'))) };
+      if (method === 'GET' && path === '/api/tokens.css') {
+        const namespaces = ['focx', 'focx-bot'];
+        const tokens = await Promise.all(namespaces.map(async namespace => {
+          const source = JSON.parse(await read(resolve(root, `design/tokens/${namespace}/tokens.json`), 'utf8'));
+          return [namespace, source[namespace]];
+        }));
+        return { status: 200, type: 'text/css', body: tokensCSS(Object.fromEntries(tokens)) };
+      }
       if (method === 'GET' && path === '/api/developer') return { status: 200, body: await developer() };
       if (method === 'POST' && ['/api/plan', '/api/apply'].includes(path)) return { status: 200, body: await operation(body, path === '/api/apply') };
       const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/main.js': ['main.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'] };

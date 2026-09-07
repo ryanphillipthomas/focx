@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createConsole, parseObjects, tokenLeaves, start } from './index.mjs';
+import { createConsole, parseObjects, tokenLeaves, tokensCSS, start } from './index.mjs';
 
 const digest = 'a'.repeat(64);
 const changes = ['POST', 'PATCH', 'PATCH', 'WRITE_FILE'].map((method, i) => ({ method, path: `/operation/${i}`, body: { text: 'nested } { " quote\n{\n brace', nested: [{ escaped: '\\"' }] } }));
@@ -11,18 +11,59 @@ const stream = `${JSON.stringify(first, null, 2)}\n${JSON.stringify(second, null
 const plan = app => app.dispatch('POST', '/api/plan', { name: 'console-demo' });
 const apply = (app, value = digest) => app.dispatch('POST', '/api/apply', { name: 'console-demo', digest: value });
 
-test('tokens endpoint emits every disk leaf with verbatim values and escaped Figma names', async () => {
-  const tokens = JSON.parse(await readFile(new URL('../../design/tokens/focx/tokens.json', import.meta.url), 'utf8'));
-  const leaves = tokenLeaves(tokens);
+test('tokens endpoint emits both namespaces with verbatim values and normalized token paths', async () => {
+  const sources = await Promise.all(['focx', 'focx-bot'].map(async namespace =>
+    JSON.parse(await readFile(new URL(`../../design/tokens/${namespace}/tokens.json`, import.meta.url), 'utf8'))));
   const response = await createConsole().dispatch('GET', '/api/tokens.css');
   assert.equal(response.status, 200);
+  assert.equal(response.type, 'text/css');
+  assert.equal(response.body.match(/:root \{/g).length, 1);
   const declarations = response.body.split('\n').filter(line => line.startsWith('  --'));
-  assert.equal(declarations.length, leaves.length);
-  assert.equal(leaves.length, 36);
-  for (const leaf of leaves) {
-    const row = declarations.find(line => line.split(':')[0].trim().replace(/\\([a-f0-9]+) /g, (_, n) => String.fromCodePoint(parseInt(n, 16))) === (leaf.figmaName.startsWith('--') ? leaf.figmaName : `--${leaf.figmaName}`));
-    assert.ok(row); assert.equal(row.slice(row.indexOf(':') + 2, -1), String(leaf.value));
-  }
+  assert.equal(declarations.length, 169);
+  assert.equal(new Set(declarations.map(line => line.split(':')[0])).size, 169);
+  assert.equal(tokenLeaves(sources[0]).length, 36);
+  assert.equal(tokenLeaves(sources[1]).length, 133);
+  assert.ok(declarations.slice(0, 36).every(line => line.startsWith('  --focx-') && !line.startsWith('  --focx-bot-')));
+  assert.ok(declarations.slice(36).every(line => line.startsWith('  --focx-bot-')));
+  const check = (value, path = []) => {
+    if (!value || typeof value !== 'object') return;
+    if (Object.hasOwn(value, 'value')) {
+      const name = '--' + path.join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      assert.ok(declarations.includes(`  ${name}: ${value.value};`));
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) if (!key.startsWith('_')) check(child, [...path, key]);
+  };
+  sources.forEach(source => check(source));
+  for (const [name, value] of [
+    ['focx-color-action-fill', sources[0].focx.color['action-fill'].value],
+    ['focx-text-body', sources[0].focx.text.body.value],
+    ['focx-radius-card', sources[0].focx.radius.card.value],
+    ['focx-bot-color-bg-app', sources[1]['focx-bot'].color['bg-app'].value],
+    ['focx-bot-space-md', sources[1]['focx-bot'].space.md.value],
+    ['focx-bot-elevation-card', sources[1]['focx-bot'].elevation.card.value],
+    ['focx-bot-style-display-page-title', sources[1]['focx-bot'].style['Display/Page Title'].value]
+  ]) assert.ok(declarations.includes(`  --${name}: ${value};`));
+  assert.match(sources[1]['focx-bot'].color['bg-app'].figmaName, /\//);
+  assert.equal(typeof sources[1]['focx-bot'].motion._note, 'string');
+  assert.equal(tokenLeaves(sources[1]['focx-bot'].motion).length, 3);
+  assert.ok(!response.body.includes('_note'));
+});
+
+test('metadata is skipped even when it contains leaf-shaped objects', () => {
+  const leaf = { value: 'published', figmaName: 'ignored/name' };
+  const fixture = { _root: { value: 'hidden' }, Focx: { _note: { nested: { value: 'hidden' } },
+    ' /Style//Name! ': leaf } };
+  assert.deepEqual(tokenLeaves(fixture), [leaf]);
+  assert.equal(tokensCSS(fixture), ':root {\n  --focx-style-name: published;\n}\n');
+});
+
+test('normalized property collisions refuse generation', () => {
+  for (const fixture of [
+    { focx: { 'A/B': { value: 1 }, 'a b': { value: 2 } } },
+    { focx: { a: { b: { value: 1 } }, 'a-b': { value: 2 } } },
+    { focx: { bot: { value: 1 } }, 'focx-bot': { value: 2 } }
+  ]) assert.throws(() => tokensCSS(fixture), /Duplicate token property: --focx-/);
 });
 
 function identitySetup({ fail = false, token = 'fake-board-secret', name = 'Developer' } = {}) {

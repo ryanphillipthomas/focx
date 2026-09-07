@@ -36,23 +36,44 @@ Teach a skill is a visible placeholder that must be returned to.
 
 ## Token gaps and treatment
 
-- Dark text on light surfaces: no semantic text token exists; use
-  `--surface-inverse`, matching Connect's existing treatment.
-- General spacing scale: only `--space-3` exists; use it for all panel padding,
-  margins and gaps. Control padding and height use their dedicated tokens.
-- Content width and responsive structure: no layout-width token; use a fluid
-  single column with a relative `60rem` maximum and wrapping text/table cells.
-- Neutral status and disabled-state colours: no such tokens; use a bordered
-  text chip with the actual status, native disabled semantics and cursor changes.
-- Elevation and motion: no tokens; use a border, no shadows or animation.
-- Code font and body line-height: no published values; inherit the body family
-  and normal browser line-height. Geist uses the existing system fallback when
-  unavailable locally; no font files are downloaded.
-- Composite typography values are descriptive strings, not CSS font shorthand.
-  The endpoint still emits all 36 leaves verbatim. For the four style names with
-  slashes, it prefixes `--` and CSS-escapes the name. The screen uses the published
-  primitive family/size/weight tokens instead of parsing those descriptions.
+The console now consumes the dark `focx-bot` namespace. The endpoint publishes
+both namespaces in one `:root` block, focx first: 36 + 133 = 169 properties,
+with disk values verbatim. Names come from the full token path, lowercased with
+runs of non-alphanumeric characters replaced by one hyphen and edge hyphens
+trimmed (for example, `--focx-bot-style-display-page-title`). Metadata keys
+beginning `_` are skipped. Colliding normalized names refuse generation.
+
+- Closed: semantic text colours on dark app/panel/surface backgrounds replace
+  the dark-on-light `surface-inverse` workaround. Secondary and muted text,
+  disabled text, border strengths and a separate focus offset are published.
+- Closed: the spacing scale supplies panel padding, section separation, gaps
+  and control padding. Radii and card elevation are used on existing elements.
+- Closed: body line-height now uses `type.line-base`; typography uses published
+  family, size and weight tokens. DM Sans uses the system fallback when absent
+  locally; no font files are downloaded.
+- Motion durations are available, deliberately unused at this stage. There were
+  no existing transitions; none or other animations have been added. An easing
+  token remains an open design decision in the source metadata.
+- Content width remains un-tokenized: the existing fluid single column, `60rem`
+  maximum and text/table wrapping remain. Breakpoints are available but unused.
+- No dedicated focx-bot control-height token exists; retain the published
+  `--focx-control-h-md`. No code-font token exists; code continues to inherit
+  the body family.
+- Status colours now exist for working/waiting/idle, but no generic neutral
+  status semantic exists. The actual status remains a bordered, muted text chip;
+  no new status mapping is inferred.
+- Composite typography values remain descriptive strings, not CSS font shorthand.
+  They are emitted verbatim; the screen consumes individual type tokens.
+
+Calculated contrast from the published colours: primary text on app/panel is
+15.59:1 / 15.08:1; muted text on surface is 5.07:1; action text on its fill is
+8.43:1. Disabled text on the sunken button background is 3.47:1, below the 4.5:1
+normal-text AA threshold (inactive controls are exempt). The strong input border,
+alpha-composited over app, is only 1.21:1, below the 3:1 non-text threshold when
+needed to identify a control. Subtle/default separators also have low contrast.
+These are source-token findings, not a claim of full accessibility conformance.
 
 Authored CSS contains no colour literals, pixel literals or drift exceptions.
+Structural values such as `0`, `100%`, `auto` and `60rem` remain unchanged.
 Tokens are read afresh for every `/api/tokens.css` request; their values are not
 copied into this app. The drift gate remains an independent required check.
