@@ -21,10 +21,23 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      # Pin the runtime for every step below. This previously sat two thirds of
+      # the way down the job, so the contract, QA-launcher and reporting suites
+      # ran on whatever Node the runner image happened to ship while only the
+      # focx-bot steps were pinned — the gate was testing two runtimes and
+      # saying so nowhere.
+      - name: Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: drift-check
         uses: ryanphillipthomas/drift-check@v1
       - name: contract validation
         run: node tools/contracts/validate.mjs
+      # `validate.mjs` checks that today's artifacts conform. This suite checks
+      # that the validator itself still rejects what it is supposed to reject.
+      - name: contract suite
+        run: node --test tools/contracts/test.mjs
       - name: QA launcher safeguards
         run: node --test tools/qa-claude-agent-acp/*.test.mjs
       # The reporting script is a pilot's only way to write back to its task
@@ -32,10 +45,14 @@ jobs:
       # succeeds, and the report is simply lost.
       - name: agent reporting path
         run: node --test scripts/paperclip-issue-update.test.mjs
-      - name: focx-bot Node runtime
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      # The gate's own detector. If this regresses, every other step in this
+      # job is still green while the thing they depend on has stopped working.
+      - name: drift-check suite
+        run: node --test tools/drift-check/test.mjs
+      - name: deploy verification suite
+        run: node --test tools/deploy-verify/test.mjs
+      - name: claude fallback suite
+        run: node --test tools/claude-fallback/test.mjs
       - name: focx-bot contract schema
         run: node packages/focx-bot/src/index.mjs --validate-contract
       - name: focx-bot provisioning safeguards

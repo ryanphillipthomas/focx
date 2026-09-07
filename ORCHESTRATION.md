@@ -109,7 +109,7 @@ States as section 3. Same protocol, same constraints.
 | F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open** — needs Ryan's decision; it widens a permission | F23 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
-| **D1** | focx-bot-desktop mockup extraction → `design/mockup/` (source, copy, components, every layout value) | Claude | **review** — [#106](https://github.com/ryanphillipthomas/focx/pull/106) open, drift gate passed; captured 2026-09-06; not a token source | — |
+| **D1** | focx-bot-desktop mockup extraction → `design/mockup/` (source, copy, components, every layout value) | Claude | **merged** — [#106](https://github.com/ryanphillipthomas/focx/pull/106) merged by Ryan 2026-09-07 00:26:00Z as `3ba04cd`; drift gate passed | — |
 
 ### Dispositions of the H workstream
 
@@ -220,6 +220,11 @@ out of its scope by design. Verified locally: `tools/contracts/validate.mjs` 48/
 [#106](https://github.com/ryanphillipthomas/focx/pull/106) against `develop` at Ryan's
 instruction. Drift gate **passed** (42s), confirming `design/mockup/` is outside the
 raw-value scan as `docs/drift-gate.md` §19 describes. Awaiting Ryan's review; not merged.
+
+**2026-09-07 · Claude.** Ryan merged [#106](https://github.com/ryanphillipthomas/focx/pull/106)
+as `3ba04cd`. Verified on the merged `develop` (`d65eca6`): `design/mockup/` present, and
+`styles.css` / `fox-avatar-atlas.png` still hash to `c423b16d…` / `d10d3c38…`, matching the
+checksums recorded in the README at capture time. All five gate steps pass on the merged tip.
 
 **Open, needs Ryan's decision:** whether `design/mockup/` is the right permanent home, given
 `AGENTS.md`'s one-source-of-truth rule. The README states the non-authoritative framing explicitly;
