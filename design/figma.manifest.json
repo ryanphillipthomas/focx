@@ -1,29 +1,58 @@
 {
-  "description": "Registry of the Figma sources of design truth. The Design role syncs published variables/components from these into design/tokens/ via the Figma MCP. Entries may share a fileKey: the parent/child split is logical (pages/sections + token namespaces), not necessarily separate files.",
+  "description": "Registry of the Figma sources of design truth. The Design role syncs published variables/components from these into design/tokens/ via the Figma MCP. Entries may share a fileKey: the parent/child split is logical (pages/sections + token namespaces), not necessarily separate files. focx-bot is a separate product on its own file and shares no values with the focx foundation.",
   "files": {
     "focx-foundation": {
-      "name": "Focx — DS-001 Shell - Today",
+      "name": "Focx \u2014 DS-001 Shell - Today",
       "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
       "role": "parent",
-      "scopeHint": "Roadmap per the cover: foundations → components → patterns → responsive screens. All content is focx.* scope until Connect pages exist.",
+      "scopeHint": "Roadmap per the cover: foundations \u2192 components \u2192 patterns \u2192 responsive screens. All content is focx.* scope until Connect pages exist.",
       "contains": "focx design system foundation: variables (color, type, spacing, radius) and components",
       "componentSets": {
-        "Button/Primary": { "nodeId": "28:117", "variants": "Size(Small|Medium|Large) x Shape(Pill|Control) x State(Default|Hover|Focused|Disabled)" },
-        "Button/Destructive": { "nodeId": "31:117", "variants": "Size(Small|Medium|Large) x Shape(Pill|Control) x State(Default|Hover|Focused|Disabled)" }
+        "Button/Primary": {
+          "nodeId": "28:117",
+          "variants": "Size(Small|Medium|Large) x Shape(Pill|Control) x State(Default|Hover|Focused|Disabled)"
+        },
+        "Button/Destructive": {
+          "nodeId": "31:117",
+          "variants": "Size(Small|Medium|Large) x Shape(Pill|Control) x State(Default|Hover|Focused|Disabled)"
+        }
       }
     },
     "connect": {
-      "name": "Focx — DS-001 Shell - Today",
+      "name": "Focx \u2014 DS-001 Shell - Today",
       "fileKey": "GOlqIWU8MUzYZDQA39g6tv",
       "role": "child",
       "extends": "focx-foundation",
-      "scopeHint": "No Connect-specific pages yet — connect.* deltas begin when Connect surfaces are added to this file (or a dedicated file, at which point only this fileKey changes).",
+      "scopeHint": "No Connect-specific pages yet \u2014 connect.* deltas begin when Connect surfaces are added to this file (or a dedicated file, at which point only this fileKey changes).",
       "contains": "Connect's extension layer: connect-specific variables and components"
+    },
+    "focx-bot": {
+      "name": "Focx Bot \u2014 DS-001 Foundation",
+      "fileKey": "b2iyqWIkd4wYY7cA3y832h",
+      "role": "independent",
+      "scopeHint": "Focx Bot's own foundation \u2014 a dark DM Sans / Space Grotesk system. It shares no colours or families with the focx foundation, so it does not extend it: every token is an addition under the focx-bot.* namespace. Foundations only; no components or documentation pages yet.",
+      "contains": "focx-bot foundation: 117 variables across 8 collections, 12 text styles, 4 effect styles",
+      "derivedFrom": "design/mockup/ \u2014 the extraction of focx-bot-desktop.rpt4k.chatgpt.site, captured 2026-09-06",
+      "collections": {
+        "focx-bot/primitives": "37 \u2014 neutral ramp, white/black alpha ramps, 6 bot accents, brand orange family, status",
+        "focx-bot/color": "27 \u2014 semantic, Dark mode, every token aliased to a primitive",
+        "focx-bot/type": "25 \u2014 2 families, 6 weights, 10-step size scale, line heights, tracking",
+        "focx-bot/space": "12 \u2014 ramp collapsing the mockup's 33 one-px-granular values",
+        "focx-bot/radius": "6",
+        "focx-bot/breakpoint": "4 \u2014 730 / 1030 / 1200 / 1550",
+        "focx-bot/border": "3",
+        "focx-bot/motion": "3 durations; easing still undecided"
+      }
     }
   },
   "sync": {
     "tool": "figma-mcp",
-    "lastSync": "2026-08-31T01:42:42Z",
-    "syncedBy": "claude-code (variables consumed by Cover 9:7 + Button/Primary 28:117 + Button/Destructive 31:117)"
+    "lastSync": "2026-09-07T02:45:00Z",
+    "syncedBy": "claude-code (focx-bot foundation authored into Figma from design/mockup/design-values.md, then exported back)",
+    "previousSync": {
+      "tool": "figma-mcp",
+      "lastSync": "2026-08-31T01:42:42Z",
+      "syncedBy": "claude-code (variables consumed by Cover 9:7 + Button/Primary 28:117 + Button/Destructive 31:117)"
+    }
   }
 }
