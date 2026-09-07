@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Developer · Focx Console</title>
+  <link rel="stylesheet" href="/api/tokens.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/main.js"></script>
+</head>
+<body>
+<main>
+  <p>Focx Console · Local · Stage 1</p>
+  <article>
+    <header>
+      <h1 id="bot-name">Developer</h1>
+      <p>Implementation engineer · <span class="chip" id="bot-status">Unavailable</span></p>
+      <button id="teach" type="button">Teach a skill</button>
+      <section id="skill" hidden aria-labelledby="skill-title">
+        <h2 id="skill-title">Teach a skill</h2>
+        <p>This placeholder must be returned to. Skill authoring is not implemented in stage 1.</p>
+        <button id="close-skill" type="button">Close</button>
+      </section>
+    </header>
+    <section aria-labelledby="identity-title">
+      <h2 id="identity-title">Identity</h2>
+      <p id="identity-message" role="status">Reading the local Developer identity…</p>
+      <dl id="identity" hidden>
+        <dt>Model</dt><dd id="model"></dd>
+        <dt>Adapter</dt><dd id="adapter"></dd>
+        <dt>Company</dt><dd id="company"></dd>
+        <dt>Issue prefix</dt><dd id="prefix"></dd>
+      </dl>
+    </section>
+    <section aria-labelledby="operation-title">
+      <h2 id="operation-title">Fresh provision · Fake only</h2>
+      <p>This local rehearsal uses the full focx-bot contract, including its QA agent. It does not change the Developer above or run either bot.</p>
+      <ol aria-label="Operation stages"><li id="stage-idle" aria-current="step">Idle</li><li id="stage-planned">Planned</li><li id="stage-applying">Applying</li><li id="stage-verified">Verified</li></ol>
+      <form id="plan-form">
+        <label for="company-name">Rehearsal company name</label>
+        <input id="company-name" name="name" value="console-demo" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}" maxlength="64" required autocomplete="off">
+        <button id="plan" type="submit">Plan fake operation</button>
+      </form>
+      <p id="message" role="status" aria-live="polite">Ready to plan.</p>
+      <div id="preview" hidden>
+        <table><caption>Preview operations · bodies withheld</caption><thead><tr><th scope="col">Method</th><th scope="col">Path</th></tr></thead><tbody id="operations"></tbody></table>
+        <h3>Review artifact</h3>
+        <p id="digest" class="digest"></p>
+        <p>This deterministic SHA covers planned operations, target and contract SHA. Any caller can compute it; it identifies what was planned against this state.</p>
+        <p id="coverage"></p>
+        <p>The preview is the fuller emitted list. The returned result has fewer operations; this screen does not combine the lists.</p>
+        <details><summary>Preflight returned by focx-bot</summary><pre id="preflight"></pre></details>
+        <label><input id="confirm" type="checkbox"> I have reviewed the fake plan and the unlisted state-write notice.</label>
+        <button id="apply" type="button" disabled>Confirm and apply fake plan</button>
+      </div>
+      <div id="result" hidden><h3>Result</h3><p id="verification"></p><pre id="result-data"></pre></div>
+    </section>
+  </article>
+</main>
+</body>
+</html>

@@ -9,6 +9,8 @@
     "node": ">=22"
   },
   "scripts": {
+    "console": "node tools/console-server/index.mjs",
+    "test:console": "node --test tools/console-server/test.mjs",
     "drift-check": "node tools/drift-check/index.mjs",
     "test:drift-check": "node --test tools/drift-check/test.mjs",
     "test:contracts": "node --test tools/contracts/test.mjs",
