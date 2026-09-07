@@ -104,7 +104,7 @@ export function grantReport(contract,live,homes,host,{pilotManifest=loadRoleSour
       say('declared','adapterLocal',a.adapterLocal)
       say('declared','.focx/agents.json adapterLocal',sourceAgent?.adapterLocal??null)
       if(!isDeepStrictEqual(a.adapterLocal,sourceAgent?.adapterLocal))diff('declared sources','declared-source-divergence',a.roleKey)
-      if(a.adapterLocal.permissionDelivery==='qa-worktree-local'){
+      if(a.adapterLocal.permissionDelivery?.endsWith('-worktree-local')){
         const adapter=b?.adapterConfig??{},env=adapter.env??{}
         const present=Object.fromEntries(['CLAUDE_CONFIG_DIR','CLAUDE_CODE_PLUGIN_CACHE_DIR'].map(key=>[key,Object.hasOwn(env,key)]))
         // API observations carry the required output label with explicit provenance.

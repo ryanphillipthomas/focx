@@ -109,7 +109,7 @@ test('identity mismatches, incomplete restricted views, HTTP errors and invalid 
   for(const status of [201,302,401,403,404,500])attempts.push(async()=>({status,json:async()=>{assert.fail('non-200 body must never be read')}}))
   attempts.push(async()=>({status:200,json:async()=>{throw Error(marker)}}),async()=>{throw Error(marker)},async()=>({status:200,json:async()=>[agent]}),async()=>({status:200,json:async()=>null}))
   for(const fetch of attempts)await assert.rejects(prepare({...options,fetch: url=>url.includes('/api/companies/')?matchingFetch(url):fetch(url)}),error=>{
-   assert.match(error.message,/Paperclip agent identity/);assert(!error.message.includes(marker));assert(!error.message.includes(env.PAPERCLIP_API_KEY));assert(!error.message.includes('\n'));return true
+   assert.match(error.message,/Paperclip agent identity|Paperclip role is not declared/);assert(!error.message.includes(marker));assert(!error.message.includes(env.PAPERCLIP_API_KEY));assert(!error.message.includes('\n'));return true
   })
   await prepare({...options,fetch:async url=>url.includes('/api/companies/')?matchingFetch(url):({status:200,json:async()=>({...agent,name:marker,privateBody:marker})})})
   assert.equal(output.length,0);assert.equal(writes.length,1)
@@ -176,16 +176,20 @@ for(const [label,needle,witness] of [
  ['worktree containment',"cwd.startsWith(join(parent, '.paperclip/worktrees') + '/') && ",contextWitness({cwd:'/project/.paperclip/worktrees-other/tree',root:'/project/.paperclip/worktrees-other/tree'},/isolated Paperclip worktree/)],
  ['common-directory isolation',guardLine("requireThat(cwd.startsWith(join(parent, '.paperclip/worktrees')"),contextWitness({commonDir:cwd+'/.git'},/isolated Paperclip worktree/)],
  ['bound task and run',guardLine('requireThat(/^[0-9a-f-]{36}$/'),contextWitness({env:{...env,PAPERCLIP_TASK_ID:''}},/bound Paperclip/)],
- ['delivery declaration',guardLine('requireThat(qa?.adapterLocal?.permissionDelivery'),subject=>{const copy=structuredClone(source);delete copy.manifest.agents.find(a=>a.roleKey==='qa-engineer').adapterLocal.permissionDelivery;contextWitness({source:copy},/not declared/)(subject)}],
+ ['delivery declaration',guardLine('requireThat(typeof role.adapterLocal?.permissionDelivery'),subject=>{const copy=structuredClone(source);delete copy.manifest.agents.find(a=>a.roleKey==='qa-engineer').adapterLocal.permissionDelivery;contextWitness({source:copy},/not declared/)(subject)}],
  ['symlink directory',guardLine("requireThat(!lstatSync(join(cwd,'.claude'))"),prepareWitness(f=>f.symlinks.add(join(cwd,'.claude')),/symlinked/)],
  ['symlink file'," && !lstatSync(settingsPath).isSymbolicLink()",prepareWitness(f=>f.symlinks.add(f.file),/regular file/)],
  ['regular file',"lstatSync(settingsPath).isFile() && ",prepareWitness(f=>f.nonFiles.add(f.file),/regular file/)],
- ...['urlKey','companyId','adapterType','id'].map(key=>[
+ ...['companyId','adapterType','id'].map(key=>[
   'identity '+key,
-  ({urlKey:"resolvedAgent.urlKey === 'qa-engineer' && ",companyId:'resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && ',adapterType:"resolvedAgent.adapterType === 'claude_local' && ",id:'resolvedAgent.id === env.PAPERCLIP_AGENT_ID'})[key],
+  ({companyId:'resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && ',adapterType:"resolvedAgent.adapterType === 'claude_local' && ",id:'resolvedAgent.id === env.PAPERCLIP_AGENT_ID'})[key],
   subject=>assert.throws(()=>subject.validateContext({...agent,[key]:'other'},context),/Paperclip agent identity does not match/)
  ]),
- ['identity guard',"requireThat(resolvedAgent.urlKey === 'qa-engineer' && resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && resolvedAgent.adapterType === 'claude_local' && resolvedAgent.id === env.PAPERCLIP_AGENT_ID, 'Paperclip agent identity does not match the assigned QA role, company and adapter')",subject=>assert.throws(()=>subject.validateContext({...agent,urlKey:'other'},context),/identity does not match/)],
+ ['identity guard',"requireThat(resolvedAgent.companyId === env.PAPERCLIP_COMPANY_ID && resolvedAgent.adapterType === 'claude_local' && resolvedAgent.id === env.PAPERCLIP_AGENT_ID, 'Paperclip agent identity does not match the assigned role, company and adapter')",subject=>assert.throws(()=>subject.validateContext({...agent,id:'other'},context),/identity does not match/)],
+ // The live agent's urlKey now selects which declared role applies, so an unknown
+ // role must be refused outright rather than silently matching another role's grant.
+ ['role is declared',guardLine('requireThat(role !== undefined,'),subject=>assert.throws(()=>subject.validateContext({...agent,urlKey:'no-such-role'},context),/not declared in the manifest/)],
+ ['role is a pilot',guardLine("requireThat(role.disposition === 'pilot'"),subject=>{const copy=structuredClone(source);copy.manifest.agents.find(a=>a.roleKey==='qa-engineer').disposition='disabled-candidate';assert.throws(()=>subject.validateContext(agent,{...context,source:copy}),/declared pilot role/)}],
  ['identity completeness',"requireThat(object(resolvedAgent) && ['id','urlKey','companyId','adapterType','name'].every(key => typeof resolvedAgent[key] === 'string' && resolvedAgent[key].trim()), 'Paperclip agent identity is incomplete')",subject=>assert.throws(()=>subject.validateContext({...agent,name:undefined},context),/identity is incomplete/)]
 ])test('KNOCK-OUT launcher '+label,async t=>{
  const original=await import(launcherURL);await witness(original,t)
