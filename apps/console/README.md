@@ -1,5 +1,11 @@
 # Focx Console · stage 2
 
+Tickets are read from `/api/companies/:id/issues` and trimmed server-side to the
+six fields the table renders — the control plane returns roughly sixty fields per
+issue and 264KB for this company, against 16KB after trimming. Assignees arrive as
+agent ids and are resolved to names from the same agents call; an id the call does
+not know stays blank rather than showing a raw uuid.
+
 One card per pilot role the contract declares. A role added to `.focx/agents.json` appears here with no console change; a role declared but absent from the company is shown as unresolved rather than hidden. Run `npm run console`, then open
 `http://127.0.0.1:4174`. Set `PORT` to change the port. Run `npm run test:console`
 for offline server tests. No dependencies, build, remote fonts or deployment.

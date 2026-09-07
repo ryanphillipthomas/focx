@@ -43,3 +43,20 @@ th { font-weight: var(--focx-bot-type-weight-medium); }
 .agent summary { cursor: pointer; color: var(--focx-bot-color-text-muted); }
 .agent details ul { margin: var(--focx-bot-space-sm) 0 0; padding-left: var(--focx-bot-space-xl);
   max-height: 240px; overflow-y: auto; font-size: var(--focx-bot-type-size-sm); }
+
+/* Tickets */
+#ticket-counts { display: flex; flex-wrap: wrap; gap: var(--focx-bot-space-sm); margin-bottom: var(--focx-bot-space-lg); }
+#tickets { max-height: 420px; overflow-y: auto; border: var(--focx-bot-border-hairline) solid var(--focx-bot-color-border-default);
+  border-radius: var(--focx-bot-radius-lg); }
+#tickets table { width: 100%; border-collapse: collapse; font-size: var(--focx-bot-type-size-base); }
+#tickets th { position: sticky; top: 0; background: var(--focx-bot-color-bg-panel); text-align: left;
+  padding: var(--focx-bot-space-sm) var(--focx-bot-space-lg); color: var(--focx-bot-color-text-muted);
+  font-size: var(--focx-bot-type-size-2xs); letter-spacing: var(--focx-bot-type-tracking-wider); }
+#tickets td { padding: var(--focx-bot-space-sm) var(--focx-bot-space-lg);
+  border-top: var(--focx-bot-border-hairline) solid var(--focx-bot-color-border-subtle); vertical-align: top; }
+#tickets td.id { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#tickets td.title { color: var(--focx-bot-color-text-secondary); }
+#tickets td.assignee, #tickets td.priority { color: var(--focx-bot-color-text-muted); white-space: nowrap; }
+.status-done { color: var(--focx-bot-color-status-working); }
+.status-blocked { color: var(--focx-bot-color-status-waiting); }
+.status-cancelled, .status-backlog { color: var(--focx-bot-color-text-faint); }
