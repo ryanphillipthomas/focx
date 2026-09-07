@@ -28,3 +28,14 @@ th { font-weight: var(--focx-bot-type-weight-medium); }
 .digest, pre { overflow-wrap: anywhere; white-space: pre-wrap; font-family: inherit; font-size: var(--focx-bot-type-size-base); }
 #preview, #result { display: grid; gap: var(--focx-bot-space-md); }
 #preview[hidden], #result[hidden] { display: none; }
+
+/* Stage 2: one card per declared pilot role. */
+#agents { display: grid; gap: var(--focx-bot-space-lg); }
+.agent {
+  background: var(--focx-bot-color-bg-panel);
+  border: var(--focx-bot-border-hairline) solid var(--focx-bot-color-border-default);
+  border-radius: var(--focx-bot-radius-lg);
+  padding: var(--focx-bot-space-xl);
+}
+.agent h3 { font-size: var(--focx-bot-type-size-lg); margin: 0 0 var(--focx-bot-space-sm); }
+.agent dl { margin: 0; }

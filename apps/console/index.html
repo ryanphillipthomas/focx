@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Developer · Focx Console</title>
+  <title>Your bots · Focx Console</title>
   <link rel="stylesheet" href="/api/tokens.css">
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/main.js"></script>
 </head>
 <body>
 <main>
-  <p>Focx Console · Local · Stage 1</p>
+  <p>Focx Console · Local · Stage 2</p>
   <article>
     <header>
-      <h1 id="bot-name">Developer</h1>
-      <p>Implementation engineer · <span class="chip" id="bot-status">Unavailable</span></p>
+      <h1>Your bots</h1>
+      <p>Every pilot role the contract declares · <span class="chip" id="agent-count">…</span></p>
       <button id="teach" type="button">Teach a skill</button>
       <section id="skill" hidden aria-labelledby="skill-title">
         <h2 id="skill-title">Teach a skill</h2>
@@ -24,17 +24,12 @@
     </header>
     <section aria-labelledby="identity-title">
       <h2 id="identity-title">Identity</h2>
-      <p id="identity-message" role="status">Reading the local Developer identity…</p>
-      <dl id="identity" hidden>
-        <dt>Model</dt><dd id="model"></dd>
-        <dt>Adapter</dt><dd id="adapter"></dd>
-        <dt>Company</dt><dd id="company"></dd>
-        <dt>Issue prefix</dt><dd id="prefix"></dd>
-      </dl>
+      <p id="identity-message" role="status">Reading declared roles…</p>
+      <div id="agents" hidden></div>
     </section>
     <section aria-labelledby="operation-title">
       <h2 id="operation-title">Fresh provision · Fake only</h2>
-      <p>This local rehearsal uses the full focx-bot contract, including its QA agent. It does not change the Developer above or run either bot.</p>
+      <p>This local rehearsal uses the full focx-bot contract, including every agent it declares. It does not change the agents above or run any of them.</p>
       <ol aria-label="Operation stages"><li id="stage-idle" aria-current="step">Idle</li><li id="stage-planned">Planned</li><li id="stage-applying">Applying</li><li id="stage-verified">Verified</li></ol>
       <form id="plan-form">
         <label for="company-name">Rehearsal company name</label>

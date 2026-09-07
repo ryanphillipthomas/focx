@@ -83,16 +83,44 @@ element('teach').addEventListener('click', () => {
 element('close-skill').addEventListener('click', () => {
   element('skill').hidden = true; element('teach').focus();
 });
+// One card per declared pilot role. Text nodes only — never innerHTML, since
+// these values come from the control plane.
+function card(agent) {
+  const box = document.createElement('section');
+  box.className = 'agent';
+  const name = document.createElement('h3');
+  name.textContent = agent.name;
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  chip.textContent = agent.unresolved ? 'Unresolved' : agent.status;
+  name.append(' ', chip);
+  box.append(name);
+  if (agent.unresolved) {
+    const why = document.createElement('p');
+    why.textContent = agent.reason;
+    box.append(why);
+    return box;
+  }
+  const list = document.createElement('dl');
+  for (const [label, key] of [['Role', 'roleKey'], ['Model', 'model'], ['Adapter', 'adapterType'],
+    ['Company', 'companyName'], ['Issue prefix', 'issuePrefix']]) {
+    const dt = document.createElement('dt'); dt.textContent = label;
+    const dd = document.createElement('dd'); dd.textContent = agent[key];
+    list.append(dt, dd);
+  }
+  box.append(list);
+  return box;
+}
 try {
-  const identity = await request('/api/developer');
+  const identity = await request('/api/agents');
   if (identity.unavailable) element('identity-message').textContent = identity.reason;
   else {
-    element('bot-name').textContent = identity.name;
-    element('bot-status').textContent = identity.status;
-    for (const [id, key] of [['model', 'model'], ['adapter', 'adapterType'], ['company', 'companyName'], ['prefix', 'issuePrefix']]) {
-      element(id).textContent = identity[key];
-    }
-    element('identity-message').textContent = 'Read-only identity from the local API.';
-    element('identity').hidden = false;
+    const list = identity.agents ?? [];
+    const container = element('agents');
+    for (const agent of list) container.append(card(agent));
+    const resolved = list.filter(a => !a.unresolved).length;
+    element('agent-count').textContent = `${resolved} of ${list.length} resolved`;
+    element('identity-message').textContent = 'Read-only identities from the local API.';
+    container.hidden = false;
   }
-} catch { element('identity-message').textContent = 'Developer identity unavailable. The local console server could not be reached.'; }
+} catch { element('identity-message').textContent = 'Agent identities unavailable. The local console server could not be reached.'; }

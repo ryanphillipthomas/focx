@@ -85,8 +85,12 @@ function identitySetup({ fail = false, token = 'fake-board-secret', name = 'Deve
 
 test('developer identity is whitelisted and company prefix FOCAAA is preserved', async () => {
   const { app, calls } = identitySetup();
-  const response = await app.dispatch('GET', '/api/developer');
-  assert.deepEqual(response.body, { id: 'dev-id', name: 'Developer', status: 'paused', adapterType: 'codex_local', model: 'model-from-api', companyName: 'Company from API', issuePrefix: 'FOCAAA' });
+  const response = await app.dispatch('GET', '/api/agents');
+  // One row per declared pilot role; roles with no live match are reported
+  // unresolved rather than omitted, so a newly added agent is visible as missing.
+  const engineer = response.body.agents.find(a => a.roleKey === 'implementation-engineer');
+  assert.deepEqual(engineer, { roleKey: 'implementation-engineer', id: 'dev-id', name: 'Developer', status: 'paused', adapterType: 'codex_local', model: 'model-from-api', companyName: 'Company from API', issuePrefix: 'FOCAAA' });
+  assert(response.body.agents.length >= 1);
   assert.deepEqual(calls[0].args, ['find-generic-password', '-a', 'test-user', '-s', 'paperclip-board-token', '-w']);
   for (const call of calls.slice(1)) {
     assert.match(call.url, /^http:\/\/127\.0\.0\.1:3100\/api\/companies\/company-1/);
@@ -100,7 +104,7 @@ test('developer identity is whitelisted and company prefix FOCAAA is preserved',
 test('unreachable API, absent token and failed keychain produce unavailable, without invented identity', async () => {
   for (const app of [identitySetup({ fail: true }).app, identitySetup({ token: '' }).app,
     createConsole({ run: async () => { throw new Error('keychain failure'); } })]) {
-    const { body } = await app.dispatch('GET', '/api/developer');
+    const { body } = await app.dispatch('GET', '/api/agents');
     assert.equal(body.unavailable, true);
     assert.deepEqual(Object.keys(body).sort(), ['reason', 'unavailable']);
   }
@@ -127,21 +131,22 @@ function resolutionSetup({ companyId = retainedCompanyId, agents = [liveDevelope
 }
 
 test('retained company resolves Developer by declared id with live on-demand slug and engineer role', async () => {
-  const { body } = await resolutionSetup().dispatch('GET', '/api/developer');
-  assert.deepEqual(body, { id: declaredDeveloperId, name: 'Developer', status: 'paused',
-    adapterType: 'codex_local', model: 'model-from-api', companyName: 'Company', issuePrefix: 'FOCAAA' });
+  const { body } = await resolutionSetup().dispatch('GET', '/api/agents');
+  assert.deepEqual(body.agents.find(a => a.roleKey === 'implementation-engineer'),
+    { roleKey: 'implementation-engineer', id: declaredDeveloperId, name: 'Developer', status: 'paused',
+      adapterType: 'codex_local', model: 'model-from-api', companyName: 'Company', issuePrefix: 'FOCAAA' });
 });
 
 test('different company resolves Developer by provisioned urlKey', async () => {
   const { body } = await resolutionSetup({ companyId: 'provisioned-company',
-    agents: [{ ...liveDeveloper, id: 'provisioned-id', urlKey: 'implementation-engineer' }] }).dispatch('GET', '/api/developer');
-  assert.equal(body.id, 'provisioned-id');
+    agents: [{ ...liveDeveloper, id: 'provisioned-id', urlKey: 'implementation-engineer' }] }).dispatch('GET', '/api/agents');
+  assert.equal(body.agents.find(a => a.roleKey === 'implementation-engineer').id, 'provisioned-id');
 });
 
 test('five engineer roles cannot substitute for a declared id or provisioned slug', async () => {
   const agents = Array.from({ length: 5 }, (_, i) => ({ ...liveDeveloper, id: `other-${i}`, urlKey: `engineer-${i}` }));
   for (const companyId of [retainedCompanyId, 'provisioned-company']) {
-    const { body } = await resolutionSetup({ companyId, agents }).dispatch('GET', '/api/developer');
+    const { body } = await resolutionSetup({ companyId, agents }).dispatch('GET', '/api/agents');
     assert.equal(body.unavailable, true);
   }
 });
@@ -152,13 +157,13 @@ test('retained identity never falls back to slug and ambiguous matches are unava
     { agents: [liveDeveloper, liveDeveloper] },
     { companyId: 'provisioned-company', agents: [liveDeveloper] },
     { companyId: 'provisioned-company', agents: Array(2).fill({ ...liveDeveloper, urlKey: 'implementation-engineer' }) }
-  ]) assert.equal((await resolutionSetup(options).dispatch('GET', '/api/developer')).body.unavailable, true);
+  ]) assert.equal((await resolutionSetup(options).dispatch('GET', '/api/agents')).body.unavailable, true);
 });
 
 test('credential, control-plane and resolution failures have distinct non-sensitive reasons', async () => {
   const reasons = {};
   for (const failure of ['keychain', 'empty-token', 'unreachable', 'refused', 'unresolved']) {
-    const { body } = await resolutionSetup({ failure, agents: [] }).dispatch('GET', '/api/developer');
+    const { body } = await resolutionSetup({ failure, agents: [] }).dispatch('GET', '/api/agents');
     assert.equal(body.unavailable, true);
     assert.deepEqual(Object.keys(body).sort(), ['reason', 'unavailable']);
     assert.ok(!JSON.stringify(body).includes('fake-board-secret'));
@@ -169,7 +174,7 @@ test('credential, control-plane and resolution failures have distinct non-sensit
   assert.equal(new Set([reasons.keychain, reasons.unreachable, reasons.unresolved]).size, 3);
   assert.match(reasons.keychain, /No board credential available/);
   assert.match(reasons.unreachable, /Control plane unreachable or refused/);
-  assert.match(reasons.unresolved, /Developer could not be resolved in the configured company/);
+  assert.match(reasons.unresolved, /Agents could not be resolved in the configured company/);
 });
 
 test('balanced stream parsing preserves nested and escaped content and rejects malformed tails', () => {
@@ -276,7 +281,7 @@ test('subprocess timeout errors are withheld and single subprocess lock covers i
   const active = plan(app);
   assert.equal((await plan(app)).status, 400);
   assert.equal((await apply(app)).status, 400);
-  assert.equal((await app.dispatch('GET', '/api/developer')).body.unavailable, true);
+  assert.equal((await app.dispatch('GET', '/api/agents')).body.unavailable, true);
   assert.equal(calls, 1);
   release({ stdout: stream }); await active;
   const failing = createConsole({ run: async () => { throw Object.assign(new Error('sensitive stderr'), { killed: true }); } });
@@ -292,7 +297,7 @@ test('token never occurs in responses or log lines, even in fields or upstream e
     const responses = [];
     for (const options of [{}, { fail: true }, { name: token }]) {
       const { app } = identitySetup(options);
-      responses.push(await app.dispatch('GET', '/api/developer'));
+      responses.push(await app.dispatch('GET', '/api/agents'));
       responses.push(await plan(app));
       responses.push(await apply(app));
     }
