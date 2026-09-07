@@ -66,7 +66,7 @@ test('normalized property collisions refuse generation', () => {
   ]) assert.throws(() => tokensCSS(fixture), /Duplicate token property: --focx-/);
 });
 
-function identitySetup({ fail = false, token = 'fake-board-secret', name = 'Developer' } = {}) {
+function identitySetup({ fail = false, token = 'fake-board-secret', name = 'Developer', extraAgents = [] } = {}) {
   const calls = [];
   const app = createConsole({ companyId: 'company-1', user: 'test-user',
     run: async (file, args, options) => {
@@ -76,7 +76,7 @@ function identitySetup({ fail = false, token = 'fake-board-secret', name = 'Deve
       calls.push({ url, options });
       if (fail) throw new Error(token);
       return { ok: true, json: async () => url.endsWith('/agents')
-        ? [{ id: 'dev-id', urlKey: 'implementation-engineer', name, status: 'paused', adapterType: 'codex_local', adapterConfig: { model: 'model-from-api', env: { SECRET: token } }, credential: token }]
+        ? [{ id: 'dev-id', urlKey: 'implementation-engineer', name, status: 'paused', adapterType: 'codex_local', adapterConfig: { model: 'model-from-api', env: { SECRET: token } }, credential: token }, ...extraAgents]
         : { name: 'Company from API', issuePrefix: 'FOCAAA', credential: token } };
     }
   });
@@ -89,7 +89,13 @@ test('developer identity is whitelisted and company prefix FOCAAA is preserved',
   // One row per declared pilot role; roles with no live match are reported
   // unresolved rather than omitted, so a newly added agent is visible as missing.
   const engineer = response.body.agents.find(a => a.roleKey === 'implementation-engineer');
-  assert.deepEqual(engineer, { roleKey: 'implementation-engineer', id: 'dev-id', name: 'Developer', status: 'paused', adapterType: 'codex_local', model: 'model-from-api', companyName: 'Company from API', issuePrefix: 'FOCAAA' });
+  const { procedures, provisioned, claudePlugins, codexPlugins, ...identity } = engineer;
+  assert.deepEqual(identity, { roleKey: 'implementation-engineer', id: 'dev-id', name: 'Developer', status: 'paused', adapterType: 'codex_local', model: 'model-from-api', companyName: 'Company from API', issuePrefix: 'FOCAAA' });
+  // Procedures come from the manifest; plugin grants from the provisioning
+  // contract, which is why the Codex list is non-empty for this role.
+  assert.deepEqual(procedures, ['focx-implement-task']);
+  assert.equal(provisioned, true);
+  assert(codexPlugins.length > 0 && claudePlugins.length === 0);
   assert(response.body.agents.length >= 1);
   assert.deepEqual(calls[0].args, ['find-generic-password', '-a', 'test-user', '-s', 'paperclip-board-token', '-w']);
   for (const call of calls.slice(1)) {
@@ -99,6 +105,21 @@ test('developer identity is whitelisted and company prefix FOCAAA is preserved',
     assert.equal(call.options.redirect, 'error');
     assert.ok(call.options.signal);
   }
+});
+
+// A role the manifest declares but the provisioning contract does not carry has
+// UNKNOWN grants, not zero. Rendering 0 there would read as "this agent has no
+// plugins" when the truth is "this agent is not provisioned by the contract".
+test('a manifest-only role reports that it is not in the contract, never zero grants', async () => {
+  const { app } = identitySetup({ extraAgents: [{ id: 'steward-id', urlKey: 'architecture-documentation-steward',
+    name: 'Steward', status: 'paused', adapterType: 'claude_local', adapterConfig: { model: 'claude-opus-5' } }] });
+  const { body } = await app.dispatch('GET', '/api/agents');
+  const steward = body.agents.find(a => a.roleKey === 'architecture-documentation-steward');
+  assert.equal(steward.unresolved, undefined);
+  assert.equal(steward.provisioned, false);
+  assert.equal(steward.claudePlugins, undefined);
+  assert.equal(steward.codexPlugins, undefined);
+  assert.deepEqual(steward.procedures, ['focx-reconcile-truth']);
 });
 
 test('unreachable API, absent token and failed keychain produce unavailable, without invented identity', async () => {
@@ -132,9 +153,12 @@ function resolutionSetup({ companyId = retainedCompanyId, agents = [liveDevelope
 
 test('retained company resolves Developer by declared id with live on-demand slug and engineer role', async () => {
   const { body } = await resolutionSetup().dispatch('GET', '/api/agents');
-  assert.deepEqual(body.agents.find(a => a.roleKey === 'implementation-engineer'),
+  const { procedures, provisioned, claudePlugins, codexPlugins, ...identity } = body.agents.find(a => a.roleKey === 'implementation-engineer');
+  assert.deepEqual(identity,
     { roleKey: 'implementation-engineer', id: declaredDeveloperId, name: 'Developer', status: 'paused',
       adapterType: 'codex_local', model: 'model-from-api', companyName: 'Company', issuePrefix: 'FOCAAA' });
+  assert.deepEqual(procedures, ['focx-implement-task']);
+  assert.equal(provisioned, true);
 });
 
 test('different company resolves Developer by provisioned urlKey', async () => {

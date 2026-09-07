@@ -99,6 +99,12 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
         if (!token) return unavailable(noCredential);
         credentials.add(token);
         const manifest = JSON.parse(await read(resolve(root, '.focx/agents.json'), 'utf8'));
+        // Plugin grants live in the provisioning contract, not the manifest. The
+        // manifest carries adapterLocal.claudeCodePlugins for Claude roles and
+        // nothing for Codex ones, so reading it alone would report 0 plugins for
+        // implementation-engineer, which the contract grants 73.
+        let contractAgents = null;
+        try { contractAgents = JSON.parse(await read(resolve(root, 'packages/focx-bot/contract.json'), 'utf8')).agents; } catch { contractAgents = null; }
         const id = companyId ?? manifest.companyId;
         if (typeof id !== 'string' || !/^[A-Za-z0-9-]+$/.test(id)) return unavailable(unresolvedDeveloper);
         const get = async path => {
@@ -132,7 +138,15 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
             adapterType: agent.adapterType, model: agent.adapterConfig?.model,
             companyName: company.name, issuePrefix: company.issuePrefix };
           if (Object.values(fields).some(v => typeof v !== 'string' || !v)) return clean({ roleKey: role.roleKey, name: role.name ?? role.roleKey, unresolved: true, reason: unresolvedRole });
-          return clean(fields);
+          // The procedures the agent actually reads, and the plugins it is granted.
+          // A role the contract does not carry is reported as such, never as zero.
+          const procedures = Array.isArray(role.skills) ? role.skills.filter(x => typeof x === 'string') : [];
+          const inContract = Array.isArray(contractAgents) ? contractAgents.find(c => c?.slug === role.roleKey) : undefined;
+          const grants = inContract
+            ? { claudePlugins: (inContract.grants?.claudePlugins ?? []).filter(x => typeof x === 'string'),
+                codexPlugins: (inContract.grants?.codexPlugins ?? []).filter(x => typeof x === 'string') }
+            : null;
+          return clean({ ...fields, procedures, provisioned: Boolean(inContract), ...(grants ?? {}) });
         });
         // Nothing resolvable at all is an unavailable page, not a list of holes.
         if (cards.every(r => r.unresolved)) return unavailable(unresolvedDeveloper);

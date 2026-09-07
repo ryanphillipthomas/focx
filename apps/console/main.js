@@ -109,7 +109,43 @@ function card(agent) {
     list.append(dt, dd);
   }
   box.append(list);
+
+  // Procedures: the method files this agent reads. Small and worth naming.
+  box.append(labelled('Procedures', agent.procedures?.length
+    ? agent.procedures.join(', ')
+    : 'None declared'));
+
+  // Plugins: where the pinned library actually reaches an agent. Counts by
+  // default — nobody reads 73 names — with the names available on demand.
+  if (!agent.provisioned) {
+    box.append(labelled('Plugins', 'Not in the provisioning contract'));
+  } else {
+    const claude = agent.claudePlugins ?? [];
+    const codex = agent.codexPlugins ?? [];
+    box.append(labelled('Plugins', `${claude.length} Claude · ${codex.length} Codex`));
+    const all = [...claude, ...codex];
+    if (all.length) {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = `Show ${all.length}`;
+      const names = document.createElement('ul');
+      for (const key of all) {
+        const li = document.createElement('li');
+        li.textContent = key;
+        names.append(li);
+      }
+      details.append(summary, names);
+      box.append(details);
+    }
+  }
   return box;
+}
+function labelled(label, value) {
+  const p = document.createElement('p');
+  const strong = document.createElement('strong');
+  strong.textContent = `${label}: `;
+  p.append(strong, document.createTextNode(value));
+  return p;
 }
 try {
   const identity = await request('/api/agents');
