@@ -14,12 +14,12 @@ const ADAPTERS = ['claude_local', 'codex_local']
 // Claude Code's own key shape for an installed plugin: <plugin>@<marketplace>.
 const PLUGIN_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*@[a-z0-9]+(?:-[a-z0-9]+)*$/
 // A Claude Code permission rule: `Tool` or `Tool(pattern)`.
-const PERMISSION_RULE = /^[A-Z][A-Za-z]*(?:\(.+\))?$/
+export const PERMISSION_RULE = /^[A-Z][A-Za-z]*(?:\(.+\))?$/
 // An MCP tool rule names one exact tool on one exact server. A role may reach an
 // external service only by listing every tool it needs by name: no wildcard, no
 // server-wide grant, so the blast radius of an MCP grant is always readable in
 // the manifest. `mcp__<server>__<tool>`.
-const MCP_RULE = /^mcp__[a-z0-9]+(?:_[a-z0-9]+)*__[a-z0-9]+(?:_[a-z0-9]+)*$/
+export const MCP_RULE = /^mcp__[a-z0-9]+(?:_[a-z0-9]+)*__[a-z0-9]+(?:_[a-z0-9]+)*$/
 const PROCEDURE_VERSION = /^\s*version: "\d+\.\d+\.\d+"$/m
 
 export function loadRoleSource(root = ROLE_ROOT) {

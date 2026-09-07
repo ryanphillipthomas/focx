@@ -380,7 +380,99 @@
       "desiredSkills": [
         "paperclipai/paperclip/paperclip"
       ]
-    }
+    },
+   {
+    "name": "Product Designer",
+    "title": "Product Designer — v0.1 pilot",
+    "roleKey": "product-designer",
+    "status": "paused",
+    "disposition": "pilot",
+    "adapterType": "claude_local",
+    "instructions": ".focx/roles/product-designer.md",
+    "skills": [
+     "focx-design-extract",
+     "focx-design-figma"
+    ],
+    "permissions": {
+     "canCreateAgents": false,
+     "canCreateSkills": false,
+     "canAssignTasks": false
+    },
+    "executionPermissions": {
+     "permissionMode": "approve-reads",
+     "nonInteractivePermissions": "deny"
+    },
+    "reportsTo": null,
+    "slug": "product-designer",
+    "role": "design",
+    "icon": "palette",
+    "model": "claude-opus-5",
+    "reasoning": "high",
+    "git": "write",
+    "workspace": "repo-worktree",
+    "run": {
+     "heartbeat": {
+      "enabled": false,
+      "wakeOnDemand": false,
+      "maxTurnContinuation": {
+       "enabled": false
+      },
+      "maxConcurrentRuns": 1
+     }
+    },
+    "limits": {
+     "timeoutSec": 900,
+     "maxTurnsPerRun": 20,
+     "maxDailyRuns": null
+    },
+    "grants": {
+     "claudePlugins": [
+      "figma@claude-plugins-official"
+     ],
+     "codexPlugins": []
+    },
+    "adapterLocal": {
+     "claudeCodePlugins": [
+      "figma@claude-plugins-official"
+     ],
+     "permissionsAllow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(jq:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git config user.:*)",
+      "Bash(mkdir -p pipeline/runs/*)",
+      "Edit(/pipeline/runs/**)",
+      "Bash(git add pipeline/runs:*)",
+      "Bash(git commit:*)",
+      "Bash(scripts/paperclip-issue-update.sh:*)",
+      "mcp__plugin_figma_figma__get_metadata",
+      "mcp__plugin_figma_figma__get_screenshot",
+      "mcp__plugin_figma_figma__get_variable_defs",
+      "mcp__plugin_figma_figma__get_libraries",
+      "mcp__plugin_figma_figma__search_design_system",
+      "mcp__plugin_figma_figma__use_figma"
+     ],
+     "permissionDelivery": "product-designer-worktree-local",
+     "permissionsDeny": [
+      "Edit",
+      "NotebookEdit",
+      "Skill"
+     ]
+    },
+    "desiredSkills": [
+     "paperclipai/paperclip/paperclip"
+    ]
+   }
   ],
   "skills": {
  "$comment": "FB3 rev 2.1 \u2014 skills section of packages/focx-bot/contract.json, rescoped by Ryan 2026-09-05 to the FULL official catalogs at current versions. Every value read from this host; see verifiedAt and each pin's method. Rev 2.1 adds `pinned` on every entry and lists the 436 community entries with identity so any can be brought back later. Rev 2.1 also pins the 37 OpenAI-developed Plugin_* entries confirmed by release.interface.developer_name and retracts rev 2's claim that no local publisher source existed. Rev 2.2 completes full identity on observedNotPinned, records release.interface.website_url on every curated-remote entry, and adds figma's oauthPrerequisite (principal by ref).",

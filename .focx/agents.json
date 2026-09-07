@@ -154,6 +154,7 @@
       "maxDailyRuns": null,
       "instructions": ".focx/roles/product-designer.md",
       "skills": [
+        "focx-design-extract",
         "focx-design-figma"
       ],
       "permissions": {

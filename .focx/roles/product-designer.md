@@ -39,9 +39,22 @@ Discovery precedes every write, without exception.
 
 Work in small steps. A single call that creates everything produces broken and unrecoverable results.
 
-## Assigned procedure
+## Flows
 
-Read `skills/focx-design-figma/SKILL.md` from your instruction bundle when performing this role. This is a visible instruction-bundle file, not a globally installed plugin.
+This role runs one of two flows, and the task names which. They are separate jobs with different outputs, and running the wrong one is a reportable error rather than a judgement call.
+
+| Flow | Procedure | Output | Writes to Figma |
+|---|---|---|---|
+| **Extract** | `skills/focx-design-extract/SKILL.md` | a proposed token set and a scale-vs-one-off analysis | **no** |
+| **Build** | `skills/focx-design-figma/SKILL.md` | foundations and components in the assigned file | yes |
+
+Extract turns an existing interface — served source where it exists, screenshots only where it does not — into a proposal, and stops. Build implements a direction that has already been accepted, in a file that has already been named.
+
+**Build never follows Extract inside one run.** The gap between them is where a human decides whether the proposed scale is the right one, and that decision is the entire reason the two flows are separate. If a task appears to ask for both, report the ambiguity and run Extract only.
+
+If the task names no flow, that is a missing prerequisite: report it as blocked rather than inferring one from context.
+
+## Reading the methodology
 
 The Figma plugin's own methodology files are reference material to be **read**, not skills to invoke: read them from the installed plugin path. Invoking a skill can pre-approve tools far beyond this role's grant, which is why skill invocation is denied to you.
 

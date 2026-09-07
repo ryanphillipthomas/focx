@@ -1,12 +1,11 @@
 ---
 name: focx-design-figma
-version: "0.1.0"
 description: Build foundations and components in an assigned Figma file from an approved source of truth, discovery first, additively, with every visual property bound to a variable.
+metadata:
+  version: "0.1.0"
 ---
 
 # focx-design-figma
-
-version: "0.1.0"
 
 A contracted procedure for the Product Designer role. It assumes the role file has been read.
 
