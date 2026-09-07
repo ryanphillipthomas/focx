@@ -49,6 +49,15 @@ function run(args, { env = {}, stdin = '' } = {}) {
     const child = execFile(SCRIPT, args, {
       env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env },
     }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr }))
+    // The script is allowed to exit before it reads stdin — a usage error does
+    // exactly that, and several tests below depend on it. When it does, the pipe
+    // closes while this write is still in flight and the write fails. That is the
+    // behaviour under test, not a harness fault, so it must not surface as an
+    // uncaught exception and fail an unrelated assertion. Anything other than a
+    // closed pipe is still unexpected and is left to throw.
+    child.stdin.on('error', err => {
+      if (err.code !== 'EPIPE' && err.code !== 'ERR_STREAM_DESTROYED') throw err
+    })
     child.stdin.end(stdin)
   })
 }
@@ -305,6 +314,24 @@ test('an unknown argument is refused rather than ignored', async () => {
     const r = await run(['--stats', 'done'], { env: baseEnv(url), stdin: 'ok' })
     assert.equal(r.code, 1)
     assert.match(r.stderr, /unknown argument/)
+    assert.equal(api.seen.length, 0)
+  } finally { await api.close() }
+})
+
+// A regression test for the harness itself. Before the stdin error handler in
+// `run` above, this raised an uncaught EPIPE and failed whichever test happened
+// to be running: the script exits on the usage error without draining stdin, so
+// a payload larger than the pipe buffer can never be written. It reproduces the
+// race deterministically rather than waiting for CI to lose it.
+test('a script that exits before reading stdin does not crash the harness', async () => {
+  const api = stubApi()
+  const url = await api.listen()
+  try {
+    const env = baseEnv(url)
+    delete env.PAPERCLIP_TASK_ID
+    const r = await run(['--status', 'done'], { env, stdin: 'x'.repeat(1024 * 1024) })
+    assert.equal(r.code, 1)
+    assert.match(r.stderr, /no issue id/)
     assert.equal(api.seen.length, 0)
   } finally { await api.close() }
 })
