@@ -71,7 +71,7 @@ The historical Phase 2 changed live state after repository review. The current c
 - Never raise a budget, in the roster or through the API. Budget increases are Ryan's.
 - Never set `canCreateAgents: true`, grant Figma write outside `designChain.figmaWrite`, or give `GH_TOKEN` to an agent whose `git` is not `write`. The Design Steward's missing token is a control, not an oversight.
 - Never edit a live instruction bundle. Edit `pipeline/org/instructions/` and re-apply.
-- Never modify `docs/pipeline.md`, `docs/roles/*`, `pipeline/contracts/*`, `tools/pipeline-parity/manifest.json`, `tools/contracts/validate.mjs`, or `.github/workflows/*`. All are parity-checked against `studio-810`, which is not on this machine, so a mirror edit cannot even be authored.
+- Preserve the artifact contracts in `pipeline/contracts/*` and their validation in `tools/contracts/validate.mjs`; changes must keep artifacts schema-valid. Changes to `.github/workflows/*` must preserve the drift gate and deployment checks.
 - Never merge, approve, force-push, or push to `main` or `develop`.
 - Never install a dependency. Every tool in this repo is dependency-free on purpose.
 
