@@ -64,7 +64,7 @@ test('fresh is dry-run by default and names all three stages without using creat
   const p=await fresh(api,source,{io,catalogCompanyId:'catalog-company',emit:e=>emitted.push(e)})
   assert.equal(p.changes[0].path,'/api/companies/import');assert.equal(p.changes[0].body.pauseAutomations,true)
   assert.equal(writes(api).length,0);assert.equal(io.writes.length,0)
-  assert.equal(emitted[0].later.length,2);assert.match(emitted[0].window,/tasks:assign/)
+  assert.equal(emitted[0].later.length,source.contract.agents.length);assert.match(emitted[0].window,/tasks:assign/)
 })
 test('fresh reports the same five digest operations in preview and return',async()=>{
   const api=createFakeApi(),io=memoryIO(),emitted=[],target={mode:'new_company',newCompanyName:'console-demo'}
@@ -88,7 +88,7 @@ test('three-stage fake provisioning: born paused, explicit grant revoked, hand-e
   assertInvariants(source.contract,f.live)
   assert(permissionsDone(f.live));assert.deepEqual(secretLinkFindings(source.contract,f.live),[])
   const calls=writes(f.api);assert.equal(calls.filter(c=>c.path==='/api/companies/import').length,1)
-  assert.equal(calls.filter(c=>c.path.endsWith('/permissions')).length,2)
+  assert.equal(calls.filter(c=>c.path.endsWith('/permissions')).length,source.contract.agents.length)
   for(const c of calls.filter(c=>c.body?.adapterConfig?.env)){assert(!('replaceAdapterConfig' in c.body));assert.equal(Object.keys(c.body.adapterConfig).length,1)}
   assert(f.live.agents.every(a=>a.access.canAssignTasks===true && a.access.taskAssignSource==='simple_default'))
   assert.equal(Object.keys(f.io.files).length,1)
@@ -154,7 +154,7 @@ test('partial import reports step 1 and created ids, marks failed, and never ret
 test('step 2 failure retains both identities and reports permissions, not invariant 1',async()=>{
   const api=createFakeApi(),io=memoryIO(),options={io,catalogCompanyId:'catalog-company'},p=await fresh(api,source,options)
   api.state.fail=({path,method})=>method==='PATCH'&&path.endsWith('/permissions')
-  await assert.rejects(fresh(api,source,{...options,apply:true,approvedDigest:p.digest}),e=>e.step===2 && Object.keys(e.state.ids).length===2 && /permissions/.test(e.unmet))
+  await assert.rejects(fresh(api,source,{...options,apply:true,approvedDigest:p.digest}),e=>e.step===2 && Object.keys(e.state.ids).length===source.contract.agents.length && /permissions/.test(e.unmet))
 })
 test('unresolved or ambiguous secret names refuse all env writes; binding failure stops step 3',async()=>{
   assert.throws(()=>resolveEnv({TOKEN:{secret:'needed'}},[]),/resolve uniquely/)
@@ -893,7 +893,7 @@ async function resumeWitness(bind) {
     pluginCalls++
     assert(f.io.locked)
     const calls=f.api.state.calls,patches=calls.filter(c=>c.method==='PATCH')
-    assert.equal(patches.length,2)
+    assert.equal(patches.length,source.contract.agents.length)
     assert.deepEqual(patches,p.changes)
     // Snapshot reads occur between PATCHes and after the final PATCH.
     const positions=calls.flatMap((c,i)=>c.method==='PATCH'?[i]:[])
@@ -953,7 +953,7 @@ async function authWitness(run,{race=false}={}) {
       const p=JSON.parse(emitted.at(-1)[0])
       const acquire=f.io.acquire;f.io.acquire=async()=>{const release=await acquire();present=false;return release}
       await assert.rejects(run(['bind-secrets','--fake','--apply','--approved-digest',p.digest],runtime),e=>e.step==='host-plugins')
-      assert.equal(f.api.state.calls.filter(c=>c.method==='PATCH').length,2)
+      assert.equal(f.api.state.calls.filter(c=>c.method==='PATCH').length,source.contract.agents.length)
       assert.equal((await f.io.readState()).phase,'awaiting-plugin-auth')
     }
     assert.equal(pluginCalls,0);assert(seen.every(p=>p===`/fake-instance/companies/${f.companyId}/codex-home/auth.json`))
@@ -1050,7 +1050,7 @@ test('F18 fake CLI completes after auth is present without starting a host manag
     const p=JSON.parse(emitted.at(-1)[0])
     await main(['bind-secrets','--fake','--apply','--approved-digest',p.digest],runtime)
     assert.equal((await f.io.readState()).phase,'configured')
-    assert.equal(f.api.state.calls.filter(c=>c.method==='PATCH').length,2)
+    assert.equal(f.api.state.calls.filter(c=>c.method==='PATCH').length,source.contract.agents.length)
   }finally{console.log=original}
 })
 test('F18 successful provisioning clears old failure while retaining manual app auth phase',async()=>{
@@ -1164,7 +1164,7 @@ async function nativeSeedWitness(install=installNativePlugins,plan=nativePluginP
   assert.deepEqual(runtime.calls.find(c=>c.method==='plugin/list').params,{marketplaceKinds:['local'],forceRefetch:false})
   assert.deepEqual(runtime.calls.filter(c=>c.method==='plugin/install').map(c=>c.params.pluginName),['first','last'])
   assert.equal(result.oauthPerformed,false);assert.equal(result.needsAuth.length,0)
-  assert.equal(emitted.filter(e=>e.write).length,2)
+  assert.equal(emitted.filter(e=>e.write).length,source.contract.agents.length)
 }
 test('F20 reserved verified / seeded-missing / failed findings continue to installed entries',()=>nativeSeedWitness())
 test('F20 classification follows normalized home containment, not a marketplace name',()=>{
