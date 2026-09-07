@@ -11,7 +11,8 @@ const timeout = 30000;
 const unavailable = reason => ({ unavailable: true, reason });
 const noCredential = 'No board credential available.';
 const controlPlaneUnavailable = 'Control plane unreachable or refused.';
-const unresolvedDeveloper = 'Developer could not be resolved in the configured company.';
+const unresolvedDeveloper = 'Agents could not be resolved in the configured company.';
+const unresolvedRole = 'Declared in the contract; not resolved in this company.';
 const invalid = () => { throw new Error('Request refused'); };
 
 // Strings, escaped quotes and nested objects are tracked independently of whitespace.
@@ -86,7 +87,7 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
     busy = true;
     try { return await work(); } finally { busy = false; }
   }
-  async function developer() {
+  async function agentRows() {
     try {
       return await exclusive(async () => {
         let token;
@@ -115,20 +116,27 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
         } catch { return unavailable(controlPlaneUnavailable); }
         const agents = Array.isArray(rows) ? rows : rows?.agents;
         if (!Array.isArray(agents)) return unavailable(unresolvedDeveloper);
-        let matches;
-        if (id === manifest.companyId) {
-          const declared = manifest.agents?.filter(a => a.roleKey === 'implementation-engineer');
-          if (declared?.length !== 1 || typeof declared[0].id !== 'string' || !declared[0].id) return unavailable(unresolvedDeveloper);
-          matches = agents.filter(a => a?.id === declared[0].id);
-        } else {
-          matches = agents.filter(a => a?.urlKey === 'implementation-engineer');
-        }
-        if (matches.length !== 1) return unavailable(unresolvedDeveloper);
-        const agent = matches[0];
-        const fields = { id: agent.id, name: agent.name, status: agent.status, adapterType: agent.adapterType,
-          model: agent.adapterConfig?.model, companyName: company.name, issuePrefix: company.issuePrefix };
-        if (Object.values(fields).some(v => typeof v !== 'string' || !v)) return unavailable(unresolvedDeveloper);
-        return clean(fields);
+        // Every pilot role the contract declares, not one hardcoded role. A role
+        // added to the manifest appears here with no console change; one that is
+        // declared but absent live is reported as unresolved rather than hidden,
+        // because "the agent I just added is missing" is the thing worth seeing.
+        const declared = (manifest.agents ?? []).filter(a => a?.disposition === 'pilot' && typeof a.roleKey === 'string');
+        if (!declared.length) return unavailable(unresolvedDeveloper);
+        const cards = declared.map(role => {
+          const matches = id === manifest.companyId
+            ? (typeof role.id === 'string' && role.id ? agents.filter(a => a?.id === role.id) : [])
+            : agents.filter(a => a?.urlKey === role.roleKey);
+          if (matches.length !== 1) return clean({ roleKey: role.roleKey, name: role.name ?? role.roleKey, unresolved: true, reason: unresolvedRole });
+          const agent = matches[0];
+          const fields = { roleKey: role.roleKey, id: agent.id, name: agent.name, status: agent.status,
+            adapterType: agent.adapterType, model: agent.adapterConfig?.model,
+            companyName: company.name, issuePrefix: company.issuePrefix };
+          if (Object.values(fields).some(v => typeof v !== 'string' || !v)) return clean({ roleKey: role.roleKey, name: role.name ?? role.roleKey, unresolved: true, reason: unresolvedRole });
+          return clean(fields);
+        });
+        // Nothing resolvable at all is an unavailable page, not a list of holes.
+        if (cards.every(r => r.unresolved)) return unavailable(unresolvedDeveloper);
+        return { agents: cards };
       });
     } catch { return unavailable(unresolvedDeveloper); }
   }
@@ -176,7 +184,7 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
         }));
         return { status: 200, type: 'text/css', body: tokensCSS(Object.fromEntries(tokens)) };
       }
-      if (method === 'GET' && path === '/api/developer') return { status: 200, body: await developer() };
+      if (method === 'GET' && path === '/api/agents') return { status: 200, body: await agentRows() };
       if (method === 'POST' && ['/api/plan', '/api/apply'].includes(path)) return { status: 200, body: await operation(body, path === '/api/apply') };
       const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/main.js': ['main.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'] };
       if (method === 'GET' && files[path]) {
