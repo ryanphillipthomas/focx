@@ -262,6 +262,13 @@ test('D1: closed stdout and stderr pipes do not crash the wrapper with EPIPE', a
     env: cleanEnv({ CLAUDE_STUB_MODE: 'stream', CLAUDE_STUB_DELAY_MS: '200' }),
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+  // The wrapper may exit before it drains stdin, which closes the pipe while
+  // this write is in flight. That is the wrapper's behaviour, not a harness
+  // fault, so a closed pipe must not surface as an uncaught exception now that
+  // this suite gates merges. Anything else still throws.
+  child.stdin.on('error', (err) => {
+    if (err.code !== 'EPIPE' && err.code !== 'ERR_STREAM_DESTROYED') throw err;
+  });
   child.stdin.end('stream prompt');
   child.stdout.once('data', () => child.stdout.destroy());
   child.stderr.once('data', () => child.stderr.destroy());
@@ -343,6 +350,13 @@ test('stdout is forwarded incrementally and byte-faithfully', async () => {
   const child = spawn(process.execPath, [WRAPPER, '--output-format', 'stream-json'], {
     env: cleanEnv({ CLAUDE_STUB_MODE: 'stream', CLAUDE_STUB_DELAY_MS: '400' }),
     stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  // The wrapper may exit before it drains stdin, which closes the pipe while
+  // this write is in flight. That is the wrapper's behaviour, not a harness
+  // fault, so a closed pipe must not surface as an uncaught exception now that
+  // this suite gates merges. Anything else still throws.
+  child.stdin.on('error', (err) => {
+    if (err.code !== 'EPIPE' && err.code !== 'ERR_STREAM_DESTROYED') throw err;
   });
   child.stdin.end('stream prompt');
 
