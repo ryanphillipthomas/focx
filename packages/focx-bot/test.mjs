@@ -66,22 +66,28 @@ test('fresh is dry-run by default and names all three stages without using creat
   assert.equal(writes(api).length,0);assert.equal(io.writes.length,0)
   assert.equal(emitted[0].later.length,source.contract.agents.length);assert.match(emitted[0].window,/tasks:assign/)
 })
-test('fresh reports the same five digest operations in preview and return',async()=>{
+test('fresh reports the same digest operations in preview and return',async()=>{
   const api=createFakeApi(),io=memoryIO(),emitted=[],target={mode:'new_company',newCompanyName:'console-demo'}
   const result=await fresh(api,source,{io,target,instanceRoot:'/fake-instance',catalogCompanyId:'catalog-company',emit:e=>emitted.push(e)})
   const homes=renderSkillHomes(source.contract,'/fake-instance','<created-company-id>',Object.fromEntries(source.contract.agents.map(a=>[a.slug,`<id:${a.slug}>`])))
   const digestOperations=[...freshPlan(source,target).operations,...Object.entries(homes.files).map(([path,body])=>({method:'WRITE_FILE',path,body})),{method:'WRITE_STATE',path:io.statePath}]
   assert.deepEqual(emitted[0].changes,result.changes)
-  assert.equal(result.changes.length,5)
+  // One import, one settings write per Claude agent, one state write. Pinning a
+  // literal here breaks the moment a role is added, which says nothing useful.
+  assert.equal(result.changes.length,freshPlan(source,target).operations.length+Object.keys(homes.files).length+1)
   assert.deepEqual(result.changes,digestOperations)
   assert.equal(result.changes.length,digestOperations.length)
   assert.deepEqual(result.changes.at(-1),{method:'WRITE_STATE',path:io.statePath})
   assert.equal(result.digest,approvalDigest(digestOperations,{baseUrl:api.baseUrl,companyId:null},source.sha))
   assert.equal(emitted[0].digest,result.digest)
 })
-test('fresh console-demo digest is unchanged from before the reporting refactor',async()=>{
+// The digest binds the rendered operation list, so it is expected to change when
+// the contract gains an agent — that is the digest working, not drifting. Re-pin
+// it deliberately when a role is added, and never to make a red test go green.
+// eafdfcf7… was the two-agent value before product-designer (PR #118).
+test('fresh console-demo digest changes only when the operation list does',async()=>{
   const result=await fresh(createFakeApi(),source,{io:memoryIO(),instanceRoot:'/fake-instance',catalogCompanyId:'catalog-company',target:{mode:'new_company',newCompanyName:'console-demo'}})
-  assert.equal(result.digest,'eafdfcf7d13b79031c15d6f535c164911dc967f231523e2cdb5e7d8ae95ff09c')
+  assert.equal(result.digest,'5b3f091930f2c16af94fb57f1912a4838d99d73ca5864fbfc8543f362736da23')
 })
 test('three-stage fake provisioning: born paused, explicit grant revoked, hand-entry pause, merge-only refs, zero changes',async()=>{
   const f=await fixture({instanceRoot:'/fake-instance'})
