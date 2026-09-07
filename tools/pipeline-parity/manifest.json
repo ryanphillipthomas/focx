@@ -44,8 +44,6 @@
     "tools/contracts/validate.mjs",
     "tools/pipeline-parity/index.mjs",
     "tools/pipeline-parity/manifest.json",
-    "docs/pipeline.md",
-    "docs/roles/chief.md",
     "docs/roles/product.md",
     "docs/roles/qa.md",
     "docs/roles/deploy.md",
@@ -61,7 +59,6 @@
     "tools/drift-check/package.json"
   ],
   "structure": [
-    "pipeline/contracts/run.schema.json",
     "pipeline/contracts/brief.schema.json",
     "pipeline/contracts/product-spec.schema.json",
     "pipeline/contracts/research-report.schema.json",
@@ -71,8 +68,11 @@
     "pipeline/contracts/release-record.schema.json"
   ],
   "local": {
-    "comment": "Deliberately repo-specific — each repo describes its own apps, packages, and design-system layering. Listed so the manifest is a complete account of the shared surface rather than a partial one. Not checked. tools/drift-check graduated out of this tier on 2026-08-31 when focx adopted studio-810's generalized parent/child layer model; only the PARENT constant and npm scope differ now, both covered by brand tokens.",
+    "comment": "Deliberately repo-specific — each repo describes its own apps, packages, and design-system layering. Listed so the manifest is a complete account of the shared surface rather than a partial one. Not checked. tools/drift-check graduated out of this tier on 2026-08-31 when focx adopted studio-810's generalized parent/child layer model; only the PARENT constant and npm scope differ now, both covered by brand tokens. pipeline/contracts/run.schema.json, docs/pipeline.md, and docs/roles/chief.md moved into this tier on 2026-09-07 because focx deliberately diverged for Paperclip under the 2026-09-01 Option B decision; studio-810 does not run Paperclip, and recording the divergence lets the remaining shared files be compared again.",
     "paths": [
+      "pipeline/contracts/run.schema.json",
+      "docs/pipeline.md",
+      "docs/roles/chief.md",
       ".github/workflows/parity.yml",
       "pipeline/deploy.config.json",
       "AGENTS.md",
