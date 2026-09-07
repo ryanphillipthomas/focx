@@ -13,6 +13,7 @@ const noCredential = 'No board credential available.';
 const controlPlaneUnavailable = 'Control plane unreachable or refused.';
 const unresolvedDeveloper = 'Agents could not be resolved in the configured company.';
 const unresolvedRole = 'Declared in the contract; not resolved in this company.';
+const noTickets = 'No tickets in this company.';
 const invalid = () => { throw new Error('Request refused'); };
 
 // Strings, escaped quotes and nested objects are tracked independently of whitespace.
@@ -154,6 +155,59 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
       });
     } catch { return unavailable(unresolvedDeveloper); }
   }
+  // Tickets. The control plane returns ~60 fields per issue and 264KB for this
+  // company; only what the view renders crosses to the browser. Assignees arrive
+  // as agent ids, so they are resolved to names from the same agents call rather
+  // than shown as raw uuids.
+  async function ticketRows() {
+    try {
+      return await exclusive(async () => {
+        let token;
+        try {
+          const { stdout } = await run('security', ['find-generic-password', '-a', user || '', '-s', 'paperclip-board-token', '-w'],
+            { timeout, maxBuffer: 65536, encoding: 'utf8' });
+          token = stdout.trim();
+        } catch { return unavailable(noCredential); }
+        if (!token) return unavailable(noCredential);
+        credentials.add(token);
+        const manifest = JSON.parse(await read(resolve(root, '.focx/agents.json'), 'utf8'));
+        const id = companyId ?? manifest.companyId;
+        if (typeof id !== 'string' || !/^[A-Za-z0-9-]+$/.test(id)) return unavailable(unresolvedDeveloper);
+        const get = async path => {
+          const response = await fetchAPI(`http://127.0.0.1:3100${path}`, {
+            method: 'GET', headers: { Authorization: `Bearer ${token}` },
+            redirect: 'error', signal: AbortSignal.timeout(8000)
+          });
+          if (!response.ok) throw new Error('Unavailable');
+          return response.json();
+        };
+        let raw, agentRaw;
+        try {
+          raw = await get(`/api/companies/${id}/issues`);
+          agentRaw = await get(`/api/companies/${id}/agents`);
+        } catch { return unavailable(controlPlaneUnavailable); }
+        const issues = Array.isArray(raw) ? raw : raw?.issues;
+        if (!Array.isArray(issues)) return unavailable(controlPlaneUnavailable);
+        const live = Array.isArray(agentRaw) ? agentRaw : agentRaw?.agents;
+        const names = new Map((Array.isArray(live) ? live : []).map(a => [a?.id, a?.name]).filter(([k, v]) => k && v));
+        const text = v => (typeof v === 'string' && v ? v : null);
+        const rows = issues.map(i => ({
+          identifier: text(i?.identifier),
+          title: text(i?.title),
+          status: text(i?.status),
+          priority: text(i?.priority),
+          assignee: names.get(i?.assigneeAgentId) ?? null,
+          updatedAt: text(i?.updatedAt)
+        })).filter(r => r.identifier && r.title);
+        // Most recently touched first: the useful default for a work list.
+        rows.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+        if (!rows.length) return unavailable(noTickets);
+        const counts = {};
+        for (const r of rows) if (r.status) counts[r.status] = (counts[r.status] ?? 0) + 1;
+        return clean({ tickets: rows, total: rows.length, counts });
+      });
+    } catch { return unavailable(controlPlaneUnavailable); }
+  }
   async function operation(body, apply) {
     return exclusive(async () => {
       // A failed attempt also invalidates the previously reviewed plan.
@@ -199,6 +253,7 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
         return { status: 200, type: 'text/css', body: tokensCSS(Object.fromEntries(tokens)) };
       }
       if (method === 'GET' && path === '/api/agents') return { status: 200, body: await agentRows() };
+      if (method === 'GET' && path === '/api/tickets') return { status: 200, body: await ticketRows() };
       if (method === 'POST' && ['/api/plan', '/api/apply'].includes(path)) return { status: 200, body: await operation(body, path === '/api/apply') };
       const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/main.js': ['main.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'] };
       if (method === 'GET' && files[path]) {

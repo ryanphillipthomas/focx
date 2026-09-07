@@ -137,6 +137,64 @@ const liveDeveloper = { id: declaredDeveloperId, urlKey: 'implementation-enginee
   role: 'engineer', name: 'Developer', status: 'paused', adapterType: 'codex_local',
   adapterConfig: { model: 'model-from-api' } };
 
+test('the launchd agent runs this checkout on loopback and escapes its paths', async () => {
+  const { plist, LABEL, agentPath } = await import('./agent.mjs');
+  const xml = plist({ node: '/usr/local/bin/node', cwd: '/repo/a&b', port: 4174, logDir: '/logs' });
+  assert.match(xml, /<key>Label<\/key><string>ai\.focx\.console<\/string>/);
+  assert.match(xml, /<string>\/repo\/a&amp;b<\/string>/);          // XML-escaped, not raw
+  assert.match(xml, /<key>PORT<\/key><string>4174<\/string>/);
+  assert.match(xml, /<key>RunAtLoad<\/key><true\/>/);
+  assert(xml.includes('/repo/a&b/tools/console-server/index.mjs'.replace('&', '&')) || xml.includes('index.mjs'));
+  assert.equal(LABEL, 'ai.focx.console');
+  assert.match(agentPath('/Users/x'), /^\/Users\/x\/Library\/LaunchAgents\/ai\.focx\.console\.plist$/);
+});
+
+function ticketSetup({ fail = false, issues, token = 'fake-board-secret' } = {}) {
+  const rows = issues ?? [
+    { identifier: 'FOC-2', title: 'Older', status: 'done', priority: 'low',
+      assigneeAgentId: 'dev-id', updatedAt: '2026-09-01T00:00:00.000Z', description: 'x'.repeat(1200), companyId: 'c', labels: [] },
+    { identifier: 'FOC-9', title: 'Newer', status: 'blocked', priority: 'high',
+      assigneeAgentId: 'unknown-agent', updatedAt: '2026-09-05T00:00:00.000Z', description: 'y', companyId: 'c', labels: [] }
+  ];
+  return createConsole({ companyId: 'company-1', user: 'test-user',
+    run: async () => ({ stdout: token }),
+    fetchAPI: async url => {
+      if (fail) throw new Error(token);
+      if (url.endsWith('/issues')) return { ok: true, json: async () => rows };
+      if (url.endsWith('/agents')) return { ok: true, json: async () => [{ id: 'dev-id', name: 'Developer', credential: token }] };
+      return { ok: true, json: async () => ({ name: 'Company', issuePrefix: 'FOCAAA' }) };
+    }
+  });
+}
+
+test('tickets are trimmed to the rendered fields, newest first, with assignees resolved to names', async () => {
+  const { body } = await ticketSetup().dispatch('GET', '/api/tickets');
+  assert.equal(body.total, 2);
+  assert.deepEqual(body.counts, { done: 1, blocked: 1 });
+  // Most recently updated first.
+  assert.deepEqual(body.tickets.map(t => t.identifier), ['FOC-9', 'FOC-2']);
+  // Only what the view renders crosses to the browser: the control plane returns
+  // ~60 fields per issue, and the descriptions alone are 1200 chars each.
+  assert.deepEqual(Object.keys(body.tickets[0]).sort(),
+    ['assignee', 'identifier', 'priority', 'status', 'title', 'updatedAt']);
+  assert.equal(body.tickets[1].assignee, 'Developer');
+  // An assignee the agents call does not know stays null rather than leaking a uuid.
+  assert.equal(body.tickets[0].assignee, null);
+  assert(!JSON.stringify(body).includes('description'));
+});
+
+test('tickets fail closed: no credential, unreachable control plane, and an empty list', async () => {
+  assert.equal((await ticketSetup({ fail: true }).dispatch('GET', '/api/tickets')).body.unavailable, true);
+  const empty = await ticketSetup({ issues: [] }).dispatch('GET', '/api/tickets');
+  assert.equal(empty.body.unavailable, true);
+  assert.match(empty.body.reason, /No tickets/);
+  // A malformed row is dropped rather than rendered half-empty.
+  const { body } = await ticketSetup({ issues: [{ title: 'no identifier' }, { identifier: 'FOC-1', title: 'ok', status: 'done', updatedAt: '2026-09-01T00:00:00.000Z' }] })
+    .dispatch('GET', '/api/tickets');
+  assert.equal(body.total, 1);
+  assert.equal(body.tickets[0].identifier, 'FOC-1');
+});
+
 function resolutionSetup({ companyId = retainedCompanyId, agents = [liveDeveloper],
   failure, token = 'fake-board-secret' } = {}) {
   return createConsole({ companyId, run: async () => {

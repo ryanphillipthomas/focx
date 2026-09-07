@@ -2,7 +2,7 @@
   "name": "focx",
   "private": true,
   "version": "0.1.0",
-  "description": "focx.ai umbrella organization — autonomous development monorepo",
+  "description": "focx.ai umbrella organization \u2014 autonomous development monorepo",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "engines": {
@@ -18,6 +18,9 @@
     "focx-bot:plan": "node packages/focx-bot/src/index.mjs apply",
     "focx-bot:verify": "node packages/focx-bot/src/index.mjs verify",
     "test:focx-bot": "node --test packages/focx-bot/test.mjs",
-    "test:scripts": "node --test scripts/paperclip-issue-update.test.mjs"
+    "test:scripts": "node --test scripts/paperclip-issue-update.test.mjs",
+    "console:install": "node tools/console-server/agent.mjs install",
+    "console:uninstall": "node tools/console-server/agent.mjs uninstall",
+    "console:status": "node tools/console-server/agent.mjs status"
   }
 }

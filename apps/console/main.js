@@ -160,3 +160,50 @@ try {
     container.hidden = false;
   }
 } catch { element('identity-message').textContent = 'Agent identities unavailable. The local console server could not be reached.'; }
+
+// Tickets. 86 rows for this company, so the table scrolls rather than paginating —
+// pagination would be state to get wrong for no gain at this size. Text nodes only.
+function ticketRow(t) {
+  const tr = document.createElement('tr');
+  for (const [value, className] of [[t.identifier, 'id'], [t.status, `chip status-${t.status}`],
+    [t.priority, 'priority'], [t.assignee ?? 'Unassigned', 'assignee'], [t.title, 'title']]) {
+    const td = document.createElement('td');
+    if (className.startsWith('chip')) {
+      const chip = document.createElement('span');
+      chip.className = className;
+      chip.textContent = value;
+      td.append(chip);
+    } else {
+      td.className = className;
+      td.textContent = value;
+    }
+    tr.append(td);
+  }
+  return tr;
+}
+try {
+  const data = await request('/api/tickets');
+  if (data.unavailable) element('tickets-message').textContent = data.reason;
+  else {
+    const counts = element('ticket-counts');
+    for (const [status, n] of Object.entries(data.counts).sort((a, b) => b[1] - a[1])) {
+      const chip = document.createElement('span');
+      chip.className = `chip status-${status}`;
+      chip.textContent = `${status} ${n}`;
+      counts.append(chip);
+    }
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    for (const label of ['Ticket', 'Status', 'Priority', 'Assignee', 'Title']) {
+      const th = document.createElement('th');
+      th.textContent = label;
+      head.append(th);
+    }
+    table.append(head);
+    for (const t of data.tickets) table.append(ticketRow(t));
+    element('tickets').append(table);
+    element('tickets-message').textContent = `${data.total} tickets, most recently updated first.`;
+    counts.hidden = false;
+    element('tickets').hidden = false;
+  }
+} catch { element('tickets-message').textContent = 'Tickets unavailable. The local console server could not be reached.'; }

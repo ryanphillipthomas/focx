@@ -1,5 +1,11 @@
 # Focx Console · stage 2
 
+Tickets are read from `/api/companies/:id/issues` and trimmed server-side to the
+six fields the table renders — the control plane returns roughly sixty fields per
+issue and 264KB for this company, against 16KB after trimming. Assignees arrive as
+agent ids and are resolved to names from the same agents call; an id the call does
+not know stays blank rather than showing a raw uuid.
+
 One card per pilot role the contract declares. A role added to `.focx/agents.json` appears here with no console change; a role declared but absent from the company is shown as unresolved rather than hidden. Run `npm run console`, then open
 `http://127.0.0.1:4174`. Set `PORT` to change the port. Run `npm run test:console`
 for offline server tests. No dependencies, build, remote fonts or deployment.
@@ -77,3 +83,15 @@ Authored CSS contains no colour literals, pixel literals or drift exceptions.
 Structural values such as `0`, `100%`, `auto` and `60rem` remain unchanged.
 Tokens are read afresh for every `/api/tokens.css` request; their values are not
 copied into this app. The drift gate remains an independent required check.
+
+## Always running
+
+`npm run console:install` registers a per-user launchd agent (`ai.focx.console`)
+that starts the console at login and restarts it if it exits, so the bookmark is
+simply there. `console:status` reports it; `console:uninstall` removes it. The
+plist is generated from this checkout at install time rather than committed,
+because a plist naming one machine's paths is not shared configuration.
+
+Installing it changes nothing about reachability: the server still binds
+127.0.0.1 and still refuses any request whose Host is not loopback. It survives a
+closed terminal; it does not become reachable from anywhere new.
