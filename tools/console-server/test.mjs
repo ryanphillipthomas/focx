@@ -394,9 +394,12 @@ test('binds only IPv4 loopback and transport blocks foreign hosts/origins withou
   assert.deepEqual(binding, [4174, '127.0.0.1']);
   for (const port of [0, NaN, 65536]) assert.throws(() => start({ port }));
   const app = createConsole();
-  for (const headers of [{ host: 'evil.example:4174' }, { host: '127.0.0.1:4174', origin: 'http://evil.example' }]) {
+  // Method is explicit: a foreign Origin is refused on writes, and a foreign Host
+  // on anything. Leaving the method off would pass for the wrong reason.
+  for (const [method, headers] of [['GET', { host: 'evil.example:4174' }],
+    ['POST', { host: '127.0.0.1:4174', origin: 'http://evil.example' }]]) {
     let status, body;
-    await app.handler({ headers, socket: { localPort: 4174 } }, { writeHead: s => { status = s; }, end: b => { body = b; } });
+    await app.handler({ method, headers, socket: { localPort: 4174 } }, { writeHead: s => { status = s; }, end: b => { body = b; } });
     assert.equal(status, 403); assert.match(body, /same-origin/);
   }
   assert.equal((await app.dispatch('GET', '/../package.json')).status, 404);
@@ -413,18 +416,30 @@ test('outlives a reverse proxy idle connection, and names the local console when
 
   // A proxy may assert the loopback Host; it cannot forge a browser's Origin.
   const app = createConsole();
-  const call = async headers => {
+  const call = async (headers, method = 'POST') => {
     let status, body;
-    await app.handler({ headers, socket: { localPort: 4174 } }, { writeHead: s => { status = s; }, end: b => { body = b; } });
+    await app.handler({ method, headers, socket: { localPort: 4174 } }, { writeHead: s => { status = s; }, end: b => { body = b; } });
     return { status, body };
   };
   const proxiedRead = await call({ host: '127.0.0.1:4174' });
   assert.notEqual(proxiedRead.status, 403, 'a proxied read must not be refused');
-  const proxiedWrite = await call({ host: '127.0.0.1:4174', origin: 'https://console.focx.ai' });
+  const proxiedWrite = await call({ host: '127.0.0.1:4174', origin: 'https://console.focx.ai' }, 'POST');
   assert.equal(proxiedWrite.status, 403);
   assert.match(proxiedWrite.body, /plan and apply must be run at http:\/\/127\.0\.0\.1:4174/);
   // The rebinding refusal stays bare — a different failure with a different fix.
   const foreignHost = await call({ host: 'console.focx.ai' });
   assert.equal(foreignHost.status, 403);
   assert.doesNotMatch(foreignHost.body, /plan and apply/);
+
+  // A module script is fetched in CORS mode and carries an Origin even
+  // same-origin. Refusing that refuses the console's own main.js when proxied.
+  const moduleScript = await call({ host: '127.0.0.1:4174', origin: 'https://console.focx.ai' }, 'GET');
+  assert.notEqual(moduleScript.status, 403, 'a module script read must not be refused');
+  // Writes from the same proxied page stay refused; that is the whole boundary.
+  for (const method of ['POST', 'PUT', 'DELETE']) {
+    const write = await call({ host: '127.0.0.1:4174', origin: 'https://console.focx.ai' }, method);
+    assert.equal(write.status, 403, `${method} from a foreign origin must be refused`);
+  }
+  // A foreign Host is still refused whatever the method — rebinding is separate.
+  assert.equal((await call({ host: 'evil.example:4174' }, 'GET')).status, 403);
 });

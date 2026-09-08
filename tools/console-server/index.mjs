@@ -280,7 +280,16 @@ export function createConsole({ run = execute, fetchAPI = fetch, read = readFile
     if (req.headers.host !== expected) {
       send({ status: 403, body: { error: 'Local same-origin requests only' } }); return;
     }
-    if (req.headers.origin && req.headers.origin !== `http://${expected}`) {
+    // A <script type="module"> is fetched in CORS mode and so carries an Origin
+    // even same-origin, while fetch() does not. Enforcing this on reads refused
+    // the console's own main.js when proxied — the API calls looked fine and only
+    // the script failed. Reads stay safe without the check: no response carries
+    // Access-Control-Allow-Origin, so a foreign page may issue the request but can
+    // never read the reply, and the Host check above still stops DNS rebinding.
+    // State-changing methods keep it, and that is what holds plan and apply to the
+    // local console. An absent Origin means a non-browser client.
+    const readOnly = req.method === 'GET' || req.method === 'HEAD';
+    if (!readOnly && req.headers.origin && req.headers.origin !== `http://${expected}`) {
       send({ status: 403, body: { error: `Local same-origin requests only. A proxied session may read; plan and apply must be run at http://${expected}.` } }); return;
     }
     try {
