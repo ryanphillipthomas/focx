@@ -6,7 +6,7 @@
     "name": "focx",
     "publicUrl": "https://focx.ai"
   },
-  "expectedSha": "6453e33963f48d10167697fd7944bfe0d9ce1321",
+  "expectedSha": "c574860945ee42e435d0e9fe7bf15315b6dfff06",
   "deploy": {
     "status": "live",
     "servingSha": "e0bb8763d689bc1f01e9df2b2cac3d3dbcf7ce24",
@@ -41,6 +41,6 @@
   ],
   "outcome": "failed",
   "unverified": [
-    "serving e0bb8763d689 instead of expected 6453e33963f4 — likely superseded; verify the newer deploy's own record"
+    "serving e0bb8763d689 instead of expected c574860945ee — likely superseded; verify the newer deploy's own record"
   ]
 }
