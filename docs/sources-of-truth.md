@@ -9,7 +9,7 @@ The `.focx` control layer establishes the current pilot. Historical records are 
 | Agent desired state | [agent manifest](../.focx/agents.json) | All 26 identities retained, three paused pilot roles, 23 disabled candidates |
 | Agent behavior and methods | [roles](../.focx/roles/) and [versioned skills](../.focx/skills/) | Visible Paperclip instruction files; old prompts are not inherited |
 | Agent execution and task coordination | Paperclip company Focx.ai | Ryan deliberately initiates work; no autonomous follow-up tasks |
-| Development | This repository, develop | GitHub issues/PRs link to the assigned Paperclip task; human merge approval |
+| Development | This repository, `main` | GitHub issues/PRs link to the assigned Paperclip task; human merge approval |
 | Design | Figma files in [manifest](../design/figma.manifest.json) | Published values mirrored into design/tokens; drift checks remain required; pilot has no autonomous design-promotion authority |
 | Run evidence | pipeline/runs and pipeline/releases | Existing contracts and current-task evidence remain required; retrieve history only for a specific question |
 | Credentials | Paperclip secret store and existing host authentication | No credential values in source; synchronization preserves existing adapter credentials, never grants new access |
