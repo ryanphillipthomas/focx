@@ -1,5 +1,7 @@
 # focx
 
+> **Connect product repo:** [ryanphillipthomas/focx-connect](https://github.com/ryanphillipthomas/focx-connect) (extracted; see [docs/connect-extract.md](docs/connect-extract.md)).
+
 Autonomous development repository for **focx.ai** — an umbrella organization containing multiple sub-applications. The first is **Connect**, a web app extending later to iOS, iPadOS, and macOS. Connect's design system *extends* the focx design system: shared fundamentals, distinct identity.
 
 This repository is built so that work can enter from a GitHub Issue, a manual invocation, or a grok bot — and flow through a role-based bot pipeline (Chief → Product → Research → Design → Engineer → QA) that produces reviewable, drift-free pull requests. **Bots build; humans merge.**
