@@ -125,3 +125,11 @@ test('UI is labeled draft-only: banner present, no Send message control', async 
   assert.doesNotMatch(html, /<(button|a)[^>]*>\s*Send(\s+message)?\s*</i);
   assert.doesNotMatch(html, /id="send-/i);
 });
+
+test('asset URLs are mount-absolute so /skills/connect works without trailing slash', async () => {
+  const html = await readFile(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(html, /href="\/skills\/connect\/styles\.css"/);
+  assert.match(html, /src="\/skills\/connect\/main\.js"/);
+  assert.doesNotMatch(html, /href="styles\.css"/);
+  assert.doesNotMatch(html, /src="main\.js"/);
+});
