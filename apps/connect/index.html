@@ -3,60 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Connect — Focx DS-001 POC</title>
+<title>Connect — Focx (draft only)</title>
+<meta name="description" content="Connect drafts a reply in your voice using local relationship memory. It never sends.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<script type="importmap">
-  { "imports": { "@focx/design-connect": "./vendor/design-connect.js" } }
-</script>
 <script type="module" src="main.js"></script>
 </head>
 <body>
-  <p class="eyebrow">Focx &bull; DS-001 &bull; Pipeline POC</p>
-  <h1>Connect &mdash; Button components, generated from the design tokens</h1>
-  <section class="sheet" data-figma-node="28:117">
-    <h2>Button/Primary — Figma 28:117</h2>
-    <div class="grid" data-primary-button-examples></div>
-  </section>
-  <section class="sheet" data-figma-node="31:117">
-    <h2>Button/Destructive — Figma 31:117</h2>
-    <div class="grid">
-      <button class="btn btn--destructive btn--md btn--pill" title="Medium / Pill / Default">Button</button>
-      <button class="btn btn--destructive btn--md btn--pill is-hover" title="Medium / Pill / Hover">Button</button>
-      <button class="btn btn--destructive btn--md btn--pill is-focused" title="Medium / Pill / Focused">Button</button>
-      <button class="btn btn--destructive btn--md btn--pill" disabled title="Medium / Pill / Disabled">Button</button>
-      <button class="btn btn--destructive btn--md btn--control" title="Medium / Control / Default">Button</button>
-      <button class="btn btn--destructive btn--md btn--control is-hover" title="Medium / Control / Hover">Button</button>
-      <button class="btn btn--destructive btn--md btn--control is-focused" title="Medium / Control / Focused">Button</button>
-      <button class="btn btn--destructive btn--md btn--control" disabled title="Medium / Control / Disabled">Button</button>
-      <button class="btn btn--destructive btn--sm btn--pill" title="Small / Pill / Default">Button</button>
-      <button class="btn btn--destructive btn--sm btn--pill is-hover" title="Small / Pill / Hover">Button</button>
-      <button class="btn btn--destructive btn--sm btn--pill is-focused" title="Small / Pill / Focused">Button</button>
-      <button class="btn btn--destructive btn--sm btn--pill" disabled title="Small / Pill / Disabled">Button</button>
-      <button class="btn btn--destructive btn--sm btn--control" title="Small / Control / Default">Button</button>
-      <button class="btn btn--destructive btn--sm btn--control is-hover" title="Small / Control / Hover">Button</button>
-      <button class="btn btn--destructive btn--sm btn--control is-focused" title="Small / Control / Focused">Button</button>
-      <button class="btn btn--destructive btn--sm btn--control" disabled title="Small / Control / Disabled">Button</button>
-      <button class="btn btn--destructive btn--lg btn--pill" title="Large / Pill / Default">Button</button>
-      <button class="btn btn--destructive btn--lg btn--pill is-hover" title="Large / Pill / Hover">Button</button>
-      <button class="btn btn--destructive btn--lg btn--pill is-focused" title="Large / Pill / Focused">Button</button>
-      <button class="btn btn--destructive btn--lg btn--pill" disabled title="Large / Pill / Disabled">Button</button>
-      <button class="btn btn--destructive btn--lg btn--control" title="Large / Control / Default">Button</button>
-      <button class="btn btn--destructive btn--lg btn--control is-hover" title="Large / Control / Hover">Button</button>
-      <button class="btn btn--destructive btn--lg btn--control is-focused" title="Large / Control / Focused">Button</button>
-      <button class="btn btn--destructive btn--lg btn--control" disabled title="Large / Control / Disabled">Button</button>
-    </div>
-  </section>
-  <section class="sheet" data-figma-node="28:117, 31:117">
-    <h2>Confirmation actions — Figma 28:117, 31:117</h2>
-    <div class="confirm-actions">
-      <button class="btn btn--primary btn--md btn--pill" data-figma-node="28:117" title="Medium / Pill / Default">Confirm</button>
-      <button class="btn btn--destructive btn--md btn--pill" data-figma-node="31:117" title="Medium / Pill / Default">Delete</button>
-    </div>
-  </section>
+  <header class="page-header">
+    <p class="eyebrow">Focx &bull; Connect &bull; Draft only</p>
+    <h1>Connect</h1>
+    <p class="lede">Remember what matters, draft in your voice, and keep your hands on the send button — because Connect never has one.</p>
+    <p class="banner" data-never-send-banner role="status">
+      <strong>Drafts never send.</strong>
+      No Messages, Contacts, SMS, or live send API. Copy the draft and send it yourself.
+    </p>
+  </header>
+
+  <main class="layout">
+    <section class="sheet" aria-labelledby="memory-heading">
+      <h2 id="memory-heading">Relationship memory</h2>
+      <p class="caption">Local vault only (this browser). Inspired by focx-legacy vault profiles — no message text is stored when you draft.</p>
+      <label class="field">
+        <span class="label">Person</span>
+        <input id="person-name" type="text" autocomplete="off" placeholder="e.g. Alex">
+      </label>
+      <label class="field">
+        <span class="label">Notes (one per line)</span>
+        <textarea id="person-notes" rows="2" placeholder="Prefers weekend plans"></textarea>
+      </label>
+      <label class="field">
+        <span class="label">Do (one per line)</span>
+        <textarea id="person-do" rows="2" placeholder="Ask one clear question"></textarea>
+      </label>
+      <label class="field">
+        <span class="label">Avoid (one per line)</span>
+        <textarea id="person-avoid" rows="2" placeholder="Over-apologizing"></textarea>
+      </label>
+      <button type="button" class="btn btn--primary btn--md btn--pill" id="save-person">Save to local vault</button>
+      <p class="status" id="person-status" aria-live="polite"></p>
+    </section>
+
+    <section class="sheet" aria-labelledby="voice-heading">
+      <h2 id="voice-heading">Your voice</h2>
+      <p class="caption">Phrases and habits that shape the draft. Nothing leaves this device in this slice.</p>
+      <label class="field">
+        <span class="label">Common phrases (one per line)</span>
+        <textarea id="voice-phrases" rows="2" placeholder="hey — means a lot"></textarea>
+      </label>
+      <label class="field">
+        <span class="label">Avoid habits (one per line)</span>
+        <textarea id="voice-avoid" rows="2" placeholder="no worries if not"></textarea>
+      </label>
+      <label class="field">
+        <span class="label">Warmth note</span>
+        <input id="voice-warmth" type="text" autocomplete="off" placeholder="Keep it short and warm">
+      </label>
+      <button type="button" class="btn btn--primary btn--md btn--pill" id="save-voice">Save voice</button>
+      <p class="status" id="voice-status" aria-live="polite"></p>
+    </section>
+
+    <section class="sheet sheet--wide" aria-labelledby="draft-heading">
+      <h2 id="draft-heading">Draft a reply</h2>
+      <p class="caption">Deterministic local drafter (legacy fake-provider mindset). Output is always a draft.</p>
+      <label class="field">
+        <span class="label">Reply as</span>
+        <select id="person-select"></select>
+      </label>
+      <label class="field">
+        <span class="label">Incoming message</span>
+        <textarea id="incoming-message" rows="4" placeholder="Paste what they sent…"></textarea>
+      </label>
+      <div class="actions">
+        <button type="button" class="btn btn--primary btn--md btn--pill" id="draft-button">Draft reply</button>
+        <button type="button" class="btn btn--secondary btn--md btn--pill" id="copy-draft" disabled>Copy draft</button>
+      </div>
+      <p class="status" id="draft-meta" aria-live="polite"></p>
+      <pre class="draft-output" id="draft-output" aria-live="polite"></pre>
+      <p class="status" id="copy-status" aria-live="polite"></p>
+    </section>
+  </main>
+
   <footer class="site-footer">
-    <p class="caption">Focx design system — Connect showcase</p>
+    <p class="caption">Connect — Focx skill slice. Drafts never send. Merge is for Ryan only.</p>
   </footer>
 </body>
 </html>

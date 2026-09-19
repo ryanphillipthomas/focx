@@ -1,7 +1,25 @@
 # Connect
 
-The first focx.ai sub-application. A web app today; native iOS, iPadOS, and macOS targets will land as sibling directories (`apps/connect-apple/`) without restructuring.
+Focx’s first skill surface at `focx.ai/skills/connect`.
 
-Deliberately empty in Phase 1: **the app scaffold is itself built by the pipeline in Phase 2**, as the first proof that a run can go from trigger → design spec → drift-free build → previewable PR. Nothing here is hand-built ahead of that proof.
+## This slice
 
-When it exists, this app consumes `@focx/design-connect` exclusively — see [`AGENTS.md`](../../AGENTS.md) and [`docs/drift-gate.md`](../../docs/drift-gate.md).
+Thinnest **draft-only** vertical slice ported from [focx-legacy](https://github.com/ryanphillipthomas/focx-legacy) Connect:
+
+1. **Relationship memory** — local browser vault (`lib/vault.js`), vault/privacy mindset from `@focx/connect-storage`
+2. **Draft in your voice** — deterministic local drafter (`lib/draft.js`), fake-provider mindset from `@focx/connect-model`
+3. **Never sends** — no send button, no live send API; copy-only
+
+Static HTML/CSS/JS so `tools/site-compose` still publishes `apps/connect` → `dist/skills/connect/`.
+
+## Verify
+
+```bash
+node apps/connect/verify.mjs
+node tools/site-compose/index.mjs
+node tools/drift-check/index.mjs
+```
+
+## Left behind (on purpose)
+
+Full Node vault, Claude provider, CLI, Shortcuts, React shell, auth, reminders, Pipeline, Paperclip, Focx Bot.
