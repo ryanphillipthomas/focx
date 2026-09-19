@@ -1,0 +1,46 @@
+{
+  "deployId": "dep-dan7t0flk1mc73f3nrf0",
+  "environment": "production",
+  "service": {
+    "id": "srv-daaf1stg1s2s73d08edg",
+    "name": "focx",
+    "publicUrl": "https://focx.ai"
+  },
+  "expectedSha": "6453e33963f48d10167697fd7944bfe0d9ce1321",
+  "deploy": {
+    "status": "live",
+    "servingSha": "e0bb8763d689bc1f01e9df2b2cac3d3dbcf7ce24",
+    "finishedAt": "2026-09-19T12:22:40.249632Z"
+  },
+  "health": {
+    "httpStatus": 200,
+    "tlsValid": true,
+    "certificateSubject": "CN=focx.ai",
+    "checkedUrl": "https://focx.ai",
+    "contentMarker": "<title>Focx</title>"
+  },
+  "customDomains": [
+    {
+      "name": "www.focx.ai",
+      "verified": true,
+      "certificateIssued": true
+    },
+    {
+      "name": "focx.ai",
+      "verified": true,
+      "certificateIssued": true
+    }
+  ],
+  "infraDrift": [
+    {
+      "setting": "branch",
+      "declared": "main",
+      "actual": "develop",
+      "authority": "repo"
+    }
+  ],
+  "outcome": "failed",
+  "unverified": [
+    "serving e0bb8763d689 instead of expected 6453e33963f4 — likely superseded; verify the newer deploy's own record"
+  ]
+}
