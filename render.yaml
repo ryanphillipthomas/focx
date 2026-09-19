@@ -1,8 +1,8 @@
 # Deployment source of truth (docs/sources-of-truth.md).
 #
 # One static site serves the whole umbrella: focx.ai routes sub-apps by path
-# (focx.ai/skills/connect), so tools/site-compose copies the committed app
-# directories into dist/ per its site-map.json. COPY-ONLY — nothing is
+# (focx.ai/skills/connect), so tools/site-compose copies apps/site plus any remote mounts
+# (see site-map.json) into dist/. COPY-ONLY — nothing is
 # generated or rewritten at deploy time: what was reviewed is what deploys.
 #
 # PR previews come from Render's *service previews*, enabled in the dashboard

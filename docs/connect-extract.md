@@ -1,23 +1,18 @@
-# Connect extract
+# Connect extract + site cutover
 
-Connect now has its own product repo:
+Connect lives in its own product repo:
 
 **https://github.com/ryanphillipthomas/focx-connect** (default branch `main`)
 
-## What moved
+## Site compose
 
-- `apps/connect` → repo root in `focx-connect`
-- `packages/design-connect` → `packages/design-connect` in `focx-connect`
-- History for those paths was preserved via `git filter-repo` from `focx` `develop`
-
-## What stays here (for now)
-
-- `apps/connect` remains in this monorepo so `tools/site-compose` can keep publishing `focx.ai/skills/connect` (`site-map.json` mount unchanged).
-- `@focx/design-focx` remains the parent design system in this umbrella.
-- Cutover (submodule, package publish, or compose from the external repo) is a follow-up — do not delete `apps/connect` until that lands.
-
-## Verify in focx-connect
+`tools/site-compose/site-map.json` mounts `skills/connect` from that repo at build time (GitHub tarball of `main`). There is no in-tree `apps/connect` anymore.
 
 ```bash
-node verify.mjs
+node tools/site-compose/index.mjs
+# → dist/skills/connect/ from ryanphillipthomas/focx-connect@main
 ```
+
+## Design packages
+
+`packages/design-connect` shipped with focx-connect. Parent `@focx/design-focx` remains in this umbrella when needed by other apps.
