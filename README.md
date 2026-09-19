@@ -60,7 +60,7 @@ The focx-only parent/child JSON integrity convention is disabled for third parti
 | [`design/`](design/) | Figma manifest + extracted design tokens (parent `focx`, child `connect`) |
 | [`packages/design-focx/`](packages/design-focx/) | Parent design-system package |
 | [`packages/design-connect/`](packages/design-connect/) | Connect's design system — extends `design-focx` |
-| [`apps/connect/`](apps/connect/) | The Connect web app (scaffolded by the pipeline in Phase 2) |
+| [`focx-connect`](https://github.com/ryanphillipthomas/focx-connect) | Connect product repo (mounted at `/skills/connect` via site-compose) |
 | [`tools/drift-check/`](tools/drift-check/) | The drift-gate CLI run on every pull request |
 | [`.github/workflows/`](.github/workflows/) | The trigger surface: pipeline, nightly research, drift gate |
 

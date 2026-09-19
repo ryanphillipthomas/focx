@@ -1,6 +1,11 @@
 {
-  "description": "URL layout of focx.ai. Maps site paths to committed app directories. apps/site is always the root. Adding a sub-app = one entry here.",
+  "description": "URL layout of focx.ai. Maps site paths to sources. apps/site is always the root. Local mounts are repo-relative directories. Remote mounts are fetched at build time from GitHub.",
   "mounts": {
-    "skills/connect": "apps/connect"
+    "skills/connect": {
+      "repo": "ryanphillipthomas/focx-connect",
+      "ref": "main",
+      "root": ".",
+      "exclude": ["packages", "verify.mjs", ".git"]
+    }
   }
 }
