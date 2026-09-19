@@ -102,7 +102,7 @@ Read [AGENTS.md](AGENTS.md), [.focx/invariants.yaml](.focx/invariants.yaml), [.f
 
 | Concern | Identifier |
 | --- | --- |
-| Repository | `ryanphillipthomas/focx`, `develop` |
+| Repository | `ryanphillipthomas/focx`, `main` |
 | Company | `5f772ef2-25ce-466f-9392-027be5055470` |
 | Connect project | `60073b69-336b-4494-a549-e7dc6916eff5` |
 | Implementation Engineer | `34f730a9-0fa0-426b-a8b6-5cb7c163311b` |
