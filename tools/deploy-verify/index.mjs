@@ -20,6 +20,8 @@
 // DEPLOY_VERIFY_FIXTURES=<dir> replaces Render API reads with
 // <dir>/{deploys,service,custom-domains}.json and disables every side effect
 // (rollback POST, gh calls) so the whole decision path tests offline.
+// Probes read <dir>/probes.json keyed by URL; gh runs the test-owned
+// <dir>/gh.mjs via Node, sharing the real subprocess buffer/error handling.
 //
 // Out: pipeline/releases/<deploy-id>.json validated against its contract,
 // raw API responses under pipeline/releases/evidence/<deploy-id>/, and
@@ -87,15 +89,36 @@ function apiPost(path, body) {
   return JSON.parse(out || '{}');
 }
 
+// Comparison JSON is projected by gh before crossing this pipe. Leave room
+// for larger CLI output/diagnostics as well, rather than Node's 1 MiB default.
+const GH_MAX_BUFFER = 16 * 1024 * 1024;
 function gh(args) {
-  if (FIXTURES) { console.log(`deploy-verify(fixtures): would run gh ${args.join(' ')}`); return ''; }
-  return execFileSync('gh', args, { encoding: 'utf8' }).trim();
+  const command = FIXTURES ? process.execPath : 'gh';
+  const commandArgs = FIXTURES ? [join(FIXTURES, 'gh.mjs'), ...args] : args;
+  try {
+    return execFileSync(command, commandArgs, {
+      encoding: 'utf8', maxBuffer: GH_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  } catch (err) {
+    // execFileSync's message starts with the entire command (including the PR
+    // body). Put the actual cause first so the record's 200-char cap keeps it.
+    const status = err.code || (err.signal ? `signal ${err.signal}` : `exit ${err.status}`);
+    const reason = err.code === 'ENOBUFS'
+      ? `output exceeded ${GH_MAX_BUFFER}-byte maxBuffer`
+      : String(err.stderr || '').trim() || String(err.message || err);
+    throw new Error(`gh ${args.slice(0, 2).join(' ')} failed (${status}): ${reason}`, { cause: err });
+  }
 }
 
 // One TLS-verified request; reports rather than throws so a dead site is a
 // finding, not a crash. certOk=false covers refusals, wrong hostnames, and
 // expiries alike — the record's tlsValid is "a browser would accept this".
 function probe(url) {
+  if (FIXTURES) {
+    const probes = JSON.parse(readFileSync(join(FIXTURES, 'probes.json'), 'utf8'));
+    if (!Object.hasOwn(probes, url)) throw new Error(`missing probe fixture for ${url}`);
+    return Promise.resolve(probes[url]);
+  }
   return new Promise((resolve) => {
     const req = https.get(url, { timeout: 15000 }, (res) => {
       const cert = res.socket.getPeerCertificate();
@@ -246,10 +269,13 @@ if (EVENT === 'production' && outcome === 'failed' && deployStatus !== 'live' &&
 
 // ------------------------------------ forward proposal: promotion PR
 // Staging only, healthy only, and always a draft — a human merges it.
-if (EVENT === 'staging' && outcome === 'live' && !FIXTURES) {
+if (EVENT === 'staging' && outcome === 'live') {
   const repo = process.env.GITHUB_REPOSITORY;
   try {
-    const cmp = JSON.parse(gh(['api', `repos/${repo}/compare/main...staging`]));
+    // Pagination limits commit transfer; --jq keeps file patches and commit
+    // objects out of Node's buffered stdout while preserving comparison totals.
+    const cmp = JSON.parse(gh(['api', `repos/${repo}/compare/main...staging?per_page=1&page=1`,
+      '--jq', '{base_commit: {sha: .base_commit.sha}, ahead_by: .ahead_by, behind_by: .behind_by}']));
     if (cmp.ahead_by > 0) {
       let prUrl = '';
       const existing = gh(['pr', 'list', '--base', 'main', '--head', 'staging', '--state', 'open', '--json', 'url', '--jq', '.[0].url // empty']);

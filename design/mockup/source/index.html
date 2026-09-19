@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101112"><meta name="description" content="Meet your little team of big thinkers. Focx Bot is an interactive desktop AI teammate mockup.">
+  <title>Focx Bot — The den</title>
+  <link rel="icon" href="assets/fox-avatar-atlas.png"><link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="desktop">
+    <header class="titlebar"><div class="window-lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="window-title">Focx Bot <span class="title-divider">/</span> Your little team of big thinkers</span><button class="demo-badge" data-action="about"><span></span> Interactive demo</button></header>
+    <div class="app-layout">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div class="workspace"><header class="toolbar" id="toolbar"></header><div class="workspace-body"><main id="main"></main><aside class="activity-panel" id="activity"></aside></div></div>
+    </div>
+    <footer class="statusbar"><span><i class="status-dot"></i><span id="global-status">The den is humming</span></span><span>Focx workspace <b>·</b> Demo data</span><button data-action="search">Quick switch <kbd>⌘ K</kbd></button></footer>
+  </div>
+  <dialog id="modal"><div id="modal-content"></div></dialog><div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

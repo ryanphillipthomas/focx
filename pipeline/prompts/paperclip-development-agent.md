@@ -24,22 +24,23 @@ At the time of this charter, the repository defined no Paperclip comment or disp
 
 The repository also defines no Paperclip child-issue creation or enumeration, named-agent assignment, blocking-dependency, or child-comment-reading CLI. This charter assumes the Paperclip runtime exposes native operations to create and enumerate child issues in the same company, assign a child to the named `QA Engineer` agent, record this build issue as blocked on that child, and read the child's returned `QA_VERDICT` comment. Use those operations and confirm each succeeds; otherwise the QA handoff has failed.
 
-Confirm the checkout is a clean `develop` branch before creating the run branch. Do not branch from unknown or dirty state. Treat your registered Paperclip agent name as the actor identity; if the runtime exposes no more specific identity, use `focx-engineer` consistently for `trigger.actor` and git authorship.
+Confirm the working tree is clean; on the GitHub Actions intake path, also confirm the checkout is on `develop` before creating the run branch. Do not branch from unknown or dirty state. Treat your registered Paperclip agent name as the actor identity; if the runtime exposes no more specific identity, use `focx-engineer` consistently for `trigger.actor` and git authorship.
 
 ## Execute the run
 
 0. **Resume before opening anything.** On every invocation, first determine whether this build assignment already has a run in flight.
-   - Check for an existing child QA issue of `PAPERCLIP_ISSUE_ID` and for any existing local or remote `run/<RUN_ID>` branch with `pipeline/runs/<RUN_ID>/00-run.json` recording `trigger.paperclipTaskId: PAPERCLIP_ISSUE_ID`. Either match means a run is in flight. Recover `RUN_ID`, `BRANCH`, and any assigned `PR_URL` and `PR_NUMBER` from that run and its child issue. Fetch remote refs and check out the existing run branch; do not mint another run ID, branch, PR, or QA issue.
+   - Check for an existing child QA issue of `PAPERCLIP_ISSUE_ID` and for an existing `pipeline/runs/<RUN_ID>/00-run.json` in local or remote refs recording `trigger.paperclipTaskId: PAPERCLIP_ISSUE_ID`; recover the branch recorded in that artifact, whatever its name. On the GitHub Actions intake path, continue checking for an existing local or remote `run/<RUN_ID>` branch with that matching artifact. Either match means a run is in flight. Recover `RUN_ID`, `BRANCH`, and any assigned `PR_URL` and `PR_NUMBER` from that run and its child issue. Fetch remote refs and check out the existing run branch; do not mint another run ID, branch, PR, or QA issue.
    - For a run with a child QA issue, enumerate and count this build issue's child QA issues to distinguish the first attempt from the second, then read the latest child's `QA_VERDICT` token. A `pass` resumes at section 7. A first `fail` resumes at section 8; a second `fail` follows section 8's terminal path. If the child is still open with no token, re-confirm the blocking dependency, comment `WAITING_ON_QA child_issue=<child-id> resume_expected=true — blocked pending QA on child issue <child-id>; expected to resume when QA returns a verdict.`, explicitly keep this issue's disposition `blocked`, and exit without doing anything else. The absence of any `QA_VERDICT` token on a closed child issue is a terminal handoff failure and follows section 7's terminal-blocker wording.
    - If the run branch or artifacts exist but no child QA issue has been created yet, use `gh pr list --head "$BRANCH" --state all --json number,url` to discover any existing PR and recover `PR_URL` and `PR_NUMBER`, then resume the same run at its first incomplete section. Never replace an in-flight run.
    - Only when neither a child QA issue nor a matching run branch or artifact exists proceed to section 1 and open a new run.
 
 1. **Resolve the assignment.** Join the issue title, one blank line, and the issue description into one non-empty prompt, preserving both fields verbatim. Set `SOURCE=manual`, `ACTOR` to this agent's identity, and `PAPERCLIP_TASK_ID=$PAPERCLIP_ISSUE_ID`. Do not translate the assignment into a GitHub issue and do not use a trigger source outside `run.schema.json`.
 
-2. **Open the run.** Mirror `.github/workflows/pipeline.yml`'s **Resolve trigger** and **Create run branch and manifest** steps inside this session:
-   - Set `RUN_ID="run-$(date -u +%Y%m%d-%H%M%S)-manual"` and `BRANCH="run/$RUN_ID"`.
-   - Run `git checkout -b "$BRANCH"` and create `pipeline/runs/$RUN_ID/`.
-   - Write `pipeline/runs/$RUN_ID/00-run.json` conforming to `pipeline/contracts/run.schema.json`. It contains `runId`, the raw `prompt`, `mode: "build"`, the current ISO date-time in `createdAt`, `branch: "run/$RUN_ID"`, and this trigger object:
+2. **Open the run.** Mirror `.github/workflows/pipeline.yml`'s **Resolve trigger** and **Create run branch and manifest** steps, preserving the existing branch inside a Paperclip per-issue worktree:
+   - Set `RUN_ID="run-$(date -u +%Y%m%d-%H%M%S)-manual"`.
+   - Inside a Paperclip per-issue worktree, read the branch with `BRANCH="${PAPERCLIP_WORKSPACE_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"`. Paperclip has already named it; do not create a second branch, rename it, or re-point the worktree. For GitHub Actions intake where no Paperclip per-issue worktree exists, set `BRANCH="run/$RUN_ID"` and run `git checkout -b "$BRANCH"`.
+   - Create `pipeline/runs/$RUN_ID/`. The run ID and branch name may differ.
+   - Write `pipeline/runs/$RUN_ID/00-run.json` conforming to `pipeline/contracts/run.schema.json`. It contains `runId`, the raw `prompt`, `mode: "build"`, the current ISO date-time in `createdAt`, `branch` set to the value of `BRANCH` verbatim, and this trigger object:
 
      ```json
      {
@@ -76,7 +77,7 @@ Confirm the checkout is a clean `develop` branch before creating the run branch.
 
 5. **Commit the build and open the draft PR.** Mirror the workflow's **Commit build** and **Open draft PR** steps.
    - Run `git add apps packages design pipeline`. If `pipeline/runs/$RUN_ID/60-qa-verdict.json` is staged, explicitly unstage it with `git restore --staged -- pipeline/runs/$RUN_ID/60-qa-verdict.json`. If anything under `pipeline/runs/$RUN_ID/evidence/` is staged, explicitly unstage that directory with `git restore --staged -- pipeline/runs/$RUN_ID/evidence/`. Their presence in the working tree after a QA round is normal and is not blocking; any evidence that the Engineer agent authored or modified them is blocking. Inspect `git diff --cached --name-only` before committing. The remaining staged build may contain only `apps/`, `packages/`, and this run's files under `pipeline/runs/$RUN_ID/`; any staged `design/` change is blocking. Fail if the staged diff is empty.
-   - Commit with message `pipeline: $RUN_ID build` and push `origin "run/$RUN_ID"`.
+   - Commit with message `pipeline: $RUN_ID build` and push `origin "$BRANCH"`.
    - Default the PR title to `pipeline: $RUN_ID`. If `10-brief.json` has a non-empty `objective`, replace the fallback with that objective flattened to one line and truncated to 120 characters, exactly as the workflow does.
    - Run `gh pr create --draft --head "$BRANCH"` with that title. Its body identifies the run ID, trigger `manual`, and artifact directory, and says: `Bots build, never merge: this PR requires the drift gate and a human review.` Capture `PR_URL` and `PR_NUMBER`. Leave the PR draft and open for human review; never approve, ready, or merge it.
 

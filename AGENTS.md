@@ -7,8 +7,10 @@ You are an agent (or a human) working in the Focx Connect repository. This file 
 1. This file.
 2. [`.focx/invariants.yaml`](.focx/invariants.yaml) and [`.focx/baseline.yaml`](.focx/baseline.yaml), then [`docs/sources-of-truth.md`](docs/sources-of-truth.md). These establish the locked rules, current state and evidence status.
 3. The [context and evidence policy](pipeline/org/instructions/_preamble.md#context-and-evidence-policy) — read that section, not every agent's instructions. Pilot role files also carry scoped context rules.
-4. Your assigned task, its acceptance criteria, and the role file applicable to that task. Load `docs/pilot-operation.md` when routing/ownership matters and `docs/pipeline.md` when participating in a pipeline run.
-5. The JSON Schema for an artifact you must produce, in [`pipeline/contracts/`](pipeline/contracts/), and the source/tests relevant to the change. Do not load unrelated roles or historical runs as startup context.
+4. [`docs/paperclip-api-facts.md`](docs/paperclip-api-facts.md) before driving an agent, task or run
+   by hand — assignment field, run status vocabulary, the wake window and branch naming.
+5. Your assigned task, its acceptance criteria, and the role file applicable to that task. Load `docs/pilot-operation.md` when routing/ownership matters and `docs/pipeline.md` when participating in a pipeline run.
+6. The JSON Schema for an artifact you must produce, in [`pipeline/contracts/`](pipeline/contracts/), and the source/tests relevant to the change. Do not load unrelated roles or historical runs as startup context.
 
 ## Non-negotiable guardrails
 
@@ -19,6 +21,7 @@ You are an agent (or a human) working in the Focx Connect repository. This file 
 ## How to work
 
 - **Every run has a run ID** (assigned at trigger time) and a branch. Intake automation cuts `run/<run-id>`; a run that happens inside a Paperclip per-issue worktree is on the branch Paperclip named, `FOC-<issue>-<slug>`. All of your work happens on whichever branch you are on, and `00-run.json` records that branch — the one you are actually on, never the one the convention would prefer.
+- **Work in an isolated `git worktree`**, not the shared checkout, whenever another session, agent or person may be working in this repository at the same time. `git worktree add <path> -b <branch> origin/develop` gives a separate working tree and index while sharing one object store, so branches, staged changes and `HEAD` cannot collide. **Never** run destructive or history-rewriting git commands — `reset --hard`, `checkout -f`, `clean -fd`, `rebase` — in a checkout you do not exclusively own. Check `git status` and `git worktree list` first. Remove the worktree when finished (`git worktree remove`) so the list stays a true account of active work. This rule records the 2026-09-07 incident when two sessions sharing one checkout put a commit on the wrong branch and ran `reset --hard` under another session.
 - **Every stage writes an artifact** to `pipeline/runs/<run-id>/` conforming to its schema in `pipeline/contracts/`. Commit the artifact before handing off. An artifact that fails schema validation is an incomplete handoff.
 - **Handoffs are explicit.** You receive the previous role's artifact; you produce yours; Ryan initiates pilot handoffs. Do not skip stages or consume artifacts out of order.
 - **Ask rather than assume.** If the brief is ambiguous, record the ambiguity and your chosen interpretation in your artifact's `assumptions` field. If the ambiguity is blocking, halt and escalate to Ryan, with the blocking question.

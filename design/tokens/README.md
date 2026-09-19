@@ -3,6 +3,8 @@
 The in-repo mirror of the published Figma variables. **Read-only for everyone except the Design role's sync process** — see [`docs/sources-of-truth.md`](../../docs/sources-of-truth.md).
 
 - `focx/tokens.json` — the parent design system, extracted from the focx foundation Figma file.
+- `focx-bot/tokens.json` — Focx Bot's own foundation. **Not a delta on `focx`**: it is a separate product
+  with a different palette and different typefaces, so every token is an addition under `focx-bot.*`.
 - `connect/tokens.json` — Connect's **deltas only**: additions under the `connect.*` namespace, and explicit overrides of parent paths marked `"override": true`. Copying parent values here is drift.
 
 Format: nested token groups; each leaf is `{ "value": <string|number>, "type": "<color|dimension|fontFamily|fontSize|radius|...>" }`. Connect overrides add `"override": true` and `"overrides": "<focx token path>"`.

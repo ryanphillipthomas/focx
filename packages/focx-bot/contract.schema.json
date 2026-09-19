@@ -1,1427 +1,1427 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Focx bot provisioning contract \u2014 FB2 rev 2.8",
-  "type": "object",
-  "properties": {
-    "$schema": {
-      "type": "string"
-    },
-    "version": {
-      "type": "string"
-    },
-    "company": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "additionalProperties": false
-    },
-    "activation": {
-      "const": "paused"
-    },
-    "project": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1
-        },
-        "workspaces": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 1,
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "minLength": 1
-              },
-              "sourceType": {
-                "const": "git_repo"
-              },
-              "repoUrl": {
-                "type": "string",
-                "pattern": "^https://"
-              },
-              "repoRef": {
-                "type": "null"
-              },
-              "defaultRef": {
-                "type": "null"
-              },
-              "isPrimary": {
-                "const": true
-              }
-            },
-            "required": [
-              "name",
-              "sourceType",
-              "repoUrl",
-              "isPrimary"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "name",
-        "workspaces"
-      ],
-      "additionalProperties": false
-    },
-    "instance": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "home": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "home"
-      ],
-      "additionalProperties": false
-    },
-    "service": {
-      "type": "object",
-      "properties": {
-        "paperclip": {
-          "type": "object",
-          "properties": {
-            "launchd": {
-              "type": "object",
-              "properties": {
-                "label": {
-                  "type": "string"
-                },
-                "programArguments": {
-                  "type": "array",
-                  "items": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      }
-                    ]
-                  },
-                  "uniqueItems": true
-                },
-                "env": {
-                  "type": "object",
-                  "properties": {
-                    "PAPERCLIP_SERVICE_MANAGED": {
-                      "type": "string"
-                    },
-                    "PAPERCLIP_INSTANCE_ID": {
-                      "type": "string"
-                    },
-                    "PAPERCLIP_HOME": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "PAPERCLIP_SERVICE_MANAGED",
-                    "PAPERCLIP_INSTANCE_ID",
-                    "PAPERCLIP_HOME"
-                  ],
-                  "additionalProperties": false
-                },
-                "logs": {
-                  "type": "object",
-                  "properties": {
-                    "stdout": {
-                      "type": "string"
-                    },
-                    "stderr": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "stdout",
-                    "stderr"
-                  ],
-                  "additionalProperties": false
-                },
-                "runAtLoad": {
-                  "type": "boolean"
-                },
-                "keepAlive": {
-                  "type": "boolean"
-                },
-                "throttleInterval": {
-                  "type": "integer"
-                },
-                "exitTimeOut": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "label",
-                "programArguments",
-                "env",
-                "logs",
-                "runAtLoad",
-                "keepAlive",
-                "throttleInterval",
-                "exitTimeOut"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "launchd"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "paperclip"
-      ],
-      "additionalProperties": false
-    },
-    "database": {
-      "type": "object",
-      "properties": {
-        "provider": {
-          "type": "string"
-        },
-        "host": {
-          "type": "string"
-        },
-        "port": {
-          "type": "integer"
-        },
-        "name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "userSecret": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "provider",
-        "host",
-        "port",
-        "name",
-        "userSecret"
-      ],
-      "additionalProperties": false
-    },
-    "network": {
-      "type": "object",
-      "properties": {
-        "provider": {
-          "type": "string"
-        },
-        "managed": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        },
-        "tokenSecret": {
-          "type": "string"
-        },
-        "daemon": {
-          "type": "object",
-          "properties": {
-            "launchd": {
-              "type": "object",
-              "properties": {
-                "label": {
-                  "type": "string"
-                },
-                "programArguments": {
-                  "type": "array",
-                  "items": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "secretPath": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "secretPath"
-                        ],
-                        "additionalProperties": false
-                      }
-                    ]
-                  },
-                  "uniqueItems": true
-                },
-                "env": {
-                  "type": "object",
-                  "properties": {},
-                  "required": [],
-                  "additionalProperties": false
-                },
-                "logs": {
-                  "type": "object",
-                  "properties": {
-                    "stdout": {
-                      "type": "string"
-                    },
-                    "stderr": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "stdout",
-                    "stderr"
-                  ],
-                  "additionalProperties": false
-                },
-                "runAtLoad": {
-                  "type": "boolean"
-                },
-                "keepAlive": {
-                  "type": "object",
-                  "properties": {
-                    "SuccessfulExit": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "SuccessfulExit"
-                  ],
-                  "additionalProperties": false
-                },
-                "throttleInterval": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "label",
-                "programArguments",
-                "env",
-                "logs",
-                "runAtLoad",
-                "keepAlive",
-                "throttleInterval"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "launchd"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "provider",
-        "managed",
-        "hostname",
-        "tokenSecret",
-        "daemon"
-      ],
-      "additionalProperties": false
-    },
-    "adapters": {
-      "type": "object",
-      "properties": {
-        "claude_local": {
-          "type": "object",
-          "properties": {
-            "engine": {
-              "type": "string"
-            },
-            "reasoningKey": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "engine",
-            "reasoningKey"
-          ],
-          "additionalProperties": false
-        },
-        "codex_local": {
-          "type": "object",
-          "properties": {
-            "engine": {
-              "type": "string"
-            },
-            "reasoningKey": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "engine",
-            "reasoningKey"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "claude_local",
-        "codex_local"
-      ],
-      "additionalProperties": false
-    },
-    "secrets": {
-      "type": "array",
-      "items": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "usedFor": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name",
-              "usedFor"
-            ],
-            "additionalProperties": false
-          }
-        ]
-      },
-      "uniqueItems": true
-    },
-    "env": {
-      "type": "object",
-      "properties": {
-        "common": {
-          "type": "object",
-          "properties": {
-            "PATH": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "PATH"
-          ],
-          "additionalProperties": false
-        },
-        "claudeAuth": {
-          "type": "object",
-          "properties": {
-            "CLAUDE_CODE_OAUTH_TOKEN": {
-              "type": "object",
-              "properties": {
-                "secret": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "secret"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "CLAUDE_CODE_OAUTH_TOKEN"
-          ],
-          "additionalProperties": false
-        },
-        "gitWrite": {
-          "type": "object",
-          "properties": {
-            "GH_TOKEN": {
-              "type": "object",
-              "properties": {
-                "secret": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "secret"
-              ],
-              "additionalProperties": false
-            },
-            "GIT_CONFIG_COUNT": {
-              "type": "string"
-            },
-            "GIT_CONFIG_KEY_0": {
-              "type": "string"
-            },
-            "GIT_CONFIG_VALUE_0": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "GH_TOKEN",
-            "GIT_CONFIG_COUNT",
-            "GIT_CONFIG_KEY_0",
-            "GIT_CONFIG_VALUE_0"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "common",
-        "claudeAuth",
-        "gitWrite"
-      ],
-      "additionalProperties": false
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "title": "Focx bot provisioning contract \u2014 FB2 rev 2.8",
+ "type": "object",
+ "properties": {
+  "$schema": {
+   "type": "string"
+  },
+  "version": {
+   "type": "string"
+  },
+  "company": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "minLength": 1
+    }
+   },
+   "required": [
+    "name"
+   ],
+   "additionalProperties": false
+  },
+  "activation": {
+   "const": "paused"
+  },
+  "project": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "minLength": 1
     },
     "workspaces": {
+     "type": "array",
+     "minItems": 1,
+     "maxItems": 1,
+     "items": {
       "type": "object",
       "properties": {
-        "repo-worktree": {
-          "type": "object",
-          "properties": {
-            "comment": {
-              "type": "string"
-            },
-            "workspaceStrategy": {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "type": "string"
-                },
-                "baseRef": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type",
-                "baseRef"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "comment",
-            "workspaceStrategy"
-          ],
-          "additionalProperties": false
-        },
-        "none": {
-          "type": "object",
-          "properties": {
-            "comment": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "comment"
-          ],
-          "additionalProperties": false
-        }
+       "name": {
+        "type": "string",
+        "minLength": 1
+       },
+       "sourceType": {
+        "const": "git_repo"
+       },
+       "repoUrl": {
+        "type": "string",
+        "pattern": "^https://"
+       },
+       "repoRef": {
+        "type": "null"
+       },
+       "defaultRef": {
+        "type": "null"
+       },
+       "isPrimary": {
+        "const": true
+       }
       },
       "required": [
-        "repo-worktree",
-        "none"
+       "name",
+       "sourceType",
+       "repoUrl",
+       "isPrimary"
       ],
       "additionalProperties": false
-    },
-    "confinement": {
-      "type": "object",
-      "properties": {
-        "comment": {
-          "type": "string"
-        },
-        "requiresBubblewrap": {
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string"
-              }
-            ]
-          },
-          "uniqueItems": true
-        },
-        "availableOnThisHost": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "comment",
-        "requiresBubblewrap",
-        "availableOnThisHost"
-      ],
-      "additionalProperties": false
-    },
-    "independence": {
-      "type": "object",
-      "properties": {
-        "comment": {
-          "type": "string"
-        },
-        "verifier": {
-          "type": "string"
-        },
-        "mechanism": {
-          "type": "string"
-        },
-        "branchTemplate": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "comment",
-        "verifier",
-        "mechanism",
-        "branchTemplate"
-      ],
-      "additionalProperties": false
-    },
-    "agents": {
-      "type": "array",
-      "minItems": 2,
-      "maxItems": 2,
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "roleKey": {
-            "type": "string"
-          },
-          "status": {
-            "const": "paused"
-          },
-          "disposition": {
-            "const": "pilot"
-          },
-          "adapterType": {
-            "enum": [
-              "claude_local",
-              "codex_local"
-            ]
-          },
-          "instructions": {
-            "type": "string"
-          },
-          "skills": {
-            "type": "array",
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "uniqueItems": true
-          },
-          "permissions": {
-            "const": {
-              "canCreateAgents": false,
-              "canCreateSkills": false,
-              "canAssignTasks": false
-            }
-          },
-          "executionPermissions": {
-            "const": {
-              "permissionMode": "approve-reads",
-              "nonInteractivePermissions": "deny"
-            }
-          },
-          "reportsTo": {
-            "type": "null"
-          },
-          "slug": {
-            "type": "string",
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-          },
-          "role": {
-            "type": "string"
-          },
-          "icon": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "reasoning": {
-            "type": "string"
-          },
-          "git": {
-            "const": "write"
-          },
-          "workspace": {
-            "const": "repo-worktree"
-          },
-          "run": {
-            "const": {
-              "heartbeat": {
-                "enabled": false,
-                "wakeOnDemand": false,
-                "maxTurnContinuation": {
-                  "enabled": false
-                },
-                "maxConcurrentRuns": 1
-              }
-            }
-          },
-          "limits": {
-            "type": "object",
-            "properties": {
-              "timeoutSec": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 900
-              },
-              "maxTurnsPerRun": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "minimum": 1,
-                "maximum": 20
-              },
-              "maxDailyRuns": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "minimum": 1
-              }
-            },
-            "required": [
-              "timeoutSec",
-              "maxTurnsPerRun",
-              "maxDailyRuns"
-            ],
-            "additionalProperties": false
-          },
-          "grants": {
-            "type": "object",
-            "required": [
-              "claudePlugins",
-              "codexPlugins"
-            ],
-            "additionalProperties": false,
-            "properties": {
-              "claudePlugins": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "uniqueItems": true
-              },
-              "codexPlugins": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "uniqueItems": true
-              }
-            }
-          },
-          "adapterMigration": {
-            "type": "object",
-            "properties": {
-              "from": {
-                "type": "string"
-              },
-              "to": {
-                "type": "string"
-              },
-              "approvedBy": {
-                "type": "string"
-              },
-              "date": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "from",
-              "to",
-              "approvedBy",
-              "date"
-            ],
-            "additionalProperties": false
-          },
-          "adapterLocal": {
-            "type": "object",
-            "properties": {
-              "claudeCodePlugins": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "uniqueItems": true
-              },
-              "permissionsAllow": {
-                "type": "array",
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    }
-                  ]
-                },
-                "uniqueItems": true
-              },
-              "permissionDelivery": {
-                "type": "string"
-              },
-              "permissionsDeny": {
-                "type": "array",
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    }
-                  ]
-                },
-                "uniqueItems": true
-              }
-            },
-            "required": [
-              "claudeCodePlugins",
-              "permissionsAllow",
-              "permissionDelivery",
-              "permissionsDeny"
-            ],
-            "additionalProperties": false
-          },
-          "desiredSkills": {
-            "const": [
-              "paperclipai/paperclip/paperclip"
-            ]
-          }
-        },
-        "required": [
-          "name",
-          "title",
-          "roleKey",
-          "status",
-          "disposition",
-          "adapterType",
-          "instructions",
-          "skills",
-          "permissions",
-          "executionPermissions",
-          "reportsTo",
-          "slug",
-          "role",
-          "icon",
-          "model",
-          "reasoning",
-          "git",
-          "workspace",
-          "run",
-          "limits",
-          "grants",
-          "desiredSkills"
-        ],
-        "additionalProperties": false
-      }
-    },
-    "skills": {
-      "type": "object",
-      "properties": {
-        "$comment": {
-          "type": "string"
-        },
-        "verifiedAt": {
-          "type": "string"
-        },
-        "claudeRuntime": {
-          "type": "object",
-          "properties": {
-            "version": {
-              "type": "string"
-            },
-            "appliesTo": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "uniqueItems": true
-            },
-            "source": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "version",
-            "appliesTo",
-            "source"
-          ],
-          "additionalProperties": false
-        },
-        "focx": {
-          "type": "object",
-          "properties": {
-            "appliesTo": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "uniqueItems": true
-            },
-            "skills": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "uniqueItems": true
-            },
-            "deferred": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "uniqueItems": true
-            },
-            "delivery": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "appliesTo",
-            "skills",
-            "deferred",
-            "delivery"
-          ],
-          "additionalProperties": false
-        },
-        "revisedAt": {
-          "type": "string"
-        },
-        "claudePlugins": {
-          "type": "object",
-          "properties": {
-            "appliesTo": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "uniqueItems": true
-            },
-            "marketplaces": {
-              "type": "object",
-              "properties": {
-                "claude-plugins-official": {
-                  "type": "object",
-                  "properties": {
-                    "official": {
-                      "type": "boolean"
-                    },
-                    "source": {
-                      "type": "string"
-                    },
-                    "repo": {
-                      "type": "string"
-                    },
-                    "lastUpdated": {
-                      "type": "string"
-                    },
-                    "manifestEntries": {
-                      "type": "integer"
-                    },
-                    "onDisk": {
-                      "type": "object",
-                      "properties": {
-                        "plugins/": {
-                          "type": "integer"
-                        },
-                        "external_plugins/": {
-                          "type": "integer"
-                        },
-                        "scaffoldNotInManifest": {
-                          "type": "array",
-                          "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              }
-                            ]
-                          },
-                          "uniqueItems": true
-                        }
-                      },
-                      "required": [
-                        "plugins/",
-                        "external_plugins/",
-                        "scaffoldNotInManifest"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "authors": {
-                      "type": "object",
-                      "properties": {
-                        "Anthropic": {
-                          "type": "integer"
-                        },
-                        "Anthropic-git-sourced": {
-                          "type": "integer"
-                        },
-                        "vendor-or-unattributed": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "Anthropic",
-                        "Anthropic-git-sourced",
-                        "vendor-or-unattributed"
-                      ],
-                      "additionalProperties": false
-                    }
-                  },
-                  "required": [
-                    "official",
-                    "source",
-                    "repo",
-                    "lastUpdated",
-                    "manifestEntries",
-                    "onDisk",
-                    "authors"
-                  ],
-                  "additionalProperties": false
-                },
-                "openai-codex": {
-                  "type": "object",
-                  "properties": {
-                    "official": {
-                      "type": "boolean"
-                    },
-                    "source": {
-                      "type": "string"
-                    },
-                    "repo": {
-                      "type": "string"
-                    },
-                    "lastUpdated": {
-                      "type": "string"
-                    },
-                    "manifestEntries": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "official",
-                    "source",
-                    "repo",
-                    "lastUpdated",
-                    "manifestEntries"
-                  ],
-                  "additionalProperties": false
-                },
-                "trailofbits": {
-                  "type": "object",
-                  "properties": {
-                    "official": {
-                      "type": "boolean"
-                    },
-                    "source": {
-                      "type": "string"
-                    },
-                    "repo": {
-                      "type": "string"
-                    },
-                    "lastUpdated": {
-                      "type": "string"
-                    },
-                    "onDisk": {
-                      "type": "integer"
-                    },
-                    "note": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "official",
-                    "source",
-                    "repo",
-                    "lastUpdated",
-                    "onDisk",
-                    "note"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "required": [
-                "claude-plugins-official",
-                "openai-codex",
-                "trailofbits"
-              ],
-              "additionalProperties": false
-            },
-            "pinMethods": {
-              "type": "object",
-              "properties": {
-                "version": {
-                  "type": "string"
-                },
-                "contentHash": {
-                  "type": "string"
-                },
-                "manifestSha": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "version",
-                "contentHash",
-                "manifestSha"
-              ],
-              "additionalProperties": false
-            },
-            "plugins": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/catalogEntry"
-              }
-            }
-          },
-          "required": [
-            "appliesTo",
-            "marketplaces",
-            "pinMethods",
-            "plugins"
-          ],
-          "additionalProperties": false
-        },
-        "codexPlugins": {
-          "type": "object",
-          "properties": {
-            "appliesTo": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "uniqueItems": true
-            },
-            "scope": {
-              "type": "string"
-            },
-            "marketplaces": {
-              "type": "object",
-              "properties": {
-                "openai-primary-runtime": {
-                  "type": "object",
-                  "properties": {
-                    "official": {
-                      "type": "boolean"
-                    },
-                    "kind": {
-                      "type": "string"
-                    },
-                    "bundleVersion": {
-                      "type": "string"
-                    },
-                    "artifactToolVersion": {
-                      "type": "string"
-                    },
-                    "nodeVersion": {
-                      "type": "string"
-                    },
-                    "manifest": {
-                      "type": "string"
-                    },
-                    "plugins": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "official",
-                    "kind",
-                    "bundleVersion",
-                    "artifactToolVersion",
-                    "nodeVersion",
-                    "manifest",
-                    "plugins"
-                  ],
-                  "additionalProperties": false
-                },
-                "openai-bundled": {
-                  "type": "object",
-                  "properties": {
-                    "official": {
-                      "type": "boolean"
-                    },
-                    "kind": {
-                      "type": "string"
-                    },
-                    "manifest": {
-                      "type": "string"
-                    },
-                    "plugins": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "official",
-                    "kind",
-                    "manifest",
-                    "plugins"
-                  ],
-                  "additionalProperties": false
-                },
-                "openai-curated-remote": {
-                  "type": "object",
-                  "properties": {
-                    "official": {
-                      "type": "string"
-                    },
-                    "kind": {
-                      "type": "string"
-                    },
-                    "catalogRows": {
-                      "type": "integer"
-                    },
-                    "firstParty": {
-                      "type": "integer"
-                    },
-                    "pluginFamilyCandidates": {
-                      "type": "object",
-                      "properties": {
-                        "total": {
-                          "type": "integer"
-                        },
-                        "openai": {
-                          "type": "integer"
-                        },
-                        "thirdParty": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "total",
-                        "openai",
-                        "thirdParty"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "thirdPartyApps": {
-                      "type": "string"
-                    },
-                    "catalogCache": {
-                      "type": "string"
-                    },
-                    "communityPluginsFamily": {
-                      "type": "integer"
-                    },
-                    "publisherField": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "official",
-                    "kind",
-                    "catalogRows",
-                    "firstParty",
-                    "pluginFamilyCandidates",
-                    "thirdPartyApps",
-                    "catalogCache",
-                    "communityPluginsFamily",
-                    "publisherField"
-                  ],
-                  "additionalProperties": false
-                },
-                "chatgpt-global": {
-                  "type": "object",
-                  "properties": {
-                    "official": {
-                      "type": "boolean"
-                    },
-                    "kind": {
-                      "type": "string"
-                    },
-                    "note": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "official",
-                    "kind",
-                    "note"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "required": [
-                "openai-primary-runtime",
-                "openai-bundled",
-                "openai-curated-remote",
-                "chatgpt-global"
-              ],
-              "additionalProperties": false
-            },
-            "plugins": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/catalogEntry"
-              }
-            },
-            "observedNotPinned": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/catalogEntry"
-              }
-            },
-            "communityNotPinned": {
-              "type": "object",
-              "properties": {
-                "$comment": {
-                  "type": "string"
-                },
-                "count": {
-                  "type": "integer"
-                },
-                "entries": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "$ref": "#/$defs/catalogEntry"
-                  }
-                }
-              },
-              "required": [
-                "$comment",
-                "count",
-                "entries"
-              ],
-              "additionalProperties": false
-            },
-            "thirdPartyDevelopedNotPinned": {
-              "type": "object",
-              "properties": {
-                "$comment": {
-                  "type": "string"
-                },
-                "entries": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "$ref": "#/$defs/catalogEntry"
-                  }
-                }
-              },
-              "required": [
-                "$comment",
-                "entries"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "appliesTo",
-            "scope",
-            "marketplaces",
-            "plugins",
-            "observedNotPinned",
-            "communityNotPinned",
-            "thirdPartyDevelopedNotPinned"
-          ],
-          "additionalProperties": false
-        },
-        "claudePluginsOfficialOpenAI": {
-          "type": "object",
-          "properties": {
-            "$comment": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": {
-            "$ref": "#/$defs/catalogEntry"
-          }
-        },
-        "claudePluginsNonOfficialInUse": {
-          "type": "object",
-          "properties": {
-            "$comment": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": {
-            "$ref": "#/$defs/catalogEntry"
-          }
-        }
-      },
-      "required": [
-        "$comment",
-        "verifiedAt",
-        "claudeRuntime",
-        "claudePlugins",
-        "codexPlugins",
-        "focx",
-        "claudePluginsOfficialOpenAI",
-        "claudePluginsNonOfficialInUse",
-        "revisedAt"
-      ],
-      "additionalProperties": false
+     }
     }
+   },
+   "required": [
+    "name",
+    "workspaces"
+   ],
+   "additionalProperties": false
   },
-  "required": [
-    "$schema",
-    "version",
-    "company",
-    "activation",
-    "project",
-    "instance",
-    "service",
-    "database",
-    "network",
-    "adapters",
-    "secrets",
-    "env",
-    "workspaces",
-    "confinement",
-    "independence",
-    "skills",
-    "agents"
-  ],
-  "additionalProperties": false,
-  "$defs": {
-    "catalogEntry": {
+  "instance": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "home": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "home"
+   ],
+   "additionalProperties": false
+  },
+  "service": {
+   "type": "object",
+   "properties": {
+    "paperclip": {
+     "type": "object",
+     "properties": {
+      "launchd": {
+       "type": "object",
+       "properties": {
+        "label": {
+         "type": "string"
+        },
+        "programArguments": {
+         "type": "array",
+         "items": {
+          "anyOf": [
+           {
+            "type": "string"
+           }
+          ]
+         },
+         "uniqueItems": true
+        },
+        "env": {
+         "type": "object",
+         "properties": {
+          "PAPERCLIP_SERVICE_MANAGED": {
+           "type": "string"
+          },
+          "PAPERCLIP_INSTANCE_ID": {
+           "type": "string"
+          },
+          "PAPERCLIP_HOME": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "PAPERCLIP_SERVICE_MANAGED",
+          "PAPERCLIP_INSTANCE_ID",
+          "PAPERCLIP_HOME"
+         ],
+         "additionalProperties": false
+        },
+        "logs": {
+         "type": "object",
+         "properties": {
+          "stdout": {
+           "type": "string"
+          },
+          "stderr": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "stdout",
+          "stderr"
+         ],
+         "additionalProperties": false
+        },
+        "runAtLoad": {
+         "type": "boolean"
+        },
+        "keepAlive": {
+         "type": "boolean"
+        },
+        "throttleInterval": {
+         "type": "integer"
+        },
+        "exitTimeOut": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "label",
+        "programArguments",
+        "env",
+        "logs",
+        "runAtLoad",
+        "keepAlive",
+        "throttleInterval",
+        "exitTimeOut"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "required": [
+      "launchd"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "paperclip"
+   ],
+   "additionalProperties": false
+  },
+  "database": {
+   "type": "object",
+   "properties": {
+    "provider": {
+     "type": "string"
+    },
+    "host": {
+     "type": "string"
+    },
+    "port": {
+     "type": "integer"
+    },
+    "name": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "userSecret": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   },
+   "required": [
+    "provider",
+    "host",
+    "port",
+    "name",
+    "userSecret"
+   ],
+   "additionalProperties": false
+  },
+  "network": {
+   "type": "object",
+   "properties": {
+    "provider": {
+     "type": "string"
+    },
+    "managed": {
+     "type": "string"
+    },
+    "hostname": {
+     "type": "string"
+    },
+    "tokenSecret": {
+     "type": "string"
+    },
+    "daemon": {
+     "type": "object",
+     "properties": {
+      "launchd": {
+       "type": "object",
+       "properties": {
+        "label": {
+         "type": "string"
+        },
+        "programArguments": {
+         "type": "array",
+         "items": {
+          "anyOf": [
+           {
+            "type": "string"
+           },
+           {
+            "type": "object",
+            "properties": {
+             "secretPath": {
+              "type": "string"
+             }
+            },
+            "required": [
+             "secretPath"
+            ],
+            "additionalProperties": false
+           }
+          ]
+         },
+         "uniqueItems": true
+        },
+        "env": {
+         "type": "object",
+         "properties": {},
+         "required": [],
+         "additionalProperties": false
+        },
+        "logs": {
+         "type": "object",
+         "properties": {
+          "stdout": {
+           "type": "string"
+          },
+          "stderr": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "stdout",
+          "stderr"
+         ],
+         "additionalProperties": false
+        },
+        "runAtLoad": {
+         "type": "boolean"
+        },
+        "keepAlive": {
+         "type": "object",
+         "properties": {
+          "SuccessfulExit": {
+           "type": "boolean"
+          }
+         },
+         "required": [
+          "SuccessfulExit"
+         ],
+         "additionalProperties": false
+        },
+        "throttleInterval": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "label",
+        "programArguments",
+        "env",
+        "logs",
+        "runAtLoad",
+        "keepAlive",
+        "throttleInterval"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "required": [
+      "launchd"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "provider",
+    "managed",
+    "hostname",
+    "tokenSecret",
+    "daemon"
+   ],
+   "additionalProperties": false
+  },
+  "adapters": {
+   "type": "object",
+   "properties": {
+    "claude_local": {
+     "type": "object",
+     "properties": {
+      "engine": {
+       "type": "string"
+      },
+      "reasoningKey": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "engine",
+      "reasoningKey"
+     ],
+     "additionalProperties": false
+    },
+    "codex_local": {
+     "type": "object",
+     "properties": {
+      "engine": {
+       "type": "string"
+      },
+      "reasoningKey": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "engine",
+      "reasoningKey"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "claude_local",
+    "codex_local"
+   ],
+   "additionalProperties": false
+  },
+  "secrets": {
+   "type": "array",
+   "items": {
+    "anyOf": [
+     {
+      "type": "object",
+      "properties": {
+       "name": {
+        "type": "string"
+       },
+       "usedFor": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "name",
+       "usedFor"
+      ],
+      "additionalProperties": false
+     }
+    ]
+   },
+   "uniqueItems": true
+  },
+  "env": {
+   "type": "object",
+   "properties": {
+    "common": {
+     "type": "object",
+     "properties": {
+      "PATH": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "PATH"
+     ],
+     "additionalProperties": false
+    },
+    "claudeAuth": {
+     "type": "object",
+     "properties": {
+      "CLAUDE_CODE_OAUTH_TOKEN": {
+       "type": "object",
+       "properties": {
+        "secret": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "secret"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "required": [
+      "CLAUDE_CODE_OAUTH_TOKEN"
+     ],
+     "additionalProperties": false
+    },
+    "gitWrite": {
+     "type": "object",
+     "properties": {
+      "GH_TOKEN": {
+       "type": "object",
+       "properties": {
+        "secret": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "secret"
+       ],
+       "additionalProperties": false
+      },
+      "GIT_CONFIG_COUNT": {
+       "type": "string"
+      },
+      "GIT_CONFIG_KEY_0": {
+       "type": "string"
+      },
+      "GIT_CONFIG_VALUE_0": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "GH_TOKEN",
+      "GIT_CONFIG_COUNT",
+      "GIT_CONFIG_KEY_0",
+      "GIT_CONFIG_VALUE_0"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "common",
+    "claudeAuth",
+    "gitWrite"
+   ],
+   "additionalProperties": false
+  },
+  "workspaces": {
+   "type": "object",
+   "properties": {
+    "repo-worktree": {
+     "type": "object",
+     "properties": {
+      "comment": {
+       "type": "string"
+      },
+      "workspaceStrategy": {
+       "type": "object",
+       "properties": {
+        "type": {
+         "type": "string"
+        },
+        "baseRef": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "type",
+        "baseRef"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "required": [
+      "comment",
+      "workspaceStrategy"
+     ],
+     "additionalProperties": false
+    },
+    "none": {
+     "type": "object",
+     "properties": {
+      "comment": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "comment"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "repo-worktree",
+    "none"
+   ],
+   "additionalProperties": false
+  },
+  "confinement": {
+   "type": "object",
+   "properties": {
+    "comment": {
+     "type": "string"
+    },
+    "requiresBubblewrap": {
+     "type": "array",
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ]
+     },
+     "uniqueItems": true
+    },
+    "availableOnThisHost": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "comment",
+    "requiresBubblewrap",
+    "availableOnThisHost"
+   ],
+   "additionalProperties": false
+  },
+  "independence": {
+   "type": "object",
+   "properties": {
+    "comment": {
+     "type": "string"
+    },
+    "verifier": {
+     "type": "string"
+    },
+    "mechanism": {
+     "type": "string"
+    },
+    "branchTemplate": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "comment",
+    "verifier",
+    "mechanism",
+    "branchTemplate"
+   ],
+   "additionalProperties": false
+  },
+  "agents": {
+   "type": "array",
+   "minItems": 2,
+   "maxItems": 3,
+   "items": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "roleKey": {
+      "type": "string"
+     },
+     "status": {
+      "const": "paused"
+     },
+     "disposition": {
+      "const": "pilot"
+     },
+     "adapterType": {
+      "enum": [
+       "claude_local",
+       "codex_local"
+      ]
+     },
+     "instructions": {
+      "type": "string"
+     },
+     "skills": {
+      "type": "array",
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        }
+       ]
+      },
+      "uniqueItems": true
+     },
+     "permissions": {
+      "const": {
+       "canCreateAgents": false,
+       "canCreateSkills": false,
+       "canAssignTasks": false
+      }
+     },
+     "executionPermissions": {
+      "const": {
+       "permissionMode": "approve-reads",
+       "nonInteractivePermissions": "deny"
+      }
+     },
+     "reportsTo": {
+      "type": "null"
+     },
+     "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+     },
+     "role": {
+      "type": "string"
+     },
+     "icon": {
+      "type": "string"
+     },
+     "model": {
+      "type": "string"
+     },
+     "reasoning": {
+      "type": "string"
+     },
+     "git": {
+      "const": "write"
+     },
+     "workspace": {
+      "const": "repo-worktree"
+     },
+     "run": {
+      "const": {
+       "heartbeat": {
+        "enabled": false,
+        "wakeOnDemand": false,
+        "maxTurnContinuation": {
+         "enabled": false
+        },
+        "maxConcurrentRuns": 1
+       }
+      }
+     },
+     "limits": {
+      "type": "object",
+      "properties": {
+       "timeoutSec": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 900
+       },
+       "maxTurnsPerRun": {
+        "type": [
+         "integer",
+         "null"
+        ],
+        "minimum": 1,
+        "maximum": 20
+       },
+       "maxDailyRuns": {
+        "type": [
+         "integer",
+         "null"
+        ],
+        "minimum": 1
+       }
+      },
+      "required": [
+       "timeoutSec",
+       "maxTurnsPerRun",
+       "maxDailyRuns"
+      ],
+      "additionalProperties": false
+     },
+     "grants": {
       "type": "object",
       "required": [
-        "pinned"
+       "claudePlugins",
+       "codexPlugins"
       ],
+      "additionalProperties": false,
       "properties": {
-        "pinned": {
-          "type": "boolean"
-        }
+       "claudePlugins": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        },
+        "uniqueItems": true
+       },
+       "codexPlugins": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        },
+        "uniqueItems": true
+       }
+      }
+     },
+     "adapterMigration": {
+      "type": "object",
+      "properties": {
+       "from": {
+        "type": "string"
+       },
+       "to": {
+        "type": "string"
+       },
+       "approvedBy": {
+        "type": "string"
+       },
+       "date": {
+        "type": "string"
+       }
       },
-      "additionalProperties": true
+      "required": [
+       "from",
+       "to",
+       "approvedBy",
+       "date"
+      ],
+      "additionalProperties": false
+     },
+     "adapterLocal": {
+      "type": "object",
+      "properties": {
+       "claudeCodePlugins": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        },
+        "uniqueItems": true
+       },
+       "permissionsAllow": {
+        "type": "array",
+        "items": {
+         "anyOf": [
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "uniqueItems": true
+       },
+       "permissionDelivery": {
+        "type": "string"
+       },
+       "permissionsDeny": {
+        "type": "array",
+        "items": {
+         "anyOf": [
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "uniqueItems": true
+       }
+      },
+      "required": [
+       "claudeCodePlugins",
+       "permissionsAllow",
+       "permissionDelivery",
+       "permissionsDeny"
+      ],
+      "additionalProperties": false
+     },
+     "desiredSkills": {
+      "const": [
+       "paperclipai/paperclip/paperclip"
+      ]
+     }
+    },
+    "required": [
+     "name",
+     "title",
+     "roleKey",
+     "status",
+     "disposition",
+     "adapterType",
+     "instructions",
+     "skills",
+     "permissions",
+     "executionPermissions",
+     "reportsTo",
+     "slug",
+     "role",
+     "icon",
+     "model",
+     "reasoning",
+     "git",
+     "workspace",
+     "run",
+     "limits",
+     "grants",
+     "desiredSkills"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "skills": {
+   "type": "object",
+   "properties": {
+    "$comment": {
+     "type": "string"
+    },
+    "verifiedAt": {
+     "type": "string"
+    },
+    "claudeRuntime": {
+     "type": "object",
+     "properties": {
+      "version": {
+       "type": "string"
+      },
+      "appliesTo": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         }
+        ]
+       },
+       "uniqueItems": true
+      },
+      "source": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "version",
+      "appliesTo",
+      "source"
+     ],
+     "additionalProperties": false
+    },
+    "focx": {
+     "type": "object",
+     "properties": {
+      "appliesTo": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         }
+        ]
+       },
+       "uniqueItems": true
+      },
+      "skills": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         }
+        ]
+       },
+       "uniqueItems": true
+      },
+      "deferred": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         }
+        ]
+       },
+       "uniqueItems": true
+      },
+      "delivery": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "appliesTo",
+      "skills",
+      "deferred",
+      "delivery"
+     ],
+     "additionalProperties": false
+    },
+    "revisedAt": {
+     "type": "string"
+    },
+    "claudePlugins": {
+     "type": "object",
+     "properties": {
+      "appliesTo": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         }
+        ]
+       },
+       "uniqueItems": true
+      },
+      "marketplaces": {
+       "type": "object",
+       "properties": {
+        "claude-plugins-official": {
+         "type": "object",
+         "properties": {
+          "official": {
+           "type": "boolean"
+          },
+          "source": {
+           "type": "string"
+          },
+          "repo": {
+           "type": "string"
+          },
+          "lastUpdated": {
+           "type": "string"
+          },
+          "manifestEntries": {
+           "type": "integer"
+          },
+          "onDisk": {
+           "type": "object",
+           "properties": {
+            "plugins/": {
+             "type": "integer"
+            },
+            "external_plugins/": {
+             "type": "integer"
+            },
+            "scaffoldNotInManifest": {
+             "type": "array",
+             "items": {
+              "anyOf": [
+               {
+                "type": "string"
+               }
+              ]
+             },
+             "uniqueItems": true
+            }
+           },
+           "required": [
+            "plugins/",
+            "external_plugins/",
+            "scaffoldNotInManifest"
+           ],
+           "additionalProperties": false
+          },
+          "authors": {
+           "type": "object",
+           "properties": {
+            "Anthropic": {
+             "type": "integer"
+            },
+            "Anthropic-git-sourced": {
+             "type": "integer"
+            },
+            "vendor-or-unattributed": {
+             "type": "integer"
+            }
+           },
+           "required": [
+            "Anthropic",
+            "Anthropic-git-sourced",
+            "vendor-or-unattributed"
+           ],
+           "additionalProperties": false
+          }
+         },
+         "required": [
+          "official",
+          "source",
+          "repo",
+          "lastUpdated",
+          "manifestEntries",
+          "onDisk",
+          "authors"
+         ],
+         "additionalProperties": false
+        },
+        "openai-codex": {
+         "type": "object",
+         "properties": {
+          "official": {
+           "type": "boolean"
+          },
+          "source": {
+           "type": "string"
+          },
+          "repo": {
+           "type": "string"
+          },
+          "lastUpdated": {
+           "type": "string"
+          },
+          "manifestEntries": {
+           "type": "integer"
+          }
+         },
+         "required": [
+          "official",
+          "source",
+          "repo",
+          "lastUpdated",
+          "manifestEntries"
+         ],
+         "additionalProperties": false
+        },
+        "trailofbits": {
+         "type": "object",
+         "properties": {
+          "official": {
+           "type": "boolean"
+          },
+          "source": {
+           "type": "string"
+          },
+          "repo": {
+           "type": "string"
+          },
+          "lastUpdated": {
+           "type": "string"
+          },
+          "onDisk": {
+           "type": "integer"
+          },
+          "note": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "official",
+          "source",
+          "repo",
+          "lastUpdated",
+          "onDisk",
+          "note"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "claude-plugins-official",
+        "openai-codex",
+        "trailofbits"
+       ],
+       "additionalProperties": false
+      },
+      "pinMethods": {
+       "type": "object",
+       "properties": {
+        "version": {
+         "type": "string"
+        },
+        "contentHash": {
+         "type": "string"
+        },
+        "manifestSha": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "version",
+        "contentHash",
+        "manifestSha"
+       ],
+       "additionalProperties": false
+      },
+      "plugins": {
+       "type": "object",
+       "additionalProperties": {
+        "$ref": "#/$defs/catalogEntry"
+       }
+      }
+     },
+     "required": [
+      "appliesTo",
+      "marketplaces",
+      "pinMethods",
+      "plugins"
+     ],
+     "additionalProperties": false
+    },
+    "codexPlugins": {
+     "type": "object",
+     "properties": {
+      "appliesTo": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         }
+        ]
+       },
+       "uniqueItems": true
+      },
+      "scope": {
+       "type": "string"
+      },
+      "marketplaces": {
+       "type": "object",
+       "properties": {
+        "openai-primary-runtime": {
+         "type": "object",
+         "properties": {
+          "official": {
+           "type": "boolean"
+          },
+          "kind": {
+           "type": "string"
+          },
+          "bundleVersion": {
+           "type": "string"
+          },
+          "artifactToolVersion": {
+           "type": "string"
+          },
+          "nodeVersion": {
+           "type": "string"
+          },
+          "manifest": {
+           "type": "string"
+          },
+          "plugins": {
+           "type": "integer"
+          }
+         },
+         "required": [
+          "official",
+          "kind",
+          "bundleVersion",
+          "artifactToolVersion",
+          "nodeVersion",
+          "manifest",
+          "plugins"
+         ],
+         "additionalProperties": false
+        },
+        "openai-bundled": {
+         "type": "object",
+         "properties": {
+          "official": {
+           "type": "boolean"
+          },
+          "kind": {
+           "type": "string"
+          },
+          "manifest": {
+           "type": "string"
+          },
+          "plugins": {
+           "type": "integer"
+          }
+         },
+         "required": [
+          "official",
+          "kind",
+          "manifest",
+          "plugins"
+         ],
+         "additionalProperties": false
+        },
+        "openai-curated-remote": {
+         "type": "object",
+         "properties": {
+          "official": {
+           "type": "string"
+          },
+          "kind": {
+           "type": "string"
+          },
+          "catalogRows": {
+           "type": "integer"
+          },
+          "firstParty": {
+           "type": "integer"
+          },
+          "pluginFamilyCandidates": {
+           "type": "object",
+           "properties": {
+            "total": {
+             "type": "integer"
+            },
+            "openai": {
+             "type": "integer"
+            },
+            "thirdParty": {
+             "type": "integer"
+            }
+           },
+           "required": [
+            "total",
+            "openai",
+            "thirdParty"
+           ],
+           "additionalProperties": false
+          },
+          "thirdPartyApps": {
+           "type": "string"
+          },
+          "catalogCache": {
+           "type": "string"
+          },
+          "communityPluginsFamily": {
+           "type": "integer"
+          },
+          "publisherField": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "official",
+          "kind",
+          "catalogRows",
+          "firstParty",
+          "pluginFamilyCandidates",
+          "thirdPartyApps",
+          "catalogCache",
+          "communityPluginsFamily",
+          "publisherField"
+         ],
+         "additionalProperties": false
+        },
+        "chatgpt-global": {
+         "type": "object",
+         "properties": {
+          "official": {
+           "type": "boolean"
+          },
+          "kind": {
+           "type": "string"
+          },
+          "note": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "official",
+          "kind",
+          "note"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "openai-primary-runtime",
+        "openai-bundled",
+        "openai-curated-remote",
+        "chatgpt-global"
+       ],
+       "additionalProperties": false
+      },
+      "plugins": {
+       "type": "object",
+       "additionalProperties": {
+        "$ref": "#/$defs/catalogEntry"
+       }
+      },
+      "observedNotPinned": {
+       "type": "object",
+       "additionalProperties": {
+        "$ref": "#/$defs/catalogEntry"
+       }
+      },
+      "communityNotPinned": {
+       "type": "object",
+       "properties": {
+        "$comment": {
+         "type": "string"
+        },
+        "count": {
+         "type": "integer"
+        },
+        "entries": {
+         "type": "object",
+         "additionalProperties": {
+          "$ref": "#/$defs/catalogEntry"
+         }
+        }
+       },
+       "required": [
+        "$comment",
+        "count",
+        "entries"
+       ],
+       "additionalProperties": false
+      },
+      "thirdPartyDevelopedNotPinned": {
+       "type": "object",
+       "properties": {
+        "$comment": {
+         "type": "string"
+        },
+        "entries": {
+         "type": "object",
+         "additionalProperties": {
+          "$ref": "#/$defs/catalogEntry"
+         }
+        }
+       },
+       "required": [
+        "$comment",
+        "entries"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "required": [
+      "appliesTo",
+      "scope",
+      "marketplaces",
+      "plugins",
+      "observedNotPinned",
+      "communityNotPinned",
+      "thirdPartyDevelopedNotPinned"
+     ],
+     "additionalProperties": false
+    },
+    "claudePluginsOfficialOpenAI": {
+     "type": "object",
+     "properties": {
+      "$comment": {
+       "type": "string"
+      }
+     },
+     "additionalProperties": {
+      "$ref": "#/$defs/catalogEntry"
+     }
+    },
+    "claudePluginsNonOfficialInUse": {
+     "type": "object",
+     "properties": {
+      "$comment": {
+       "type": "string"
+      }
+     },
+     "additionalProperties": {
+      "$ref": "#/$defs/catalogEntry"
+     }
     }
+   },
+   "required": [
+    "$comment",
+    "verifiedAt",
+    "claudeRuntime",
+    "claudePlugins",
+    "codexPlugins",
+    "focx",
+    "claudePluginsOfficialOpenAI",
+    "claudePluginsNonOfficialInUse",
+    "revisedAt"
+   ],
+   "additionalProperties": false
   }
+ },
+ "required": [
+  "$schema",
+  "version",
+  "company",
+  "activation",
+  "project",
+  "instance",
+  "service",
+  "database",
+  "network",
+  "adapters",
+  "secrets",
+  "env",
+  "workspaces",
+  "confinement",
+  "independence",
+  "skills",
+  "agents"
+ ],
+ "additionalProperties": false,
+ "$defs": {
+  "catalogEntry": {
+   "type": "object",
+   "required": [
+    "pinned"
+   ],
+   "properties": {
+    "pinned": {
+     "type": "boolean"
+    }
+   },
+   "additionalProperties": true
+  }
+ }
 }

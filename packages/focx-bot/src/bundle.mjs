@@ -69,7 +69,8 @@ export function overlayAgent(agent, live = {}) {
 export function renderAdapter(contract, agent) {
   const config={model:agent.model,[contract.adapters[agent.adapterType].reasoningKey]:agent.reasoning,...(contract.workspaces[agent.workspace].workspaceStrategy?{workspaceStrategy:contract.workspaces[agent.workspace].workspaceStrategy}:{})}
   config.env=Object.fromEntries(Object.entries(composeEnv(contract,agent)).filter(([,v])=>typeof v==='string'))
-  if (agent.adapterLocal?.permissionDelivery==='qa-worktree-local') config.agentCommand='node tools/qa-claude-agent-acp/index.mjs'
+  // Any role declaring worktree-local delivery gets the launcher, not just QA.
+  if (agent.adapterLocal?.permissionDelivery?.endsWith('-worktree-local')) config.agentCommand='node tools/qa-claude-agent-acp/index.mjs'
   return overlayAgent(agent,{adapterConfig:config}).adapterConfig
 }
 export function renderFreshBundle(contract, sourceFiles) {

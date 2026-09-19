@@ -105,8 +105,11 @@ States as section 3. Same protocol, same constraints.
 | F17 | Live `bind-secrets --apply` (env binding + first live plugin provisioning) | Claude | **partial** — env binding PASS; all 294 Claude plugins PASS; native Codex stage blocked by F20 | FB9, F18, F19 |
 | F20 | Native Codex plugins: `openai-bundled` is reserved and cannot be installed by path; `openai-curated-remote` needs network + sign-in | Claude (found) | **done** — PR #96 merged (`431eced`) | F17 |
 | F21 | `bind-secrets` must not report `configured` while pinned plugins are unseeded | Codex | **done** — landed on develop via PR #98 (`93ceec7`) | F20 |
+| F23 | QA launcher hardcodes the `FOC-` issue prefix, so QA cannot run in any provisioned company | Claude (found) | **done and PROVEN LIVE** — PR #103 merged (`7a49b9c`); the gate no longer fires in a provisioned company | F17 |
+| F24 | QA's declared write permissions assume `run/` branches, so a Paperclip-named worktree branch can never be pushed | Claude (found) | **open — direction accepted, NOT blocked.** Ryan 2026-09-07: script-mediated push (option c). An earlier note said this waited on `contract.json` being unpinned; that was wrong — see the 2026-09-07 correction. Still a permission change; not on stage 1's path | F23 |
 | F19 | Plugin pin readback requires a `.claude-plugin/plugin.json` that skills-only plugins do not ship | Claude (found) | **done** — PR #95 merged (`752b16f`) | F17 |
 | F10 | QA launcher identity redesign (rev 2.7 decision 15) + focx-bot mirror | Codex | **done** — [#90](https://github.com/ryanphillipthomas/focx/pull/90) merged by Ryan 2026-09-06 01:06:50Z as `52261d6`; drift gate passed | FB8 |
+| **D1** | focx-bot-desktop mockup extraction → `design/mockup/` (source, copy, components, every layout value) | Claude | **merged** — [#106](https://github.com/ryanphillipthomas/focx/pull/106) merged by Ryan 2026-09-07 00:26:00Z as `3ba04cd`; drift gate passed | — |
 
 ### Dispositions of the H workstream
 
@@ -178,6 +181,56 @@ Recorded here rather than silently rescoped, per section 3.
 
 Also stale and corrected here: section 6 states `develop` at `bf30840`. It is `252349a`
 since #87 merged.
+
+### D1 log — focx-bot-desktop mockup extraction
+
+**2026-09-06 · Claude.** Ryan asked for a repo-ready extraction of the mockup at
+`focx-bot-desktop.rpt4k.chatgpt.site`. Note this is the **desktop UI mockup**, unrelated to
+Workstream FB's `focx-bot` provisioning product despite the shared name — D1 is a separate,
+design-side lane and does not touch FB.
+
+Delivered on `docs/focx-bot-desktop-mockup` under `design/mockup/`:
+
+- `source/` — `index.html`, `styles.css`, `app.js`, `assets/fox-avatar-atlas.png` as served.
+  Byte-identical except the Cloudflare bot-challenge script stripped from `index.html`.
+  Checksums recorded in `design/mockup/README.md`.
+- `copy.md` — verbatim copy of 7 screens, 13 modals, 4 empty states, 11 placeholders, 16 toasts.
+- `components.md` — component inventory and state-coverage matrix.
+- `design-values.md` — every colour, type, spacing, radius, shadow, motion and breakpoint value,
+  parsed from 1,397 CSS declarations across 354 selectors; §10 is the scale-vs-one-off verdict.
+
+**Scope boundary.** `design/mockup/` is a captured record and an input to tokenisation, **not** a
+design-value source. `design/tokens/` remains the only home for published values per `AGENTS.md`,
+and values reach it via the Design role's Figma sync. The drift gate's raw-value scan covers
+`apps/`, `src/`, `packages/` only (`docs/drift-gate.md` §19), so the raw hex in these documents is
+out of its scope by design. Verified locally: `tools/contracts/validate.mjs` 48/48,
+`focx-bot --validate-contract` exit 0.
+
+**Findings for Ryan, not acted on:**
+
+1. `--surface`, `--muted`, `--green` are declared in the mockup's `:root` and used nowhere at all.
+   Do not publish them on the assumption they are live.
+2. The mockup has no error, loading, disabled or pressed state anywhere in its product UI.
+   If the Figma library expects those, the mockup cannot supply them.
+3. Spacing has no scale: every integer 1–30px is used, with no skipped step. Type has no modular
+   ratio. 148 opaque colours collapse to 58 perceptually distinct ones. These need re-deciding,
+   not mapping.
+
+**2026-09-06 · Claude.** Pushed `docs/focx-bot-desktop-mockup` and opened
+[#106](https://github.com/ryanphillipthomas/focx/pull/106) against `develop` at Ryan's
+instruction. Drift gate **passed** (42s), confirming `design/mockup/` is outside the
+raw-value scan as `docs/drift-gate.md` §19 describes. Awaiting Ryan's review; not merged.
+
+**2026-09-07 · Claude.** Ryan merged [#106](https://github.com/ryanphillipthomas/focx/pull/106)
+as `3ba04cd`. Verified on the merged `develop` (`d65eca6`): `design/mockup/` present, and
+`styles.css` / `fox-avatar-atlas.png` still hash to `c423b16d…` / `d10d3c38…`, matching the
+checksums recorded in the README at capture time. All five gate steps pass on the merged tip.
+
+**Open, needs Ryan's decision:** whether `design/mockup/` is the right permanent home, given
+`AGENTS.md`'s one-source-of-truth rule. The README states the non-authoritative framing explicitly;
+if that is not sufficient, the alternative is to keep the extraction outside the repo entirely.
+
+---
 
 ### FB4 log
 
@@ -1763,6 +1816,191 @@ since #87 merged.
   config, workflows, docs — not just the deployment file I happen to know about. A branch that looks abandoned by commit
   date can still be load-bearing by configuration. `staging` is in the same shape and is a live deploy branch
   (`staging.focx.ai`); it stays untouched.
+
+- 2026-09-06 Ryan: **"lets roll develop out"**, then **"ok, merged"** (PR #100, develop → staging).
+- 2026-09-06 16:47:23Z Claude: **Staging merged (`61bce8e`); the DEPLOY GATE is broken, and has been since before today.** PR #100
+  carried 61 merged PRs (#28–#99), 188 files, +36,676/−203, of which the served site is five files under `apps`
+  (+109/−30). The `deploy.yml` `verify` job failed on staging at **`actions/checkout`**, before any verification logic:
+  `fatal: could not read Username for 'https://github.com': terminal prompts disabled`, three retries, exit 128. The
+  cause is `token: ${{ secrets.PIPELINE_TOKEN || github.token }}` (`deploy.yml:58`): the secret **exists but is no longer
+  valid**, so checkout uses it and fails — were it unset, the `||` fallback to `github.token` would have worked. **Not
+  caused by this rollout:** the `main` run of 2026-09-01 failed identically, as did the run triggered by Ryan's restore
+  push at 16:39:53Z. That restore run also failed at checkout, i.e. **before** the rollback/issue logic, so nothing was
+  rolled back and no issue was opened (`gh issue list` empty).
+  **Consequences:** Render deploys independently of this gate, and `https://staging.focx.ai/` answers **200 over valid
+  TLS with `<title>Focx</title>` and the `skills/connect` mount present** — so the site is up. But there is **no release
+  record and no `staging → main` promotion PR**, because the code that writes them never ran. Promoting to production
+  right now would mean promoting **without the evidence the deploy role requires** (`live` status, evidence-backed
+  checks, empty `infraDrift`).
+  **Fix is Ryan's:** rotate `PIPELINE_TOKEN` in repository secrets (Claude never handles tokens), then re-run the
+  workflow. Raised rather than worked around.
+
+- 2026-09-06 Ryan: **"i rotated"** — `PIPELINE_TOKEN` updated 16:51:38Z.
+- 2026-09-06 16:54:03Z Claude: **Re-ran the staging verification (attempt 2). The token fix worked; the gate now runs.** Verified
+  output: `contracts: 49 artifact(s) valid` and
+  `deploy-verify: staging dep-daephbrbc2fs73ciu04g → degraded (serving 61bce8e, expected 61bce8e)`. So **the right
+  commit is live on staging**, health and content marker pass, and the record plus four evidence files
+  (`deploy.json`, `health.json`, `service.json`, `custom-domains.json`) were generated.
+  **Two things still stop a clean promotion.**
+  1. **The gate cannot write its own record.** `git push origin staging` was rejected: `GH006: Protected branch update
+     failed … Changes must be made through a pull request. Required status check "drift" is expected.` The workflow is
+     designed to commit the release record back to the deployed branch (its `paths-ignore` exists precisely to stop the
+     resulting loop), so branch protection and the workflow now contradict each other. Fixing it means letting the
+     pipeline identity bypass protection on `staging`/`main` — a **weakening of branch protection, which the guardrails
+     forbid Claude from touching**. Ryan's call.
+  2. **The release is `degraded`, and the reason is inside the record that could not be pushed.** By
+     `tools/deploy-verify/index.mjs:181`, `degraded` means live + correct SHA + healthy, but with non-empty `infraDrift`,
+     an unverified/uncertified custom domain, or unverified items. Declared values to compare against the live Render
+     service `srv-daatu9fqj5pc73b9ap0g`: name `focx-staging`, branch `staging`, autoDeploy `yes`, buildCommand
+     `node tools/site-compose/index.mjs`, publishPath `dist`.
+  No promotion PR was opened, and per the deploy role a human accepts one only on a `live` record with empty drift.
+
+- 2026-09-06 Ryan: **"i changed both main and staging branch protection try that again"** → attempt 3 SUCCEEDED;
+  the record pushed (`35cb0d9`). Record read: `infraDrift: []`, health 200/TLS valid/marker found, `staging.focx.ai`
+  verified + certificate issued, serving `61bce8e` as expected. The **only** blemish:
+  `unverified: ["promotion step failed: spawnSync gh ENOBUFS"]`.
+- 2026-09-06 Ryan (AskUserQuestion): **"Open the promotion PR by hand now"** → **PR #101** (staging → main) opened with
+  the recorded evidence quoted, drift gate green, and Ryan merged it. **focx.ai now serves the rolled-out tree** —
+  fetched read-only: 200, TLS valid, `CN=focx.ai`, `<title>Focx</title>`, byte-identical to staging.
+- 2026-09-06 17:17:13Z Claude: **The production verification came back `failed`, and it exposes a real drift — plus a correction to
+  something I told Ryan earlier.** Record `dep-daepfuuq1p3s73d9fmng.json` on `origin/main`:
+  `infraDrift: [{"setting":"branch","declared":"main","actual":"develop"}]` and
+  `unverified: ["serving e1380cc7582e instead of expected 3f780a80b30c — likely superseded"]`.
+  **The production Render service deploys from `develop`, not `main`.** The repo *declares* `main`
+  (`pipeline/deploy.config.json`) and the workflow triggers on `main`, but the live service tracks `develop`.
+  **Correction to my earlier claim:** I told Ryan that deleting `main` meant "no production deploy could run". That was
+  wrong. Production never deployed from `main`; it has been auto-deploying `develop` all along, which also means every
+  merge to develop today was already reaching focx.ai before the promotion. Restoring `main` was still right — the
+  workflow and the declared config both name it — but I overstated the impact and should have checked Render's actual
+  branch, which is exactly what this gate is for.
+  **No harm done:** the gate deliberately did **not** roll back (`index.mjs:183` — a live deploy of a different commit
+  usually means a newer push superseded it, and rolling back would fight that deploy), no issue was opened, and
+  focx.ai is healthy. **Open question for Ryan, not urgent:** either re-point the Render production service at `main`,
+  or change the declaration to `develop`. Right now the repo and the dashboard disagree, and that disagreement is the
+  only thing making production releases read `failed`.
+- 2026-09-06 Ryan: **"fix the buffer bug; i dont care about the branch protection untill i get close to release"** →
+  branch protection deliberately left loose; **F22 dispatched** for the ENOBUFS defect.
+
+- 2026-09-06 Ryan (AskUserQuestion): **"Authorise the run"** (QA lane smoke in `focx-bot-4a-restore-2`).
+- 2026-09-06 17:37:27Z Claude: **QA lane run BLOCKED by F23; agent restored and paused.** Three wake attempts:
+  1. `73edc6cb…` cancelled — `issue_assignee_changed`. **My error:** I created the task with `assigneeId`, a field the
+     API ignores, then bound it to the project; the run gate saw no assignee.
+  2. `bc7cc19b…` cancelled the same way — my re-assign used the same wrong field.
+  3. `410acfed…` reached the adapter and **failed at `ensure_session`**:
+     `[focx-qa-permissions] stopped: QA must run at its FOC issue worktree root`.
+  The correct field is **`assigneeAgentId`** (`issues.js:6909`); once set, project `9c1b5803…`, workspace `f6c6bfba…`
+  and the assignee all held.
+- **F23 — the QA launcher is hardcoded to the original company's issue prefix.**
+  `tools/qa-claude-agent-acp/index.mjs:37`:
+  `requireThat(cwd === root && /^FOC-\d+-/.test(branch), 'QA must run at its FOC issue worktree root')`.
+  Paperclip names the worktree branch from the company's issue identifier, and a provisioned company gets its own
+  prefix — `FOCA` for `focx-bot-4a`, **`FOCAAA`** for `focx-bot-4a-restore-2`. `FOCAAA-1-…` fails `^FOC-\d+-`, so the
+  guard can only ever be satisfied by the original `Focx.ai` company. **The QA lane cannot run in ANY company focx-bot
+  provisions** — which is the whole point of focx-bot. The Implementation lane is unaffected: it runs Codex through a
+  different path and its FB8 smoke passed in `focx-bot-4a`.
+  **Correction to what I told Ryan:** I said zero more PRs were needed. That was wrong — this needs one.
+  **Cleanup done:** `runtimeConfig` restored **byte-identical** to the recorded `before` and the agent **paused**
+  (verified by read-back). The task `571e10d0…` remains in `backlog`, assigned, unstarted; no branch, commit or push
+  was made by the agent.
+
+- 2026-09-06 Ryan (AskUserQuestion): **"Fix F23 now"**. (Three garbled messages arrived around it —
+  `3.+.320`, `3.20.`, `3+6=/i,`1234++654` — read as stray keystrokes and deliberately not acted on.)
+- 2026-09-06 18:16:04Z Claude: **F23 reviewed — ACCEPT; committed `0bbcd2d`, PR #103 opened**, drift gate green. Codex ran at
+  **medium** effort per Ryan's new setting (`gpt-6-astra`; there is no `aura` in the 128-model catalog — the gpt-6
+  family is astra alone). First dispatch was refused by my own tree-clean guard because the F23 ledger entry was still
+  uncommitted; committed as `9e6c163`, then dispatched.
+  Fix read: `resolveCompany` mirrors `resolveAgent` — bounded `GET /api/companies/:id`, run-bound bearer,
+  `redirect:'error'`, 10 s timeout — and its `id` must agree with **both** the resolved agent and
+  `PAPERCLIP_COMPANY_ID`. The prefix must match `^[A-Z][A-Z0-9]*$` and the branch must start `<prefix>-<digits>-`, so a
+  `FOC` company cannot accept a `FOCAAA` branch or the reverse. **No fallback**: an unavailable prefix refuses. `cwd ===
+  root`, the worktrees containment, the git common-dir check, the symlink refusals and the identity assertions are all
+  untouched. Checks: launcher suites 27 pass / 8 SDK skips (18 knock-outs), focx-bot 282/282, `--validate-contract` 0,
+  `diff --check` clean, `contract.json` 0 lines in the diff. Live read-only: the two real companies return `FOC` and
+  `FOCAAA`, both matching the accepted shape. **Not yet proven: a live QA run in a provisioned company** — that is the
+  next step after merge and is what actually closes the objective.
+
+- 2026-09-06 Ryan: **"merged, run the QA lane again"** → PR #103 on develop (`7a49b9c`).
+- 2026-09-06 18:30:51Z Claude: **QA lane re-run: the F23 fix HOLDS LIVE, and the lane got two steps further.** Run
+  `0f7af0f6…`, status **succeeded**, `usageJson.model = claude-opus-5`, `requestedModel = claude-opus-5`.
+  (Note for future polling: Paperclip reports **`succeeded`**, not `completed` — my loop watched for the wrong word and
+  spun past the result, which briefly made Ryan think it had failed.)
+  **What the agent proved:** session init cleared the F23 gate — `git rev-parse --show-toplevel` matched
+  `PAPERCLIP_WORKSPACE_WORKTREE_PATH` and the branch matched `PAPERCLIP_WORKSPACE_BRANCH`, on branch
+  `FOCAAA-1-qa-lane-smoke-…`. **Step 1 done:** it wrote exactly `pipeline/runs/run-20260906-173426-qa/evidence/
+  qa-smoke.txt` containing one line, and touched nothing else. Verified by hand in the worktree; the file is there and
+  uncommitted.
+  **Where it stopped, and it stopped correctly:** `git add …` and the reporting `curl` both returned `User refused
+  permission to run tool`. The agent **halted on each rather than retrying or routing around**, and reported through the
+  run summary because the control-plane write was itself denied — exactly the F14 rule, obeyed without being reminded.
+- **F24 — the QA role's write rules are written for a branch convention Paperclip does not use.**
+  `.focx/agents.json` grants QA `Bash(git push origin run/:*)`. The launcher mirrored it verbatim into the worktree
+  (confirmed in `.claude/settings.local.json`, 31 rules). Paperclip names the branch `FOCAAA-1-…`, so **that rule can
+  never match** — the same convention drift as F23, and the same family as the repo's own open issue #55
+  ("run.schema.json's branch pattern (^run/) can't be satisfied by Paperclip-native execution branches").
+  A second, separate cause: the agent ran `cd … && git add … && git status --porcelain`, and a **compound** command
+  cannot match a prefix rule like `Bash(git add pipeline/runs:*)` even though the underlying command is allowed. That
+  one is fixable in the task text, not in the permission set.
+  **This widens a permission, so it is Ryan's call, not mine.** Recorded, not acted on.
+  **Cleanup:** runtimeConfig restored byte-identical, agent paused, both read back. The worktree and its uncommitted
+  evidence file are left in place so a retry resumes at step 2. Task `FOCAAA-1` still reads `blocked`; the agent could
+  not update it because that write went through the same denied channel — worth knowing, since the board will show a
+  stale status whenever this happens.
+
+- 2026-09-07 01:20Z Claude: **F24 re-analysed; my "narrowing" framing was WRONG; direction decided and deferred.**
+  A Codex dispatch (`gpt-6-astra`, medium) was briefed to bind QA's push rule to the run's branch in
+  `validateContext`, on my claim that this was a *narrowing* and so needed no permission decision. **Codex confirmed all
+  five premises, then stopped without editing anything, on the brief's own stop condition, and it was right.**
+  - **The framing error.** `Bash(git push origin run/:*)` permits commands prefixed `git push origin run/`.
+    `Bash(git push origin FOC-92-smoke:*)` permits `git push origin FOC-92-smoke…`, which was **not permitted before**.
+    Fewer branches are eligible, but a previously-refused command becomes allowed: the new set is **not a subset**, it is
+    a replacement of authority. F24 therefore remains a permission change and Ryan's call — which is what the original
+    finding said before I argued myself out of it.
+  - **A second property, found by Codex and worth more than the correction.** A command-prefix rule cannot constrain
+    trailing arguments. `git push origin FOC-92-smoke develop:main` matches the prefix and pushes `main`. **This hole
+    exists in today's rule too** (`git push origin run/x develop:main`), so it is not introduced by any proposed change —
+    but it means *no* `git push` prefix rule can honestly claim "this branch only". Two wrong conclusions in this task
+    came from treating a prefix match as a specification. Do not reason about these rules that way again.
+  - **The contract constraint, proven rather than quoted.** The rule string lives in **two** places:
+    `.focx/agents.json:280` and **`packages/focx-bot/contract.json:368`**. The live state file
+    `~/.paperclip/instances/default/focx-bot/restore-f15-state.json` records
+    `contractSha = f5a54cf1ff0530131b5c0207c6ec5ecfa2a18daaffe26fbe704b20aee4fa4ea2`, which matches the file on disk,
+    and that restore is parked at phase `awaiting-plugin-auth`. `approvalDigest()` binds `contractSha`. So editing the
+    declared rule moves the sha. **Corrected 2026-09-07 — see the entry below: this does not block a contract change.**
+  - **Accepted direction (Ryan, 2026-09-07): option (c), script-mediated push.** Replace the `git push` grant with
+    `Bash(scripts/qa-push.sh)` — **no `:*`**, exact command match, no arguments accepted — the script deriving the branch
+    from `PAPERCLIP_WORKSPACE_BRANCH` and asserting it against the company prefix as the launcher already does. This is
+    the only option where the granted authority and the intended authority are the same sentence, and it closes the
+    trailing-argument hole that today's rule leaves open. Precedent: `scripts/paperclip-issue-update.sh` is already the
+    script-mediated route for the reporting call.
+  - **Rejected: the launcher-side substitution as a stopgap.** It is a permission change buying a lane stage 1 does not
+    use (stage 1 is Developer-only, by Ryan's scope decision), and it would be reversed when (c) lands — a permission
+    change with a scheduled reversal.
+  - **Sequencing.** (c) changes the declared rule, so it is blocked until `contract.json` is unpinned. The parked restore
+    is what pins it, and its purpose is already served — the F15 round trip PASSED and `focx-bot-4a-restore-2` is a
+    disposable company, not the retained `Focx.ai`. Finishing or abandoning it deliberately also unblocks widening
+    `agents: {minItems: 2, maxItems: 2}` and any future contract work, so it is worth doing on its own merits.
+  - **State:** nothing was edited, no commit, push or network call, `contract.json` sha unchanged and re-verified.
+    Branch `run/run-20260907-011750-f24` carries this record only.
+
+- 2026-09-07 01:00Z Claude: **CORRECTION — `contract.json` was never pinned; and the two stale restore states are archived.**
+  I told Ryan a contract change was blocked until the parked restore was cleared, and wrote that into the F24 entry
+  above. Reading the code rather than re-asserting it: `fresh.mjs:156` requires `state.contractSha === source.sha` only
+  to **resume** a parked restore. A contract change therefore makes that one restore unresumable; it breaks nothing
+  else. Proof it had already happened: the **default** `state.json` (`focx-bot-4a`, `awaiting-secret-entry`) was already
+  at `shaMatchesContract = false`, so the contract had moved before with no consequence.
+  **The real cost of a contract change, which I had missed:** `snapshot-fb9.json` also carries the matching
+  `contractSha`, and `portability.mjs:123` requires it to match for a parity restore. So a contract change invalidates
+  that snapshot and a fresh one must be taken. That, not the state file, is the thing to plan around.
+  **Consequence:** F24 option (c) and widening `agents: {minItems: 2, maxItems: 2}` were never blocked by this.
+  **Archived (local files only, no API writes, nothing deleted, byte-identical, hashes recorded before and after):**
+  `~/.paperclip/instances/default/focx-bot/` → `archived-2026-09-07/`
+  `restore-f15-state.json` (`awaiting-plugin-auth`) sha256 `6a549c90b1d894aa0bd2f9d0d962825f9728b04e07a3a3b516dceee164b6fc41`;
+  `restore-state.json` (`failed`) sha256 `b87fa104b7b70d6d9e4df9b0ac8baca567a9d589747ab2eccdf7b9726f36dd2e`.
+  Undo by moving both back up one directory. `state.json` and `snapshot-fb9.json` untouched; no company or agent was
+  deleted (`agentDeletionAllowed: false`), and `focx-bot-4a-restore-2`'s two agents remain paused. Verified after:
+  four companies present, focx-bot 282/282, `--validate-contract` 0.
+  Note for anyone following a reference to `restore-f15-state.json` in `focx-frontend-handoff.md`'s estate table or
+  above: it is in `archived-2026-09-07/`, not lost.
 
 ### FB3 log
 

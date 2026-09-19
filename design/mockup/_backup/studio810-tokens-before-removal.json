@@ -1,0 +1,50 @@
+{
+  "_note": "Complete dump of the studio810 design system found in Figma file b2iyqWIkd4wYY7cA3y832h ('Focx Bot — DS-001 Foundation') on 2026-09-07, captured immediately before removal at Ryan's instruction. Kept so the removal is recoverable outside Figma version history. studio810 appears to be an unrelated marketing/e-commerce site system that arrived when the file was duplicated.",
+  "capturedAt": "2026-09-07",
+  "fileKey": "b2iyqWIkd4wYY7cA3y832h",
+  "collections": {
+    "studio810/color": { "modes": ["Light"], "tokens": {
+      "action-fill": "#d4967d", "action-fill-text": "#ffffff", "surface-1": "#495a58",
+      "text-inverse": "#ffffff", "action-fill-hover": "#ddab97", "action-fill-disabled": "#ddab97",
+      "surface-2": "#d4967d", "surface-3": "#ffffff", "surface-4": "#e5e3dc",
+      "text-ink": "#303636", "text-accent": "#495a58", "border-focus": "#303636",
+      "action-inverse-fill": "#ffffff", "action-inverse-text": "#d4967d",
+      "action-inverse-fill-hover": "#f6eae5", "action-inverse-fill-disabled": "#f6eae5",
+      "border-focus-inverse": "#ffffff", "border-focus-brand": "#d4967d", "text-brand": "#d4967d" } },
+    "studio810/radius": { "modes": ["Light"], "tokens": { "control": 15 } },
+    "studio810/space": { "modes": ["Light"], "tokens": {
+      "control-x": 35.20000076293945, "control-y": 24, "control-x-sm": 19.200000762939453,
+      "control-y-sm": 12.800000190734863, "header-gap": 24.479999542236328, "header-y": 28.799999237060547,
+      "section-x": 43.20000076293945, "nav-item-x": 13.680000305175781, "nav-item-y": 1.600000023841858,
+      "folder-x": 16, "folder-y": 8, "cart-badge-gap": 4.666669845581055, "menu-header-pad": 82,
+      "menu-item-y": 54.375, "menu-item-x": 11.25, "menu-item-margin": 18.75, "menu-controls-y": 64.375,
+      "header-y-mobile": 22.5, "stack-sm": 16, "stack-md": 32, "section-y": 47.52000045776367,
+      "grid-edge": 32.1953010559082, "grid-gutter": 11, "section-y-sm": 14.399999618530273,
+      "section-y-lg": 95.04000091552734, "section-y-hero": 144, "reel-inset": 125, "gallery-gap": 54 } },
+    "studio810/type": { "modes": ["Light"], "tokens": {
+      "family-body": "PT Serif", "size-body": 16, "weight-bold": 700, "size-h3": 36.15999984741211,
+      "weight-regular": 400, "family-display": "Marcellus", "size-h1": 66.4000015258789,
+      "size-h2": 46.2400016784668, "size-h4": 26.079999923706055, "size-wordmark": 24.399999618530273,
+      "size-hero": 232, "line-control-sm": 27, "line-nav-folder": 20.799999237060547,
+      "size-nav-mobile": 31.875, "size-nav-mobile-back": 16.31999969482422, "size-wordmark-mobile": 16,
+      "size-lead": 22.719999313354492, "size-plan-title": 21.040000915527344,
+      "size-plan-price": 17.68000030517578, "size-small": 14.272000312805176 } },
+    "studio810/border": { "modes": ["Light"], "tokens": { "hairline": 1, "focus-ring": 2, "focus-offset": 4, "underline-offset": 20 } },
+    "studio810/size": { "modes": ["Light"], "tokens": {
+      "header-max-width": 1400, "folder-min-width": 200, "icon-social": 20, "icon-cart": 25,
+      "burger": 35, "burger-bar": 1, "burger-btn": 47, "reel-control": 44 } },
+    "studio810/opacity": { "modes": ["Light"], "tokens": { "nav-mobile-back": 0.5, "nav-mobile-hover": 0.8999999761581421 } }
+  },
+  "textStyles": [
+    { "name": "Brand/Hero/Desktop", "font": "Marcellus Regular", "size": 232, "lineHeight": 232, "letterSpacingPercent": -2 },
+    { "name": "Brand/Wordmark", "font": "Marcellus Regular", "size": 24.399999618530273, "lineHeight": 29.280000686645508, "letterSpacingPercent": -2 },
+    { "name": "Heading/H1", "font": "Marcellus Regular", "size": 66.4000015258789, "lineHeight": 70.11840057373047, "letterSpacingPercent": -2 },
+    { "name": "Heading/H2", "font": "Marcellus Regular", "size": 46.2400016784668, "lineHeight": 51.49290084838867, "letterSpacingPercent": -2 },
+    { "name": "Heading/H3", "font": "Marcellus Regular", "size": 36.15999984741211, "lineHeight": 41.309200286865234, "letterSpacingPercent": -2 },
+    { "name": "Heading/H4", "font": "Marcellus Regular", "size": 26.079999923706055, "lineHeight": 30.54490089416504, "letterSpacingPercent": -2 },
+    { "name": "UI/Body", "font": "PT Serif Regular", "size": 16, "lineHeight": 24, "letterSpacingPercent": 0 },
+    { "name": "UI/Body Strong", "font": "PT Serif Bold", "size": 16, "lineHeight": 24, "letterSpacingPercent": 0 },
+    { "name": "UI/Nav", "font": "PT Serif Regular", "size": 16, "lineHeight": 24, "letterSpacingPercent": 0 },
+    { "name": "UI/Link", "font": "PT Serif Regular", "size": 16, "lineHeight": 24, "letterSpacingPercent": 0 }
+  ]
+}

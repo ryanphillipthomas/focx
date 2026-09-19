@@ -16,8 +16,7 @@
 # environment at all.
 #
 # Per-repo values (service ids, public URLs, content markers, bot identity)
-# come from pipeline/deploy.config.json, so this file stays parity-identical
-# across focx and studio-810.
+# come from pipeline/deploy.config.json.
 #
 # paths-ignore prevents the loop this workflow would otherwise create: it
 # commits the release record back to the deployed branch, and that push must
