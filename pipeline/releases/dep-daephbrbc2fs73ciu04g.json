@@ -1,0 +1,34 @@
+{
+  "deployId": "dep-daephbrbc2fs73ciu04g",
+  "environment": "staging",
+  "service": {
+    "id": "srv-daatu9fqj5pc73b9ap0g",
+    "name": "focx-staging",
+    "publicUrl": "https://staging.focx.ai"
+  },
+  "expectedSha": "61bce8e3b161042556f573dec5b32f8867f59e8f",
+  "deploy": {
+    "status": "live",
+    "servingSha": "61bce8e3b161042556f573dec5b32f8867f59e8f",
+    "finishedAt": "2026-09-06T16:45:49.224593Z"
+  },
+  "health": {
+    "httpStatus": 200,
+    "tlsValid": true,
+    "certificateSubject": "CN=staging.focx.ai",
+    "checkedUrl": "https://staging.focx.ai",
+    "contentMarker": "<title>Focx</title>"
+  },
+  "customDomains": [
+    {
+      "name": "staging.focx.ai",
+      "verified": true,
+      "certificateIssued": true
+    }
+  ],
+  "infraDrift": [],
+  "outcome": "degraded",
+  "unverified": [
+    "promotion step failed: spawnSync gh ENOBUFS"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "dep-daepfuuq1p3s73d9fmng",
+  "commit": {
+    "id": "e1380cc7582ea911e8ba0acc5857fc0dca81e6cb",
+    "message": "Merge pull request #99 from ryanphillipthomas/chore/orchestration-ledger\n\ndocs: commit the Claude/Codex orchestration ledger",
+    "createdAt": "2026-09-06T16:42:33Z"
+  },
+  "status": "live",
+  "trigger": "new_commit",
+  "createdAt": "2026-09-06T16:42:35.636277Z",
+  "updatedAt": "2026-09-06T16:42:43.482798Z",
+  "startedAt": "2026-09-06T16:42:35.634444Z",
+  "finishedAt": "2026-09-06T16:42:43.482534Z"
+}
