@@ -19,11 +19,15 @@ Do not put secrets here. Fill unknown Notion bug-database mappings before enabli
 | `feature-map.md` | User-facing surfaces and verification notes |
 | `../automations/bug-agent/OPERATIONS.md` | Authoritative run instructions |
 
-## Existing automation to reuse
+## New automation (do not reuse the old entry)
 
-Do **not** create a second Slack bug automation. Edit the existing entry:
+Create a **new** Automations entry. Do **not** leave the old Slack bug automation active alongside it.
 
-- Dashboard: https://cursor.com/automations/59897871-b611-11f1-bb68-864e54d14197
-- Observed name: **Fix bugs reported in Slack** / run label **Bug report resolution**
-- Automation id: `59897871-b611-11f1-bb68-864e54d14197`
-- Source channel (observed): `#bug-reports` (`C0C3ASJ4RLL`)
+| Item | Value |
+|------|--------|
+| New automation id | `PENDING_NEW_AUTOMATION_ID` (placeholder until created) |
+| Suggested name | Slack bug triage + resolution |
+| Source channel | `#bug-reports` (`C0C3ASJ4RLL`) |
+| **Old automation to disable/delete** | `59897871-b611-11f1-bb68-864e54d14197` — [Fix bugs reported in Slack](https://cursor.com/automations/59897871-b611-11f1-bb68-864e54d14197) |
+
+Live traffic stays **disabled** until the checklist passes.

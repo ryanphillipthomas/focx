@@ -6,7 +6,7 @@ Secret-free. Do not invent destinations. Until `bug_database.status` is configur
 
 | Field | Value |
 |-------|-------|
-| Status | **Candidate — confirm before traffic** |
+| Status | **Configured** (Ryan confirmed) |
 | Database | [Docs](https://app.notion.com/p/3e17559fe2d780ed95d0e6f446f505d5) |
 | Data source | `collection://3e17559f-e2d7-80af-833c-000bcc071e00` |
 | Useful types | PRD, Spec, RFC, Decision, Guideline, Runbook |
@@ -23,10 +23,29 @@ Rules:
 | Field | Value |
 |-------|-------|
 | Status | **UNCONFIGURED** |
-| Database URL | _required_ |
+| Database URL | _required — Ryan must pick or confirm tracker-free_ |
 | Data source | _required_ |
 
-No dedicated Bugs database was found in the connected Notion workspace. **Tasks** (`https://app.notion.com/p/3e17559fe2d780b0b15cee7f6d5a757d`) exists but is a general task board (Assignee, Due date, Blocker, Evidence URL) without a Slack-thread field or bug-specific statuses. Do **not** treat Tasks as the bug database unless explicitly confirmed.
+### Notion MCP discovery (2026-09-22)
+
+Searched connected workspace (`ryanthomas.ai` teamspace) via Notion MCP for Bugs / Issues / Defects / incident / ticket / tracker. **No dedicated bug database was found.**
+
+Nearby databases (not proposed as the bug tracker unless Ryan explicitly picks one):
+
+| Database | URL | Data source | Why not auto-selected |
+|----------|-----|-------------|------------------------|
+| Tasks | https://app.notion.com/p/3e17559fe2d780b0b15cee7f6d5a757d | `collection://3e17559f-e2d7-804d-80cc-000b13450095` | General task board (Assignee, Due, Blocker, Evidence URL). **Do not use unless Ryan explicitly confirms.** He did not. |
+| My Tasks | https://app.notion.com/p/f35b8d405c5f4c26939374f10f83c82d | (personal home view) | Personal assignee view — not a defect tracker |
+| Docs | https://app.notion.com/p/3e17559fe2d780ed95d0e6f446f505d5 | `collection://3e17559f-e2d7-80af-833c-000bcc071e00` | Product docs (read scope) — not bugs |
+| Projects | https://app.notion.com/p/3e17559fe2d7807b8606d983bd43f14d | `collection://3e17559f-e2d7-8001-a3f1-000b42ab1a67` | Project portfolio |
+| Products | https://app.notion.com/p/98ee4ff7b0ce471a96e1986af98149cc | `collection://2702d554-bc46-4c33-b98e-a114d809c924` | Product catalog |
+| Seeds | https://app.notion.com/p/b7c4a904d8b1469e9d39d0adff182ae3 | `collection://71eefd5b-abee-448c-b2cc-59cbb4508ccf` | Idea seeds |
+| Meetings | https://app.notion.com/p/3e17559fe2d780bdaf31d0863480c6ff | `collection://3e17559f-e2d7-8056-aefc-000b85e7c43b` | Meeting notes |
+| Notes | https://app.notion.com/p/3e17559fe2d7804a9792e734764421e6 | `collection://3e17559f-e2d7-8069-8cac-000b5f13ff95` | Freeform notes (title only) |
+
+There is **no single clear Bugs DB** to propose. Options for Ryan: create a Bugs database, explicitly confirm Tasks (not recommended without confirmation), or run tracker-free (no Notion bug writes).
+
+Candidate inventory also in Project store: `docs/bug-agent-notion-bug-db-candidates.md`.
 
 ### Required field map (fill after destination is chosen)
 

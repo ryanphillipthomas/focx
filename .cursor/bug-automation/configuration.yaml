@@ -3,12 +3,19 @@ agent: slack-bug-triage-resolution
 layout: .cursor/bug-automation  # chosen because no prior .cursor/benny tree; Benny two-job pack not adopted
 
 automation:
-  # Reuse this existing Automations entry — do not create a duplicate.
-  id: "59897871-b611-11f1-bb68-864e54d14197"
-  dashboard_url: "https://cursor.com/automations/59897871-b611-11f1-bb68-864e54d14197"
-  observed_name: "Fix bugs reported in Slack"
-  observed_run_label: "Bug report resolution"
+  # NEW Automations entry — do not reuse the old Slack bug automation.
+  # Placeholder until Ryan creates the replacement in the Automations dashboard.
+  id: "PENDING_NEW_AUTOMATION_ID"
+  dashboard_url: ""  # fill after create: https://cursor.com/automations/<new-id>
+  observed_name: ""  # suggested: "Slack bug triage + resolution"
+  observed_run_label: ""  # suggested: "Bug report resolution"
   enabled_for_traffic: false  # keep disabled / do not enable until integration checklist passes
+  # OLD automation — must be disabled or deleted so it is not left active alongside the replacement:
+  #   id: 59897871-b611-11f1-bb68-864e54d14197
+  #   dashboard: https://cursor.com/automations/59897871-b611-11f1-bb68-864e54d14197
+  #   observed name: Fix bugs reported in Slack / Bug report resolution
+  superseded_automation_id: "59897871-b611-11f1-bb68-864e54d14197"
+  superseded_automation_action: "disable_or_delete_before_enabling_replacement"
 
 operations_path: ".cursor/automations/bug-agent/OPERATIONS.md"
 notion_map_path: ".cursor/bug-automation/notion.md"
@@ -34,37 +41,57 @@ repository:
   url: "https://github.com/ryanphillipthomas/focx-site"
   default_branch: "main"
   draft_only: true
-  # Product surface /skills/connect is composed from focx-connect at build time.
-  # Write scope for Connect fixes is unresolved — see missing-config ask.
+  # write_scope: draft PRs only in focx-site + focx-connect.
+  # Merge / auto-merge / deploy remain OUT OF SCOPE (never_merge) pending explicit override.
+  # Ryan asked to "open PRs and merge in all repositories" — merge is NOT encoded; draft PRs only.
+  write_scope:
+    mode: "draft_prs_only"
+    allow_merge: false
+    allow_auto_merge: false
+    allow_deploy: false
+    repos:
+      - url: "https://github.com/ryanphillipthomas/focx-site"
+        role: "primary"
+        draft_prs: true
+      - url: "https://github.com/ryanphillipthomas/focx-connect"
+        role: "related_product"
+        mount_path: "skills/connect"
+        draft_prs: true
   related_product_repos:
     - url: "https://github.com/ryanphillipthomas/focx-connect"
       mount_path: "skills/connect"
-      write_scope: "UNCONFIGURED"
+      write_scope: "draft_prs_only"
 
 notion:
   product_docs:
-    status: "candidate"
+    status: "configured"
     database_url: "https://app.notion.com/p/3e17559fe2d780ed95d0e6f446f505d5"
     data_source: "collection://3e17559f-e2d7-80af-833c-000bcc071e00"
-    notes: "Workspace Docs DB (PRD/RFC/Spec/…). Confirm as the product-doc read scope."
+    notes: "Workspace Docs DB (PRD/RFC/Spec/…) — confirmed as product-doc read scope."
   bug_database:
     status: "UNCONFIGURED"
     database_url: ""
     data_source: ""
-    # Do not write until destination + field map are confirmed in notion.md
+    # No dedicated Bugs/Issues/Defects DB found via Notion MCP (2026-09-22).
+    # Candidates listed in Project store docs/bug-agent-notion-bug-db-candidates.md.
+    # Do NOT use Tasks unless Ryan explicitly confirms. Do not invent a destination.
 
 environment:
-  status: "UNCONFIGURED"
-  # Candidate local path once confirmed:
-  #   compose: node tools/site-compose/index.mjs → dist/
-  #   serve: static server on dist/ (not production focx.ai)
-  name: ""
+  # PROPOSED — pending Ryan confirm (proposed-pending-confirm). Not private prod.
+  status: "proposed-pending-confirm"
+  name: "local-site-compose-dist"
+  compose_command: "node tools/site-compose/index.mjs"
+  compose_output: "dist/"
+  serve: "local static server on dist/ (not production focx.ai)"
   allow_production_data_writes: false
+  never_use_production_host: "focx.ai"
   artifact_directory: "/tmp/bug-agent-artifacts"
+  # Proposed default: compose → serve dist/ locally; never production focx.ai / no prod data writes.
 
 control:
   status: "UNCONFIGURED"
-  # Candidates when confirmed: Playwright MCP, computerUse, or none (code/CLI only)
+  # Ryan answered "Yes" without choosing Playwright MCP vs computerUse vs none (code/CLI only).
+  # Leave unset until he picks one.
   adapter: ""
   feature_map_path: ".cursor/bug-automation/feature-map.md"
 
@@ -80,3 +107,4 @@ boundaries:
   never_auto_merge: true
   never_deploy: true
   never_modify_production_data: true
+  # Merge is OUT OF SCOPE pending explicit override, even though Ryan asked for merge in all repos.

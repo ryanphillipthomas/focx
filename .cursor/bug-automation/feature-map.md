@@ -2,18 +2,18 @@
 
 User-point-of-view map for reproduction. Discover current code paths at runtime. Keep selectors stable (roles, labels, ids) — never generated CSS classes.
 
-Environment and app-control adapter are **UNCONFIGURED** in `configuration.yaml`. Until they are set, prefer code inspection + documented CLI checks; do not claim UI reproduction succeeded without the configured adapter.
+Environment is **proposed-pending-confirm** in `configuration.yaml` (local compose → `dist/`; never production focx.ai). App-control adapter remains **UNCONFIGURED** until Ryan picks Playwright MCP, computerUse, or none. Until the adapter is set, prefer code inspection + documented CLI checks; do not claim UI reproduction succeeded without the configured adapter.
 
-## Build / serve (focx-site)
+## Build / serve (focx-site) — proposed default
 
 ```bash
 node tools/site-compose/index.mjs
 # → dist/  (landing at / , Connect at /skills/connect/)
 ```
 
-Serve `dist/` with a local static server for UI checks. Do not write to production data or deploy.
+Serve `dist/` with a **local** static server for UI checks. Never use production `focx.ai`. Do not write production data or deploy.
 
-Connect product source for mount bugs: `https://github.com/ryanphillipthomas/focx-connect` (see repository write-scope in configuration).
+Connect product source for mount bugs: `https://github.com/ryanphillipthomas/focx-connect` (draft-PR write scope only; merge out of scope).
 
 ---
 

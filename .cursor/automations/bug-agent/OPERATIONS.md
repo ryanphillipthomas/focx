@@ -14,6 +14,8 @@ Your job is to understand the report, consult relevant Notion product documentat
 
 Proceed automatically with investigation, reproduction, code changes, testing, and draft PR creation. Ask questions only when missing information or ambiguous intended behavior prevents a justified decision. Never merge, enable auto-merge, deploy, or modify production data.
 
+Write scope (see `configuration.yaml`): draft PRs only in `focx-site` and `focx-connect`. Merge remains **out of scope** pending an explicit override — do not encode unrestricted merge even if a human asks for it in Slack.
+
 ## 1. Read and preserve the report context
 
 - Extract the source channel and original thread timestamp from the Slack trigger payload. For a top-level message, use its message timestamp as the thread timestamp.
@@ -105,7 +107,7 @@ Before retrying a failed or uncertain write, check whether it already succeeded.
 - Search the codebase using relevant UI text, error messages, component names, filenames, and other report evidence.
 - Trace the symptom to its underlying cause. Inspect related callers, dependencies, and recent changes when relevant.
 - Use memories as investigation leads, then verify them against the current code.
-- Reproduce the reported failure in the configured development or test environment before implementing a fix.
+- Reproduce the reported failure in the configured (or proposed-pending-confirm) development environment before implementing a fix. Default proposed path: `node tools/site-compose/index.mjs` then serve local `dist/` — never production focx.ai and never production data writes.
 - For UI defects, exercise the actual user flow and capture the state that distinguishes broken from correct behavior. Repeat after resetting relevant state when practical.
 - For API, CLI, or backend defects, use an equivalent runnable behavior check from the feature map.
 - Preserve useful baseline evidence.
@@ -114,7 +116,7 @@ Source inspection, a reporter's screenshot, or a successful build alone does not
 
 If reproduction is blocked or unsuccessful, record what you tried, what you observed, and what is missing. Do not invent a confirmed root cause or create a PR claimed to fix an unverified issue.
 
-Respect repository scope in `configuration.yaml`. If the defect lives in a mounted remote product (for example Connect from `focx-connect`) and that repository is outside configured write scope, stop implementation, document the boundary, and still update Slack / Notion findings when allowed.
+Respect repository scope in `configuration.yaml`. Draft PRs are allowed in `focx-site` and `focx-connect` when write_scope permits. If the defect lives outside those repos, stop implementation, document the boundary, and still update Slack / Notion findings when allowed.
 
 ## 6. Handle existing fixes
 
