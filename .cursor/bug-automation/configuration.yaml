@@ -1,0 +1,82 @@
+schema_version: 1
+agent: slack-bug-triage-resolution
+layout: .cursor/bug-automation  # chosen because no prior .cursor/benny tree; Benny two-job pack not adopted
+
+automation:
+  # Reuse this existing Automations entry — do not create a duplicate.
+  id: "59897871-b611-11f1-bb68-864e54d14197"
+  dashboard_url: "https://cursor.com/automations/59897871-b611-11f1-bb68-864e54d14197"
+  observed_name: "Fix bugs reported in Slack"
+  observed_run_label: "Bug report resolution"
+  enabled_for_traffic: false  # keep disabled / do not enable until integration checklist passes
+
+operations_path: ".cursor/automations/bug-agent/OPERATIONS.md"
+notion_map_path: ".cursor/bug-automation/notion.md"
+feature_map_path: ".cursor/bug-automation/feature-map.md"
+
+slack:
+  source_channel_id: "C0C3ASJ4RLL"
+  source_channel_name: "bug-reports"
+  team_id: "T0C3ASBK47N"
+  workspace_host: "ryanthomasai.slack.com"
+  operations_channel_id: ""  # none — never use an ops channel
+  allow_source_root_posts: false
+  allow_worker_slack_writes: false
+  # Trigger field mapping (use actual payload fields; do not invent template vars):
+  #   source_channel_id <- trigger.channel / slackChannelId
+  #   message_ts        <- trigger.message_ts / slackMessageTimestamp
+  #   thread_ts         <- trigger.thread_ts if present, else message_ts
+  read_action: "read_slack_messages"
+  thread_post_action: "send_slack_message"
+  include_pr_urls_in_slack_text: false  # system supplies PR links
+
+repository:
+  url: "https://github.com/ryanphillipthomas/focx-site"
+  default_branch: "main"
+  draft_only: true
+  # Product surface /skills/connect is composed from focx-connect at build time.
+  # Write scope for Connect fixes is unresolved — see missing-config ask.
+  related_product_repos:
+    - url: "https://github.com/ryanphillipthomas/focx-connect"
+      mount_path: "skills/connect"
+      write_scope: "UNCONFIGURED"
+
+notion:
+  product_docs:
+    status: "candidate"
+    database_url: "https://app.notion.com/p/3e17559fe2d780ed95d0e6f446f505d5"
+    data_source: "collection://3e17559f-e2d7-80af-833c-000bcc071e00"
+    notes: "Workspace Docs DB (PRD/RFC/Spec/…). Confirm as the product-doc read scope."
+  bug_database:
+    status: "UNCONFIGURED"
+    database_url: ""
+    data_source: ""
+    # Do not write until destination + field map are confirmed in notion.md
+
+environment:
+  status: "UNCONFIGURED"
+  # Candidate local path once confirmed:
+  #   compose: node tools/site-compose/index.mjs → dist/
+  #   serve: static server on dist/ (not production focx.ai)
+  name: ""
+  allow_production_data_writes: false
+  artifact_directory: "/tmp/bug-agent-artifacts"
+
+control:
+  status: "UNCONFIGURED"
+  # Candidates when confirmed: Playwright MCP, computerUse, or none (code/CLI only)
+  adapter: ""
+  feature_map_path: ".cursor/bug-automation/feature-map.md"
+
+tools_expected:
+  - read_slack_messages
+  - send_slack_message
+  - open_git_pr
+  - notion_read_within_configured_scope
+  - notion_write_bug_record_when_configured
+
+boundaries:
+  never_merge: true
+  never_auto_merge: true
+  never_deploy: true
+  never_modify_production_data: true
