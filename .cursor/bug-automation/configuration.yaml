@@ -43,7 +43,6 @@ repository:
   draft_only: true
   # write_scope: draft PRs only in focx-site + focx-connect.
   # Merge / auto-merge / deploy remain OUT OF SCOPE (never_merge) pending explicit override.
-  # Ryan asked to "open PRs and merge in all repositories" — merge is NOT encoded; draft PRs only.
   write_scope:
     mode: "draft_prs_only"
     allow_merge: false
@@ -69,16 +68,13 @@ notion:
     data_source: "collection://3e17559f-e2d7-80af-833c-000bcc071e00"
     notes: "Workspace Docs DB (PRD/RFC/Spec/…) — confirmed as product-doc read scope."
   bug_database:
-    status: "UNCONFIGURED"
-    database_url: ""
-    data_source: ""
-    # No dedicated Bugs/Issues/Defects DB found via Notion MCP (2026-09-22).
-    # Candidates listed in Project store docs/bug-agent-notion-bug-db-candidates.md.
-    # Do NOT use Tasks unless Ryan explicitly confirms. Do not invent a destination.
+    status: "configured"
+    database_url: "https://app.notion.com/p/d90b04c202fd413a886fc6026bbb4aae"
+    data_source: "collection://24dc9aeb-1c47-43c1-9f95-8309f900da1f"
+    notes: "Dedicated Bugs DB (not Tasks). Field/status map in notion.md."
 
 environment:
-  # PROPOSED — pending Ryan confirm (proposed-pending-confirm). Not private prod.
-  status: "proposed-pending-confirm"
+  status: "configured"
   name: "local-site-compose-dist"
   compose_command: "node tools/site-compose/index.mjs"
   compose_output: "dist/"
@@ -86,13 +82,10 @@ environment:
   allow_production_data_writes: false
   never_use_production_host: "focx.ai"
   artifact_directory: "/tmp/bug-agent-artifacts"
-  # Proposed default: compose → serve dist/ locally; never production focx.ai / no prod data writes.
 
 control:
-  status: "UNCONFIGURED"
-  # Ryan answered "Yes" without choosing Playwright MCP vs computerUse vs none (code/CLI only).
-  # Leave unset until he picks one.
-  adapter: ""
+  status: "configured"
+  adapter: "playwright_mcp"
   feature_map_path: ".cursor/bug-automation/feature-map.md"
 
 tools_expected:
@@ -101,10 +94,11 @@ tools_expected:
   - open_git_pr
   - notion_read_within_configured_scope
   - notion_write_bug_record_when_configured
+  - playwright_mcp
 
 boundaries:
   never_merge: true
   never_auto_merge: true
   never_deploy: true
   never_modify_production_data: true
-  # Merge is OUT OF SCOPE pending explicit override, even though Ryan asked for merge in all repos.
+  # Merge is OUT OF SCOPE pending explicit override.

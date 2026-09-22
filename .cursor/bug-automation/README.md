@@ -8,7 +8,7 @@ This repository had **no** existing `.cursor/benny/` or `.cursor/bug-automation/
 
 Configuration lives under **`.cursor/bug-automation/`**. Operational instructions live under **`.cursor/automations/bug-agent/`** (single combined agent).
 
-Do not put secrets here. Fill unknown Notion bug-database mappings before enabling live traffic.
+Do not put secrets here. Notion Bugs DB, Docs read scope, local env, and Playwright MCP are configured. Keep live traffic disabled until the new Automations entry is created, the old one is disabled/deleted, and validation passes.
 
 ## Files
 

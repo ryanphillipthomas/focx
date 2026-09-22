@@ -2,9 +2,9 @@
 
 User-point-of-view map for reproduction. Discover current code paths at runtime. Keep selectors stable (roles, labels, ids) — never generated CSS classes.
 
-Environment is **proposed-pending-confirm** in `configuration.yaml` (local compose → `dist/`; never production focx.ai). App-control adapter remains **UNCONFIGURED** until Ryan picks Playwright MCP, computerUse, or none. Until the adapter is set, prefer code inspection + documented CLI checks; do not claim UI reproduction succeeded without the configured adapter.
+Environment is **configured**: local compose → `dist/` (never production focx.ai). App-control adapter is **Playwright MCP**. Use Playwright for UI baseline/patched checks per the surfaces below; fall back to documented CLI/non-UI checks when Playwright cannot exercise the path.
 
-## Build / serve (focx-site) — proposed default
+## Build / serve (focx-site) — configured
 
 ```bash
 node tools/site-compose/index.mjs
