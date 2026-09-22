@@ -4,13 +4,14 @@ layout: .cursor/bug-automation  # chosen because no prior .cursor/benny tree; Be
 
 automation:
   # NEW Automations entry — do not reuse the old Slack bug automation.
-  # Placeholder until Ryan creates the replacement in the Automations dashboard.
-  id: "PENDING_NEW_AUTOMATION_ID"
-  dashboard_url: ""  # fill after create: https://cursor.com/automations/<new-id>
-  observed_name: ""  # suggested: "Slack bug triage + resolution"
-  observed_run_label: ""  # suggested: "Bug report resolution"
-  enabled_for_traffic: false  # keep disabled / do not enable until integration checklist passes
-  # OLD automation — must be disabled or deleted so it is not left active alongside the replacement:
+  id: "3762c69f-b631-11f1-bb68-864e54d14197"
+  dashboard_url: "https://cursor.com/automations/3762c69f-b631-11f1-bb68-864e54d14197"
+  observed_name: "Slack bug triage + resolution"
+  observed_run_label: "Bug report resolution"
+  # Cost-aware model preference for editor: cursor-grok-4.6-medium-fast (not Claude thinking)
+  preferred_model: "cursor-grok-4.6-medium-fast"
+  enabled_for_traffic: false  # keep disabled / do not enable until validation + old entry removed
+  # OLD automation — must be disabled or deleted so it is not left active alongside this one:
   #   id: 59897871-b611-11f1-bb68-864e54d14197
   #   dashboard: https://cursor.com/automations/59897871-b611-11f1-bb68-864e54d14197
   #   observed name: Fix bugs reported in Slack / Bug report resolution
